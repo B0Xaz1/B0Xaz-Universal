@@ -209,6 +209,10 @@ return function(Context)
                 MovementSystem.Update(dt)
             end
 
+            if Context.GameLoader and type(Context.GameLoader.Update) == "function" then
+	            Context.GameLoader.Update(dt)
+            end
+
             if FeatureConfig.Visuals and FeatureConfig.Visuals.Fullbright then
                 Lighting.Ambient = Color3.fromRGB(255,255,255)
                 Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
