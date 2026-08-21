@@ -57,6 +57,7 @@ Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
 Context.ESPSystem = import("src/Systems/ESPSystem.lua")(Context)
 Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
+Context.PerformanceSystem = import("src/Systems/PerformanceSystem.lua")(Context)
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
 
 -- 6. Game Specific Loader
