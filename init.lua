@@ -7,23 +7,26 @@ local BASE_URL = string.format("https://raw.githubusercontent.com/%s/%s/%s/", GI
 getgenv().B0XazScriptURL = BASE_URL .. "init.lua"
 
 local function import(path)
-    -- Added timestamp query to bypass GitHub raw cache when you update files
     local url = BASE_URL .. path .. "?t=" .. tostring(os.time())
     local ok, source = pcall(function()
         return game:HttpGet(url)
     end)
+    
     if not ok or not source or #source == 0 then
-        error("[B0Xaz Loader] Failed to fetch: " .. path .. " -> " .. tostring(source))
+        error("[B0Xaz Loader] Failed to fetch: " .. path)
     end
     
-    local fn, compileErr = loadstring(source, path)
-    if not fn then
+    local chunk, compileErr = loadstring(source, path)
+    if not chunk then
         error("[B0Xaz Loader] Syntax error in " .. path .. ": " .. tostring(compileErr))
     end
-    return fn
+    
+    -- We execute the chunk immediately to get the 'return function' inside the file
+    local result = chunk()
+    return result
 end
 
--- 1. Initialize Cleanup
+-- 1. Initialize Cleanup (Resets previous session)
 import("src/Cleanup.lua")()
 
 -- 2. Load Core Dependencies
@@ -35,6 +38,8 @@ local Context = import("src/Context.lua")(CONFIG, DefaultLighting, Utils, Drawin
 -- 3. Load UI Engine & Theme
 local Theme = import("src/UI/Theme.lua")()
 local ShankUI = import("src/UI/ShankUI.lua")(Context, Theme)
+
+-- Set these into context so other modules can see them
 Context.Theme = Theme
 Context.ShankUI = ShankUI
 
