@@ -6,59 +6,79 @@ local GITHUB_BRANCH = "main"
 local BASE_URL = string.format("https://raw.githubusercontent.com/%s/%s/%s/", GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH)
 getgenv().B0XazScriptURL = BASE_URL .. "init.lua"
 
+-- Create a shared container to prevent "index function" errors
+getgenv().B0XazShared = {}
+local Context = getgenv().B0XazShared
+
 local function import(path)
-    local url = BASE_URL .. path .. "?t=" .. tostring(os.time())
+    -- The "?t=" part forces GitHub to give us the newest version of your code
+    local url = BASE_URL .. path .. "?t=" .. tostring(tick())
     local ok, source = pcall(function()
         return game:HttpGet(url)
     end)
     
     if not ok or not source or #source == 0 then
-        error("[B0Xaz Loader] Failed to fetch: " .. path)
+        warn("[B0Xaz] Failed to download: " .. path)
+        return nil
     end
     
     local chunk, compileErr = loadstring(source, path)
     if not chunk then
-        error("[B0Xaz Loader] Syntax error in " .. path .. ": " .. tostring(compileErr))
+        error("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
     end
     
-    -- We execute the chunk immediately to get the 'return function' inside the file
-    local result = chunk()
+    local success, result = pcall(chunk)
+    if not success then
+        error("[B0Xaz] Execution error in " .. path .. ": " .. tostring(result))
+    end
+    
     return result
 end
 
--- 1. Initialize Cleanup (Resets previous session)
-import("src/Cleanup.lua")()
+print("[B0Xaz] Starting Load...")
 
--- 2. Load Core Dependencies
-local CONFIG, DefaultLighting = import("src/Config.lua")()
-local Utils = import("src/Utils.lua")(CONFIG)
-local DrawingManager = import("src/DrawingManager.lua")()
-local Context = import("src/Context.lua")(CONFIG, DefaultLighting, Utils, DrawingManager)
+-- 1. Cleanup
+import("src/Cleanup.lua")
 
--- 3. Load UI Engine & Theme
-local Theme = import("src/UI/Theme.lua")()
-local ShankUI = import("src/UI/ShankUI.lua")(Context, Theme)
+-- 2. Load Core (These return functions that we call immediately)
+local configFunc = import("src/Config.lua")
+local CONFIG, DefaultLighting = configFunc()
+Context.CONFIG = CONFIG
+Context.DefaultLighting = DefaultLighting
 
--- Set these into context so other modules can see them
-Context.Theme = Theme
-Context.ShankUI = ShankUI
+local utilsFunc = import("src/Utils.lua")
+Context.Utils = utilsFunc(CONFIG)
 
--- 4. Load Feature Systems
+local dmFunc = import("src/DrawingManager.lua")
+Context.DrawingManager = dmFunc()
+
+local ctxFunc = import("src/Context.lua")
+local ctxTable = ctxFunc(CONFIG, DefaultLighting, Context.Utils, Context.DrawingManager)
+
+-- Merge the context table into our shared global
+for k, v in pairs(ctxTable) do Context[k] = v end
+
+-- 3. Load UI & Theme
+local themeFunc = import("src/UI/Theme.lua")
+Context.Theme = themeFunc()
+
+local uiFunc = import("src/UI/ShankUI.lua")
+Context.ShankUI = uiFunc(Context, Context.Theme)
+
+-- 4. Systems
 Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
 Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
 Context.ESPSystem = import("src/Systems/ESPSystem.lua")(Context)
 Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
-
--- 5. Load Visual Overlays
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
 
--- 6. Construct UI
+-- 5. Build UI
 Context.UI = import("src/UI/BuildUI.lua")(Context)
 getgenv().B0XazLibrary = Context.UI
 
--- 7. Initialize ESP & Start Runtime Engine
+-- 6. Start
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
 
-Context.UI:Notify("B0Xaz Universal", "Loaded - RShift to toggle menu", 4, Theme.Success)
+Context.UI:Notify("B0Xaz Universal", "Loaded Successfully", 4, Context.Theme.Success)
