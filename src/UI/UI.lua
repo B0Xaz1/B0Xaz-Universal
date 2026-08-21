@@ -1,4 +1,4 @@
--- src/UI/ShankUI.lua
+-- src/UI/UI.lua
 return function(Context, Theme)
     local TS = game:GetService("TweenService")
     local UIS = game:GetService("UserInputService")
@@ -42,14 +42,14 @@ return function(Context, Theme)
         end 
     end))
 
-    local ShankUI = {}
-    ShankUI.__index = ShankUI
+    local UI = {}
+    UI.__index = UI
 
-    function ShankUI.new(title)
-        local self = setmetatable({}, ShankUI)
+    function UI.new(title)
+        local self = setmetatable({}, UI)
         self.Tabs = {}; self.ActiveTab = nil; self._openDropdowns = {}; self.Minimized = false
 
-        self.ScreenGui = createElement("ScreenGui", {Name = "B0XazShankUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, IgnoreGuiInset = true, DisplayOrder = 999})
+        self.ScreenGui = createElement("ScreenGui", {Name = "B0XazUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, IgnoreGuiInset = true, DisplayOrder = 999})
         local parented = false
         pcall(function() if gethui then self.ScreenGui.Parent = gethui(); parented = true end end)
         if not parented then pcall(function() self.ScreenGui.Parent = CoreGui; parented = true end) end
@@ -117,14 +117,14 @@ return function(Context, Theme)
         return self
     end
 
-    function ShankUI:RegisterDropdown(closeFn) table.insert(self._openDropdowns, closeFn) end
-    function ShankUI:CloseAllDropdownsExcept(exceptFn) 
+    function UI:RegisterDropdown(closeFn) table.insert(self._openDropdowns, closeFn) end
+    function UI:CloseAllDropdownsExcept(exceptFn) 
         for _, fn in ipairs(self._openDropdowns) do 
             if fn ~= exceptFn then fn(false) end 
         end 
     end
 
-    function ShankUI:_ApplySearch(query)
+    function UI:_ApplySearch(query)
         query = query:lower()
         for _, tab in ipairs(self.Tabs) do
             for _, section in ipairs(tab.Sections) do
@@ -145,7 +145,7 @@ return function(Context, Theme)
         end
     end
 
-    function ShankUI:Notify(title, text, duration, color)
+    function UI:Notify(title, text, duration, color)
         local accentColor = color or Theme.Accent
         local notif = createElement("Frame", {Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = self.NotifyContainer, BackgroundTransparency = 1},
             {uiCorner(6), uiStroke(accentColor, 1, 0.5),
@@ -160,7 +160,7 @@ return function(Context, Theme)
         end)
     end
 
-    function ShankUI:SelectTab(tab)
+    function UI:SelectTab(tab)
         for _, t in ipairs(self.Tabs) do 
             t.Page.Visible = false; t.Button.TextColor3 = Theme.TextDim; t.Button.BackgroundColor3 = Theme.Side 
         end
@@ -168,7 +168,7 @@ return function(Context, Theme)
         self.ActiveTab = tab; self:CloseAllDropdownsExcept(nil)
     end
 
-    function ShankUI:AddTab(name)
+    function UI:AddTab(name)
         local ui = self
         local tab = {Name = name, Sections = {}, UI = ui}
 
@@ -366,5 +366,5 @@ return function(Context, Theme)
         return tab
     end
 
-    return ShankUI
+    return UI
 end
