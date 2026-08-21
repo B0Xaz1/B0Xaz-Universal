@@ -23,6 +23,7 @@ return function(Context)
                 MaxDistance = FeatureConfig.Aimbot.MaxDistance,
                 ShakeIntensity = FeatureConfig.Aimbot.ShakeIntensity,
                 LockNPC = FeatureConfig.Aimbot.LockNPC,
+                Performance = table.clone(FeatureConfig.Performance),
                 Triggerbot = table.clone(FeatureConfig.Aimbot.Triggerbot),
                 FOV = table.clone(FeatureConfig.Aimbot.FOV)
             },
@@ -103,6 +104,9 @@ return function(Context)
                     FeatureConfig.Chams[k] = v
                 end
             end
+        end
+        if type(data.Performance) == "table" then
+            for k, v in pairs(data.Performance) do FeatureConfig.Performance[k] = v end
         end
         if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then
             FeatureConfig.Camera.FOV = data.Camera.FOV
