@@ -1,14 +1,9 @@
 -- src/Systems/MovementSystem.lua
 return function(Context)
-    local UIS = game:GetService("UserInputService")
-    local Workspace = game:GetService("Workspace")
-
     local FeatureConfig = Context.FeatureConfig
     local Utils = Context.Utils
-    local Connections = Context.Connections
 
     local MovementSystem = {}
-    local _bhopConn = nil
 
     function MovementSystem.UpdateCFrameSpeed(dt)
         if not FeatureConfig.Movement.CFrameSpeed then return end
@@ -16,13 +11,12 @@ return function(Context)
         local hum = Utils.GetHumanoid()
         local root = Utils.GetRootPart()
         if not hum or not root then return end
-        if FeatureConfig.Movement.FlyEnabled then return end -- don't fight fly
+        if FeatureConfig.Movement.FlyEnabled then return end
 
         local moveDir = hum.MoveDirection
         if moveDir.Magnitude < 0.05 then return end
 
         local speed = FeatureConfig.Movement.CFrameSpeedValue or 50
-        -- Extra CFrame push on top of normal walk (bypass-style)
         root.CFrame = root.CFrame + moveDir * speed * dt
     end
 
@@ -30,13 +24,16 @@ return function(Context)
         if not FeatureConfig.Movement.Bhop then return end
 
         local hum = Utils.GetHumanoid()
-        if not hum then return end
+        if not hum or hum.Health <= 0 then return end
 
-        -- Hold Space = auto hop on landing
-        local holdingJump = UIS:IsKeyDown(Enum.KeyCode.Space)
-        if not holdingJump then return end
+        local state = hum:GetState()
 
-        if hum.FloorMaterial ~= Enum.Material.Air then
+        -- Only trigger when touching the ground (not in mid-air)
+        if hum.FloorMaterial ~= Enum.Material.Air 
+           and state ~= Enum.HumanoidStateType.Jumping 
+           and state ~= Enum.HumanoidStateType.Freefall then
+            
+            hum.Jump = true
             hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end
@@ -45,20 +42,6 @@ return function(Context)
         MovementSystem.UpdateCFrameSpeed(dt)
         MovementSystem.UpdateBhop()
     end
-
-    -- Optional: also fire on JumpRequest for snappier bhop
-    function MovementSystem.BindBhopInput()
-        if _bhopConn then return end
-        _bhopConn = Connections.Add(UIS.JumpRequest:Connect(function()
-            if not FeatureConfig.Movement.Bhop then return end
-            local hum = Utils.GetHumanoid()
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end))
-    end
-
-    MovementSystem.BindBhopInput()
 
     return MovementSystem
 end
