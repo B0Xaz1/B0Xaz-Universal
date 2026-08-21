@@ -1,153 +1,289 @@
 -- src/Systems/AimbotSystem.lua
 return function(Context)
-    local Players = game:GetService("Players")
-    local UIS = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
     local Workspace = game:GetService("Workspace")
+    local Players = game:GetService("Players")
+    local UserInputService = game:GetService("UserInputService")
+
     local LocalPlayer = Players.LocalPlayer
     local Camera = Workspace.CurrentCamera
 
     local FeatureConfig = Context.FeatureConfig
     local State = Context.State
-    local CONFIG = Context.CONFIG
     local Utils = Context.Utils
+    local Connections = Context.Connections
 
-    local AimbotSystem = {}
-    local _lastAimScreenPos = nil
+    local TargetPlayer = nil
+    local ActiveHeldInputs = {}
 
-    function AimbotSystem.EvaluateTarget(model, playerRef)
-        if not model or not model.Parent or model == Utils.GetCharacter() then return nil end
-        local hum = model:FindFirstChildOfClass("Humanoid")
-        local root = model:FindFirstChild("HumanoidRootPart")
-        if not hum or not root or hum.Health <= 0 then return nil end
-        if playerRef and FeatureConfig.Aimbot.TeamCheck and Utils.SameTeam(playerRef) then return nil end
+    -- Rig limb definitions
+    local R6Parts = {
+        ["Head"] = "Head",
+        ["Torso"] = "Torso",
+        ["LeftArm"] = "Left Arm",
+        ["RightArm"] = "Right Arm",
+        ["LeftLeg"] = "Left Leg",
+        ["RightLeg"] = "Right Leg",
+        ["Root"] = "HumanoidRootPart",
+    }
 
-        local part = model:FindFirstChild(FeatureConfig.Aimbot.Hitpart) or root
-        local myRoot = Utils.GetRootPart()
-        if myRoot and (myRoot.Position - part.Position).Magnitude > FeatureConfig.Aimbot.MaxDistance then return nil end
+    local R15Parts = {
+        ["Head"] = "Head",
+        ["Torso"] = "UpperTorso",
+        ["LowerTorso"] = "LowerTorso",
+        ["LeftUpperArm"] = "LeftUpperArm",
+        ["LeftLowerArm"] = "LeftLowerArm",
+        ["LeftHand"] = "LeftHand",
+        ["RightUpperArm"] = "RightUpperArm",
+        ["RightLowerArm"] = "RightLowerArm",
+        ["RightHand"] = "RightHand",
+        ["LeftUpperLeg"] = "LeftUpperLeg",
+        ["LeftLowerLeg"] = "LeftLowerLeg",
+        ["LeftFoot"] = "LeftFoot",
+        ["RightUpperLeg"] = "RightUpperLeg",
+        ["RightLowerLeg"] = "RightLowerLeg",
+        ["RightFoot"] = "RightFoot",
+        ["Root"] = "HumanoidRootPart",
+    }
 
-        local sp, onScreen = Utils.WorldToScreen(part.Position)
-        if not onScreen then return nil end
-
-        local dist2d = (Utils.GetMousePosition() - sp).Magnitude
-        if dist2d > FeatureConfig.Aimbot.FOV.Size then return nil end
-        if FeatureConfig.Aimbot.VisCheck and not Utils.IsVisible(part) then return nil end
-
-        return {
-            model = model,
-            player = playerRef,
-            name = playerRef and (playerRef.DisplayName or playerRef.Name) or model.Name,
-            dist2d = dist2d
-        }
+    local function IsR15(character)
+        if not character then return false end
+        return character:FindFirstChild("UpperTorso") ~= nil
     end
 
-    function AimbotSystem.GetClosestTarget()
-        local closest, closestDist = nil, math.huge
-        if FeatureConfig.Aimbot.LockNPC then
-            for _, obj in ipairs(Workspace:GetChildren()) do
-                if obj:IsA("Model") and obj ~= Utils.GetCharacter() then
-                    local pr = Utils.FindPlayerFromModel(obj)
-                    if pr ~= LocalPlayer then
-                        local t = AimbotSystem.EvaluateTarget(obj, pr)
-                        if t and t.dist2d < closestDist then
-                            closestDist = t.dist2d
-                            closest = t
-                        end
-                    end
-                end
-            end
+    local function GetHitpartName(character)
+        local partName = FeatureConfig.Aimbot.Hitpart or "Head"
+        if IsR15(character) then
+            return R15Parts[partName] or partName
         else
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then
-                    local t = AimbotSystem.EvaluateTarget(p.Character, p)
-                    if t and t.dist2d < closestDist then
-                        closestDist = t.dist2d
-                        closest = t
-                    end
-                end
-            end
+            return R6Parts[partName] or partName
         end
-        return closest
     end
 
-    function AimbotSystem.LockOn()
-        local t = AimbotSystem.GetClosestTarget()
-        if not t then return false end
-        State.AimTarget = t
-        State.AimLocked = true
-        State.AimSettleCounter = 0
-        _lastAimScreenPos = nil
+    local function IsTeammate(player)
+        if not FeatureConfig.Aimbot.TeamCheck then return false end
+        return Utils.SameTeam(player)
+    end
+
+    local function IsCharacterValid(character)
+        if not character then return false end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not rootPart then return false end
+        if humanoid.Health <= 0 then return false end
         return true
     end
 
+    local function IsVisible(targetPart)
+        if not FeatureConfig.Aimbot.VisCheck then return true end
+        return Utils.IsVisible(targetPart)
+    end
+
+    local function MatchesKey(input, bindItem)
+        if typeof(bindItem) == "string" then
+            local kc = Utils.GetKeyCode(bindItem)
+            return kc and input.KeyCode == kc
+        elseif typeof(bindItem) == "EnumItem" then
+            if bindItem.EnumType == Enum.KeyCode then
+                return input.KeyCode == bindItem
+            elseif bindItem.EnumType == Enum.UserInputType then
+                return input.UserInputType == bindItem
+            end
+        end
+        return false
+    end
+
+    local function GetMatchingBind(input)
+        local bind = FeatureConfig.Aimbot.Keybind
+        if typeof(bind) == "table" then
+            for _, b in ipairs(bind) do
+                if MatchesKey(input, b) then return b end
+            end
+        else
+            if MatchesKey(input, bind) then return bind end
+        end
+        return nil
+    end
+
+    local function IsAnyKeyHeld()
+        for _ in pairs(ActiveHeldInputs) do
+            return true
+        end
+        return false
+    end
+
+    local function GetClosestPlayer()
+        local closestDistance = math.huge
+        local closestPlayer = nil
+        local mouseLocation = UserInputService:GetMouseLocation()
+        local cfg = FeatureConfig.Aimbot
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            if IsTeammate(player) then continue end
+            if not IsCharacterValid(player.Character) then continue end
+
+            local hitpartName = GetHitpartName(player.Character)
+            local hitpart = player.Character:FindFirstChild(hitpartName) or player.Character:FindFirstChild("HumanoidRootPart")
+            if not hitpart then continue end
+
+            local screenPosition, isVisible = Camera:WorldToViewportPoint(hitpart.Position)
+            if not isVisible then continue end
+            if not IsVisible(hitpart) then continue end
+
+            local screenVector = Vector2.new(screenPosition.X, screenPosition.Y)
+            local distance = (mouseLocation - screenVector).Magnitude
+
+            if cfg.FOV and cfg.FOV.Show and distance > (cfg.FOV.Size or 100) then
+                continue
+            end
+
+            if cfg.MaxDistance then
+                local myRoot = Utils.GetRootPart()
+                if myRoot then
+                    local worldDistance = (myRoot.Position - hitpart.Position).Magnitude
+                    if worldDistance > cfg.MaxDistance then continue end
+                end
+            end
+
+            if distance < closestDistance then
+                closestPlayer = player
+                closestDistance = distance
+            end
+        end
+
+        return closestPlayer
+    end
+
+    -- Registered Inputs via Connection Tracker
+    Connections.Add(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not FeatureConfig.Aimbot.Enabled then return end
+
+        local matchedBind = GetMatchingBind(input)
+        if not matchedBind then return end
+
+        ActiveHeldInputs[matchedBind] = true
+
+        if FeatureConfig.Aimbot.LockMode == "Toggle" then
+            if TargetPlayer then
+                TargetPlayer = nil
+                State.AimLocked = false
+                State.AimTarget = nil
+            else
+                TargetPlayer = GetClosestPlayer()
+                if TargetPlayer then
+                    State.AimLocked = true
+                    State.AimTarget = TargetPlayer
+                end
+            end
+        elseif FeatureConfig.Aimbot.LockMode == "Hold" then
+            TargetPlayer = GetClosestPlayer()
+            if TargetPlayer then
+                State.AimLocked = true
+                State.AimTarget = TargetPlayer
+            end
+        end
+    end))
+
+    Connections.Add(UserInputService.InputEnded:Connect(function(input)
+        local matchedBind = GetMatchingBind(input)
+        if not matchedBind then return end
+
+        ActiveHeldInputs[matchedBind] = nil
+
+        if FeatureConfig.Aimbot.LockMode == "Hold" and not IsAnyKeyHeld() then
+            TargetPlayer = nil
+            State.AimLocked = false
+            State.AimTarget = nil
+        end
+    end))
+
+    Connections.Add(Players.PlayerRemoving:Connect(function(player)
+        if player == TargetPlayer then
+            TargetPlayer = nil
+            State.AimLocked = false
+            State.AimTarget = nil
+        end
+    end))
+
+    local AimbotSystem = {}
+
+    function AimbotSystem.GetClosestTarget()
+        return GetClosestPlayer()
+    end
+
+    function AimbotSystem.LockOn()
+        TargetPlayer = GetClosestPlayer()
+        if TargetPlayer then
+            State.AimLocked = true
+            State.AimTarget = TargetPlayer
+            return true
+        end
+        return false
+    end
+
     function AimbotSystem.LockOff()
+        TargetPlayer = nil
         State.AimLocked = false
         State.AimTarget = nil
         State.AimHoldActive = false
-        State.AimSettleCounter = 0
-        _lastAimScreenPos = nil
+        table.clear(ActiveHeldInputs)
     end
 
-    function AimbotSystem.UpdateAim()
-        if not FeatureConfig.Aimbot.Enabled then return end
-        if FeatureConfig.Aimbot.LockMode == "Hold" and not State.AimHoldActive then
-            if State.AimLocked then AimbotSystem.LockOff() end
+    function AimbotSystem.UpdateAim(dt)
+        local cfg = FeatureConfig.Aimbot
+        if not cfg.Enabled then return end
+
+        if cfg.LockMode == "Hold" and IsAnyKeyHeld() and not TargetPlayer then
+            TargetPlayer = GetClosestPlayer()
+            if TargetPlayer then
+                State.AimLocked = true
+                State.AimTarget = TargetPlayer
+            end
+        end
+
+        if not TargetPlayer then return end
+
+        if not IsCharacterValid(TargetPlayer.Character) then
+            AimbotSystem.LockOff()
             return
         end
-        if not State.AimLocked or not State.AimTarget then return end
 
-        local td = State.AimTarget
-        if not td or not td.model or not td.model.Parent then AimbotSystem.LockOff(); return end
-
-        local char = td.model
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then AimbotSystem.LockOff(); return end
-
-        local partName = (hum.FloorMaterial == Enum.Material.Air) and FeatureConfig.Aimbot.AirHitpart or FeatureConfig.Aimbot.Hitpart
-        local hitpart = char:FindFirstChild(partName) or char:FindFirstChild("HumanoidRootPart")
-        if not hitpart then return end
-
-        local vel = hitpart.AssemblyLinearVelocity
-        local predPos = hitpart.Position + Vector3.new(
-            vel.X * FeatureConfig.Aimbot.Prediction.Horizontal,
-            vel.Y * FeatureConfig.Aimbot.Prediction.Vertical,
-            vel.Z * FeatureConfig.Aimbot.Prediction.Horizontal
-        )
-
-        if FeatureConfig.Aimbot.ShakeIntensity > 0 then
-            local s = FeatureConfig.Aimbot.ShakeIntensity / 10
-            predPos = predPos + Vector3.new((math.random() * 2 - 1) * s, (math.random() * 2 - 1) * s, 0)
+        local hitpartName = GetHitpartName(TargetPlayer.Character)
+        local hitpart = TargetPlayer.Character:FindFirstChild(hitpartName) or TargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not hitpart then
+            AimbotSystem.LockOff()
+            return
         end
 
-        local sp, onScreen, depth = Utils.WorldToScreen(predPos)
-        if not onScreen or depth <= 0 then return end
-
-        local mousePos = UIS:GetMouseLocation()
-        if not _lastAimScreenPos then _lastAimScreenPos = mousePos end
-        _lastAimScreenPos = _lastAimScreenPos:Lerp(sp, 0.2)
-
-        local rawDelta = _lastAimScreenPos - mousePos
-        if rawDelta.Magnitude < CONFIG.AIM_DEADZONE then return end
-
-        local sm = math.max(FeatureConfig.Aimbot.Smoothness, CONFIG.AIM_MIN_SMOOTHNESS)
-        local step = rawDelta / sm
-        if step.Magnitude > CONFIG.AIM_MAX_STEP then step = step.Unit * CONFIG.AIM_MAX_STEP end
-
-        local moved = false
-        if mousemoverel then
-            moved = pcall(function() mousemoverel(step.X, step.Y) end)
+        if not IsVisible(hitpart) then
+            AimbotSystem.LockOff()
+            return
         end
-        if not moved then
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, predPos), math.min(1, 1 / math.max(sm, 1)))
-        end
+
+        local pred = cfg.Prediction or {Horizontal = 0.165, Vertical = 0.100}
+        local predX = pred.Horizontal or pred.X or 0
+        local predY = pred.Vertical or pred.Y or 0
+
+        local velocity = hitpart.AssemblyLinearVelocity or hitpart.Velocity or Vector3.zero
+        local predictedPosition = hitpart.Position + (velocity * Vector3.new(predX, predY, predX))
+
+        local targetCFrame = CFrame.new(Camera.CFrame.Position, predictedPosition)
+        local smoothness = math.max(1, cfg.Smoothness or 1)
+        local deltaTime = dt or 0.016
+        local alpha = math.clamp(deltaTime * (60 / smoothness), 0, 1)
+
+        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
     end
 
     function AimbotSystem.UpdateTriggerbot()
-        if not FeatureConfig.Aimbot.Triggerbot.Enabled or not FeatureConfig.Aimbot.Enabled then return end
+        local cfg = FeatureConfig.Aimbot
+        if not cfg.Triggerbot or not cfg.Triggerbot.Enabled or not cfg.Enabled then return end
 
         local mousePos = Utils.GetMousePosition()
         for _, p in ipairs(Players:GetPlayers()) do
             if p == LocalPlayer then continue end
-            if FeatureConfig.Aimbot.TeamCheck and Utils.SameTeam(p) then continue end
+            if IsTeammate(p) then continue end
             if not Utils.IsAlive(p) then continue end
 
             local char = p.Character
@@ -157,8 +293,8 @@ return function(Context)
                 local sp, onScreen, depth = Utils.WorldToScreen(part.Position)
                 if not onScreen or depth <= 0 then continue end
                 if (mousePos - sp).Magnitude < 14 then
-                    task.delay(FeatureConfig.Aimbot.Triggerbot.Delay, function()
-                        if not FeatureConfig.Aimbot.Triggerbot.Enabled then return end
+                    task.delay(cfg.Triggerbot.Delay or 0.05, function()
+                        if not cfg.Triggerbot.Enabled then return end
                         if mouse1click then
                             mouse1click()
                         else
