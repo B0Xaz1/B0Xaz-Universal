@@ -21,6 +21,7 @@ return function(Context)
     local AimbotSystem = Context.AimbotSystem
     local ESPSystem = Context.ESPSystem
     local FlySystem = Context.FlySystem
+    local MovementSystem = Context.MovementSystem
     local OverlayManager = Context.OverlayManager
 
     local DrawingESP = getgenv().B0XazDrawingESP
