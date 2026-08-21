@@ -22,9 +22,9 @@ return function(Context)
                 RS.RenderStepped:Wait()
                 if hrp and hrp.Parent then hrp.Velocity = oldVelocity end
                 RS.Stepped:Wait()
-                if hrp and hrp.Parent then 
+                if hrp and hrp.Parent then
                     hrp.Velocity = oldVelocity + Vector3.new(0, FlingSystem._movel, 0)
-                    FlingSystem._movel = FlingSystem._movel * -1 
+                    FlingSystem._movel = FlingSystem._movel * -1
                 end
             end
         end))
@@ -32,9 +32,9 @@ return function(Context)
 
     function FlingSystem.Stop()
         FlingSystem._active = false
-        if FlingSystem._thread then 
+        if FlingSystem._thread then
             pcall(function() task.cancel(FlingSystem._thread) end)
-            FlingSystem._thread = nil 
+            FlingSystem._thread = nil
         end
     end
 
