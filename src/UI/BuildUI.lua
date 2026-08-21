@@ -1,5 +1,27 @@
 -- src/UI/BuildUI.lua
 return function(Context)
+    -- Import everything from Context
+    local ShankUI = Context.ShankUI
+    local Theme = Context.Theme
+    local FeatureConfig = Context.FeatureConfig
+    local State = Context.State
+    local StatsConfig = Context.StatsConfig
+    local UIRegistry = Context.UIRegistry
+    local Utils = Context.Utils
+    local Connections = Context.Connections
+    local DefaultLighting = Context.DefaultLighting
+
+    local AimbotSystem = Context.AimbotSystem
+    local ESPSystem = Context.ESPSystem
+    local FlySystem = Context.FlySystem
+    local FlingSystem = Context.FlingSystem
+    local ConfigSystem = Context.ConfigSystem
+    local OverlayManager = Context.OverlayManager
+
+    -- Line 29: This should now work because ShankUI is defined above!
+    local UI = ShankUI.new("B0Xaz Universal")
+    Context.UI = UI
+    getgenv().B0XazLibrary = UI
     local Players = game:GetService("Players")
     local Workspace = game:GetService("Workspace")
     local Lighting = game:GetService("Lighting")
