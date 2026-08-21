@@ -1,47 +1,262 @@
--- src/Games/_Template/init.lua
--- Copy this folder, rename to the game's PlaceId, edit Registry.lua
+-- src/Games/155615604/init.lua
+-- Prison Life
 return function(Context)
+	local Workspace = game:GetService("Workspace")
+	local Players = game:GetService("Players")
+
 	local FeatureConfig = Context.FeatureConfig
 	local Utils = Context.Utils
 	local Theme = Context.Theme
+	local Connections = Context.Connections
 
-	-- Optional: game-only config on FeatureConfig
-	FeatureConfig.Game = FeatureConfig.Game or {
-		ExampleToggle = false,
-		ExampleSlider = 50,
+	local DOOR_FOLDERS = {
+		"Doors",
+		"glass",
+		"CellDoors",
+		"Prison_Fences",
+		"Prison_Gate",
 	}
+
+	FeatureConfig.Game = FeatureConfig.Game or {}
+	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
+	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false -- default on when phase is used
+	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
+
+	-- original property cache: [BasePart] = { CanCollide, Transparency, Color, Material, ... }
+	local _cache = {}
+	local _highlights = {} -- [BasePart] = Highlight
+	local _active = false
+	local _scanConn = nil
 
 	local Game = {
 		Name = "Prison Life",
 	}
 
-	-- Called when building the "Game Specific" tab
-	function Game.BuildUI(tab)
-		local sec = tab:AddSection("Template Features")
-
-		sec:AddToggle("Example Toggle", FeatureConfig.Game.ExampleToggle, function(v)
-			FeatureConfig.Game.ExampleToggle = v
-		end)
-
-		sec:AddSlider("Example Slider", FeatureConfig.Game.ExampleSlider, 0, 100, function(v)
-			FeatureConfig.Game.ExampleSlider = v
-		end)
-
-		sec:AddButton("Example Action", function()
-			if Context.UI then
-				Context.UI:Notify("Game", "Template button pressed", nil, Theme and Theme.Success)
-			end
-		end)
+	local function isDoorPart(inst)
+		return inst:IsA("BasePart")
 	end
 
-	-- Optional per-frame logic
+	local function collectDoorParts()
+		local parts = {}
+		for _, folderName in ipairs(DOOR_FOLDERS) do
+			local folder = Workspace:FindFirstChild(folderName)
+			if folder then
+				for _, desc in ipairs(folder:GetDescendants()) do
+					if isDoorPart(desc) then
+						table.insert(parts, desc)
+					end
+				end
+				-- folder itself might be a model with direct children only
+				for _, child in ipairs(folder:GetChildren()) do
+					if isDoorPart(child) and not table.find(parts, child) then
+						table.insert(parts, child)
+					end
+				end
+			end
+		end
+		return parts
+	end
+
+	local function cachePart(part)
+		if _cache[part] then return end
+		_cache[part] = {
+			CanCollide = part.CanCollide,
+			Transparency = part.Transparency,
+			Color = part.Color,
+			Material = part.Material,
+		}
+	end
+
+	local function applyGlow(part, on)
+		if on then
+			if _highlights[part] and _highlights[part].Parent then
+				_highlights[part].FillColor = FeatureConfig.Game.GlowColor
+				_highlights[part].OutlineColor = FeatureConfig.Game.GlowColor
+				return
+			end
+			local h = Instance.new("Highlight")
+			h.Name = "B0XazDoorGlow"
+			h.Adornee = part
+			h.FillColor = FeatureConfig.Game.GlowColor
+			h.OutlineColor = FeatureConfig.Game.GlowColor
+			h.FillTransparency = 0.55
+			h.OutlineTransparency = 0
+			h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+			-- Parent to part or character-safe container
+			h.Parent = part
+			_highlights[part] = h
+		else
+			if _highlights[part] then
+				pcall(function() _highlights[part]:Destroy() end)
+				_highlights[part] = nil
+			end
+		end
+	end
+
+	local function applyPart(part)
+		if not part or not part.Parent then return end
+		cachePart(part)
+
+		if FeatureConfig.Game.DoorPhase then
+			part.CanCollide = false
+			if FeatureConfig.Game.DoorGlow then
+				-- slight see-through so glow reads better
+				part.Transparency = math.max(part.Transparency, 0.35)
+				applyGlow(part, true)
+			else
+				applyGlow(part, false)
+			end
+		end
+	end
+
+	local function restorePart(part)
+		local c = _cache[part]
+		if c and part and part.Parent then
+			pcall(function()
+				part.CanCollide = c.CanCollide
+				part.Transparency = c.Transparency
+				part.Color = c.Color
+				part.Material = c.Material
+			end)
+		end
+		applyGlow(part, false)
+		_cache[part] = nil
+	end
+
+	local function applyAll()
+		local parts = collectDoorParts()
+		for _, part in ipairs(parts) do
+			applyPart(part)
+		end
+	end
+
+	local function restoreAll()
+		for part, _ in pairs(_cache) do
+			restorePart(part)
+		end
+		for part, h in pairs(_highlights) do
+			pcall(function() if h then h:Destroy() end end)
+			_highlights[part] = nil
+		end
+		table.clear(_cache)
+		table.clear(_highlights)
+	end
+
+	local function stopScan()
+		if _scanConn then
+			pcall(function() _scanConn:Disconnect() end)
+			_scanConn = nil
+		end
+	end
+
+	local function startScan()
+		stopScan()
+		-- re-apply periodically (doors can respawn / streaming)
+		_scanConn = task.spawn(function()
+			while FeatureConfig.Game.DoorPhase do
+				applyAll()
+				task.wait(1.5)
+			end
+		end)
+		if Connections and Connections.Track then
+			Connections.Track(_scanConn)
+		end
+	end
+
+	function Game.SetDoorPhase(enabled)
+		FeatureConfig.Game.DoorPhase = enabled and true or false
+		_active = FeatureConfig.Game.DoorPhase
+		if _active then
+			applyAll()
+			startScan()
+		else
+			stopScan()
+			restoreAll()
+		end
+	end
+
+	function Game.SetDoorGlow(enabled)
+		FeatureConfig.Game.DoorGlow = enabled and true or false
+		if FeatureConfig.Game.DoorPhase then
+			applyAll()
+		end
+	end
+
+	function Game.SetGlowColor(color)
+		FeatureConfig.Game.GlowColor = color
+		if FeatureConfig.Game.DoorPhase and FeatureConfig.Game.DoorGlow then
+			for part, h in pairs(_highlights) do
+				if h then
+					h.FillColor = color
+					h.OutlineColor = color
+				end
+			end
+		end
+	end
+
+	function Game.BuildUI(tab)
+		local doors = tab:AddSection("Doors / Gates")
+
+		doors:AddToggle("Phase Through Doors", FeatureConfig.Game.DoorPhase, function(v)
+			Game.SetDoorPhase(v)
+			if Context.UI then
+				Context.UI:Notify(
+					"Prison Life",
+					v and "Doors are non-collidable" or "Doors restored",
+					nil,
+					v and (Theme and Theme.Success) or (Theme and Theme.Accent)
+				)
+			end
+		end)
+
+		doors:AddToggle("Door Glow", FeatureConfig.Game.DoorGlow, function(v)
+			Game.SetDoorGlow(v)
+		end)
+
+		doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
+			Game.SetGlowColor(c)
+		end)
+
+		doors:AddButton("Refresh Door List", function()
+			if FeatureConfig.Game.DoorPhase then
+				applyAll()
+				if Context.UI then
+					Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success)
+				end
+			else
+				if Context.UI then
+					Context.UI:Notify("Prison Life", "Enable Phase first", nil, Theme and Theme.Warning or Theme.Accent)
+				end
+			end
+		end)
+
+		local info = tab:AddSection("Folders")
+		for _, name in ipairs(DOOR_FOLDERS) do
+			local exists = Workspace:FindFirstChild(name) ~= nil
+			info:AddButton(name .. (exists and "  [OK]" or "  [missing]"), function() end)
+		end
+	end
+
 	function Game.Update(dt)
-		if not FeatureConfig.Game.ExampleToggle then return end
-		-- game-specific loop code here
+		-- optional: keep collision off if something resets it
+		if not FeatureConfig.Game.DoorPhase then return end
+		for part, _ in pairs(_cache) do
+			if part and part.Parent and part.CanCollide then
+				part.CanCollide = false
+			end
+		end
 	end
 
 	function Game.Destroy()
-		-- cleanup connections / objects for this game module
+		stopScan()
+		restoreAll()
+	end
+
+	-- If they saved config with DoorPhase on, apply after load
+	if FeatureConfig.Game.DoorPhase then
+		task.defer(function()
+			Game.SetDoorPhase(true)
+		end)
 	end
 
 	return Game
