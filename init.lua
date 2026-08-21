@@ -12,16 +12,18 @@ local Context = getgenv().B0XazContext
 local function import(path)
     local url = BASE_URL .. path .. "?t=" .. tostring(tick())
     local source = game:HttpGet(url)
-    if not source or #source == 0 then error("Failed to load: " .. path) end
+    if not source or #source == 0 then error("[B0Xaz Loader] Failed to load: " .. path) end
     local chunk, err = loadstring(source, path)
-    if not chunk then error("Syntax Error: " .. path .. " : " .. tostring(err)) end
+    if not chunk then error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) end
     return chunk()
 end
+
+print("[B0Xaz] Loading modules...")
 
 -- 1. Reset
 import("src/Cleanup.lua")()
 
--- 2. Base Load
+-- 2. Base Configurations & Utils
 local CONFIG, DefaultLighting = import("src/Config.lua")()
 Context.CONFIG = CONFIG
 Context.DefaultLighting = DefaultLighting
@@ -32,10 +34,13 @@ Context.DrawingManager = import("src/DrawingManager.lua")()
 local ctxData = import("src/Context.lua")(CONFIG, DefaultLighting, Context.Utils, Context.DrawingManager)
 for k, v in pairs(ctxData) do Context[k] = v end
 
--- 4. Load UI blueprint and Theme
+-- 4. Load UI Engine & Theme
 Context.Theme = import("src/UI/Theme.lua")()
--- We save the UI "Class" into the context here
-Context.ShankUI = import("src/UI/ShankUI.lua")(Context, Context.Theme)
+Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
+
+if not Context.UIEngine then
+    error("[B0Xaz Loader] src/UI/UI.lua failed to return the UI engine!")
+end
 
 -- 5. Load Systems
 Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
@@ -45,11 +50,10 @@ Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
 
--- 6. Construct the UI Menu
--- This calls BuildUI.lua and passes the whole Context
+-- 6. Construct the UI
 import("src/UI/BuildUI.lua")(Context)
 
--- 7. Start
+-- 7. Initialize ESP & Runtime Loop
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
 
