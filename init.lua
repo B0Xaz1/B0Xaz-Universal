@@ -11,10 +11,18 @@ local Context = getgenv().B0XazContext
 
 local function import(path)
     local url = BASE_URL .. path .. "?t=" .. tostring(tick())
-    local source = game:HttpGet(url)
-    if not source or #source == 0 then error("[B0Xaz Loader] Failed to load: " .. path) end
+    local ok, source = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if not ok or not source or #source == 0 or source:sub(1,3) == "404" or source:find("404: Not Found") or source:find("<!DOCTYPE html>") then
+        error("[B0Xaz Loader] 404 File Not Found: " .. path .. "\nCheck URL: " .. url)
+    end
+    
     local chunk, err = loadstring(source, path)
-    if not chunk then error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) end
+    if not chunk then 
+        error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) 
+    end
     return chunk()
 end
 
@@ -45,23 +53,23 @@ end
 -- 5. Load Systems
 Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
 Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
+Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
 Context.ESPSystem = import("src/Systems/ESPSystem.lua")(Context)
 Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
-Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
+
+-- 6. Load Game Module Loader
 Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
 Context.GameModule = Context.GameLoader.Load()
 
--- 6. Construct the UI
+-- 7. Construct the UI
 import("src/UI/BuildUI.lua")(Context)
 
--- 7. Initialize ESP & Runtime Loop
+-- 8. Initialize ESP & Runtime Loop
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
 
 local gameName = Context.GameLoader.GetDisplayName()
-local support = Context.GameLoader.IsSupported() and "supported" or "universal only"
-Context.UI:Notify("B0Xaz Universal", gameName .. " — " .. support, 4, Context.Theme.Success)
-
-Context.UI:Notify("B0Xaz Universal", "Loaded Successfully", 4, Context.Theme.Success)
+local supportStr = Context.GameLoader.IsSupported() and "Supported" or "Universal Mode"
+Context.UI:Notify("B0Xaz Universal", gameName .. " (" .. supportStr .. ")", 4, Context.Theme.Success)
