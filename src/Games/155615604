@@ -1,11 +1,8 @@
 -- src/Games/155615604/init.lua
--- Prison Life
+-- Prison Life Module
 return function(Context)
 	local Workspace = game:GetService("Workspace")
-	local Players = game:GetService("Players")
-
 	local FeatureConfig = Context.FeatureConfig
-	local Utils = Context.Utils
 	local Theme = Context.Theme
 	local Connections = Context.Connections
 
@@ -19,22 +16,16 @@ return function(Context)
 
 	FeatureConfig.Game = FeatureConfig.Game or {}
 	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
-	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false -- default on when phase is used
+	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
 
-	-- original property cache: [BasePart] = { CanCollide, Transparency, Color, Material, ... }
 	local _cache = {}
-	local _highlights = {} -- [BasePart] = Highlight
-	local _active = false
+	local _highlights = {}
 	local _scanConn = nil
 
 	local Game = {
 		Name = "Prison Life",
 	}
-
-	local function isDoorPart(inst)
-		return inst:IsA("BasePart")
-	end
 
 	local function collectDoorParts()
 		local parts = {}
@@ -42,29 +33,13 @@ return function(Context)
 			local folder = Workspace:FindFirstChild(folderName)
 			if folder then
 				for _, desc in ipairs(folder:GetDescendants()) do
-					if isDoorPart(desc) then
+					if desc:IsA("BasePart") then
 						table.insert(parts, desc)
-					end
-				end
-				-- folder itself might be a model with direct children only
-				for _, child in ipairs(folder:GetChildren()) do
-					if isDoorPart(child) and not table.find(parts, child) then
-						table.insert(parts, child)
 					end
 				end
 			end
 		end
 		return parts
-	end
-
-	local function cachePart(part)
-		if _cache[part] then return end
-		_cache[part] = {
-			CanCollide = part.CanCollide,
-			Transparency = part.Transparency,
-			Color = part.Color,
-			Material = part.Material,
-		}
 	end
 
 	local function applyGlow(part, on)
@@ -82,7 +57,6 @@ return function(Context)
 			h.FillTransparency = 0.55
 			h.OutlineTransparency = 0
 			h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-			-- Parent to part or character-safe container
 			h.Parent = part
 			_highlights[part] = h
 		else
@@ -95,12 +69,16 @@ return function(Context)
 
 	local function applyPart(part)
 		if not part or not part.Parent then return end
-		cachePart(part)
+		if not _cache[part] then
+			_cache[part] = {
+				CanCollide = part.CanCollide,
+				Transparency = part.Transparency,
+			}
+		end
 
 		if FeatureConfig.Game.DoorPhase then
 			part.CanCollide = false
 			if FeatureConfig.Game.DoorGlow then
-				-- slight see-through so glow reads better
 				part.Transparency = math.max(part.Transparency, 0.35)
 				applyGlow(part, true)
 			else
@@ -115,8 +93,6 @@ return function(Context)
 			pcall(function()
 				part.CanCollide = c.CanCollide
 				part.Transparency = c.Transparency
-				part.Color = c.Color
-				part.Material = c.Material
 			end)
 		end
 		applyGlow(part, false)
@@ -124,8 +100,7 @@ return function(Context)
 	end
 
 	local function applyAll()
-		local parts = collectDoorParts()
-		for _, part in ipairs(parts) do
+		for _, part in ipairs(collectDoorParts()) do
 			applyPart(part)
 		end
 	end
@@ -142,44 +117,18 @@ return function(Context)
 		table.clear(_highlights)
 	end
 
-	local function stopScan()
-		if _scanConn then
-			pcall(function() _scanConn:Disconnect() end)
-			_scanConn = nil
-		end
-	end
-
-	local function startScan()
-		stopScan()
-		-- re-apply periodically (doors can respawn / streaming)
-		_scanConn = task.spawn(function()
-			while FeatureConfig.Game.DoorPhase do
-				applyAll()
-				task.wait(1.5)
-			end
-		end)
-		if Connections and Connections.Track then
-			Connections.Track(_scanConn)
-		end
-	end
-
 	function Game.SetDoorPhase(enabled)
 		FeatureConfig.Game.DoorPhase = enabled and true or false
-		_active = FeatureConfig.Game.DoorPhase
-		if _active then
+		if FeatureConfig.Game.DoorPhase then
 			applyAll()
-			startScan()
 		else
-			stopScan()
 			restoreAll()
 		end
 	end
 
 	function Game.SetDoorGlow(enabled)
 		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			applyAll()
-		end
+		if FeatureConfig.Game.DoorPhase then applyAll() end
 	end
 
 	function Game.SetGlowColor(color)
@@ -195,17 +144,12 @@ return function(Context)
 	end
 
 	function Game.BuildUI(tab)
-		local doors = tab:AddSection("Doors / Gates")
+		local doors = tab:AddSection("Doors & Fences")
 
 		doors:AddToggle("Phase Through Doors", FeatureConfig.Game.DoorPhase, function(v)
 			Game.SetDoorPhase(v)
 			if Context.UI then
-				Context.UI:Notify(
-					"Prison Life",
-					v and "Doors are non-collidable" or "Doors restored",
-					nil,
-					v and (Theme and Theme.Success) or (Theme and Theme.Accent)
-				)
+				Context.UI:Notify("Prison Life", v and "Door phase enabled" or "Door phase disabled", nil, Theme and Theme.Success)
 			end
 		end)
 
@@ -220,25 +164,18 @@ return function(Context)
 		doors:AddButton("Refresh Door List", function()
 			if FeatureConfig.Game.DoorPhase then
 				applyAll()
-				if Context.UI then
-					Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success)
-				end
-			else
-				if Context.UI then
-					Context.UI:Notify("Prison Life", "Enable Phase first", nil, Theme and Theme.Warning or Theme.Accent)
-				end
+				if Context.UI then Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success) end
 			end
 		end)
 
-		local info = tab:AddSection("Folders")
+		local info = tab:AddSection("Folders Detected")
 		for _, name in ipairs(DOOR_FOLDERS) do
 			local exists = Workspace:FindFirstChild(name) ~= nil
-			info:AddButton(name .. (exists and "  [OK]" or "  [missing]"), function() end)
+			info:AddButton(name .. (exists and "  [Found]" or "  [Missing]"), function() end)
 		end
 	end
 
 	function Game.Update(dt)
-		-- optional: keep collision off if something resets it
 		if not FeatureConfig.Game.DoorPhase then return end
 		for part, _ in pairs(_cache) do
 			if part and part.Parent and part.CanCollide then
@@ -248,15 +185,7 @@ return function(Context)
 	end
 
 	function Game.Destroy()
-		stopScan()
 		restoreAll()
-	end
-
-	-- If they saved config with DoorPhase on, apply after load
-	if FeatureConfig.Game.DoorPhase then
-		task.defer(function()
-			Game.SetDoorPhase(true)
-		end)
 	end
 
 	return Game
