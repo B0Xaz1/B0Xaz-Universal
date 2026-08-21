@@ -78,7 +78,7 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
         Chams = {
             Enabled = false,
             FillColor = Color3.fromRGB(0, 170, 255),
-            OutlineColor = Color3.fromRGB(255, 255, 255)
+            OutlineColor = Color3.fromRGB(255, 255, 255),
         },
         Camera = {FOV = 90},
         Visuals = {Fullbright = false},
@@ -88,6 +88,14 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             Crosshair = {Visible = false, Size = 12, Gap = 4, Thickness = 2, Color = Color3.fromRGB(255, 255, 255)},
             SpeedLines = false,
             Wallbang = false,
+        },
+        Performance = {
+            NoTextures = false,
+            LowMaterials = false,
+            OptimizeTerrain = false,
+            NoPostProcessing = false,
+            NoShadows = false,
+            NoParticles = false,
         },
         Game = {
             DoorPhase = false,
@@ -100,15 +108,7 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             ForceRange = false,
             FireRateValue = 0.001,
             RangeValue = 10000,
-        }
-                Performance = {
-            NoTextures = false,
-            LowMaterials = false,
-            OptimizeTerrain = false,
-            NoPostProcessing = false,
-            NoShadows = false,
-            NoParticles = false,
-        }
+        },
     }
 
     local State = {
