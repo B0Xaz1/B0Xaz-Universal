@@ -37,37 +37,25 @@ return function(Context, import)
 			return nil
 		end
 
-		local targetName = GameLoader.Info.Folder or placeId
-		
-		-- Try single file first (e.g., src/Games/155615604.lua)
-		local pathsToTry = {
-			"src/Games/" .. targetName .. ".lua",
-			"src/Games/" .. targetName .. "/init.lua",
-		}
+		local folder = GameLoader.Info.Folder or placeId
+		local path = "src/Games/" .. folder .. "/init.lua"
 
-		local result = nil
-		local lastErr = ""
-
-		for _, path in ipairs(pathsToTry) do
-			local ok, res = pcall(function()
-				local factory = import(path)
-				if type(factory) == "function" then
-					return factory(Context)
-				end
-				return factory
-			end)
-
-			if ok and type(res) == "table" then
-				GameLoader.Module = res
-				GameLoader.LoadError = nil
-				return res
-			else
-				lastErr = tostring(res)
+		local ok, result = pcall(function()
+			local factory = import(path)
+			if type(factory) == "function" then
+				return factory(Context)
 			end
+			return factory
+		end)
+
+		if ok and type(result) == "table" then
+			GameLoader.Module = result
+			GameLoader.LoadError = nil
+			return result
 		end
 
-		GameLoader.LoadError = lastErr
-		warn("[B0Xaz GameLoader] Error loading game module for " .. placeId .. ": " .. lastErr)
+		GameLoader.LoadError = tostring(result)
+		warn("[B0Xaz GameLoader] Error loading " .. path .. ": " .. tostring(result))
 		GameLoader.Module = nil
 		return nil
 	end
