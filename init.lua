@@ -28,7 +28,7 @@ end
 
 print("[B0Xaz] Loading modules...")
 
--- 1. Reset
+-- 1. Full Session Cleanup
 import("src/Cleanup.lua")()
 
 -- 2. Base Configurations & Utils
@@ -38,11 +38,11 @@ Context.DefaultLighting = DefaultLighting
 Context.Utils = import("src/Utils.lua")(CONFIG)
 Context.DrawingManager = import("src/DrawingManager.lua")()
 
--- 3. Load Context Table
+-- 3. Context & State Initialization
 local ctxData = import("src/Context.lua")(CONFIG, DefaultLighting, Context.Utils, Context.DrawingManager)
 for k, v in pairs(ctxData) do Context[k] = v end
 
--- 4. Load UI Engine & Theme
+-- 4. UI Engine & Theme
 Context.Theme = import("src/UI/Theme.lua")()
 Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
 
@@ -50,7 +50,7 @@ if not Context.UIEngine then
     error("[B0Xaz Loader] src/UI/UI.lua failed to return the UI engine!")
 end
 
--- 5. Load Systems
+-- 5. Core Systems
 Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
 Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
 Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
@@ -59,17 +59,17 @@ Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
 
--- 6. Load Game Module Loader
+-- 6. Game Specific Loader
 Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
 Context.GameModule = Context.GameLoader.Load()
 
--- 7. Construct the UI
+-- 7. Build User Interface
 import("src/UI/BuildUI.lua")(Context)
 
--- 8. Initialize ESP & Runtime Loop
+-- 8. Runtime & ESP Loops
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
 
 local gameName = Context.GameLoader.GetDisplayName()
-local supportStr = Context.GameLoader.IsSupported() and "Supported" or "Universal Mode"
+local supportStr = Context.GameLoader.IsSupported() and "Supported Game" or "Universal Mode"
 Context.UI:Notify("B0Xaz Universal", gameName .. " (" .. supportStr .. ")", 4, Context.Theme.Success)
