@@ -6,21 +6,32 @@ return function(Context)
     local Connections = Context.Connections
 
     local MovementSystem = {}
+    local lastJumpTime = 0
 
-    -- Auto-Bhop: Runs on Stepped (RIGHT BEFORE Roblox calculates physics)
+    -- Auto-Bhop: Runs on Stepped (Pre-Physics)
     Connections.Add(RS.Stepped:Connect(function()
         if not FeatureConfig.Movement.Bhop then return end
 
         local hum = Utils.GetHumanoid()
         if not hum or hum.Health <= 0 then return end
 
-        -- Trigger jump the exact millisecond the feet touch any ground/floor
-        if hum.FloorMaterial ~= Enum.Material.Air then
+        -- Cooldown check (250ms) to ensure character has physically left the ground
+        if tick() - lastJumpTime < 0.25 then return end
+
+        local state = hum:GetState()
+        local isGrounded = (hum.FloorMaterial ~= Enum.Material.Air) 
+            and (state ~= Enum.HumanoidStateType.Jumping) 
+            and (state ~= Enum.HumanoidStateType.Freefall)
+
+        -- Only jump when actually touching a floor/ground
+        if isGrounded then
+            lastJumpTime = tick()
             hum.Jump = true
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end))
 
-    -- CFrame Speed: Runs on RenderStepped for buttery-smooth movement
+    -- CFrame Speed: Runs on RenderStepped
     Connections.Add(RS.RenderStepped:Connect(function(dt)
         if not FeatureConfig.Movement.CFrameSpeed then return end
 
