@@ -1,1 +1,93 @@
-
+-- src/Cleanup.lua
+return function()
+    local g = getgenv()
+    if g.B0XazLibrary then pcall(function() g.B0XazLibrary:Destroy() end); g.B0XazLibrary = nil end
+    if g.B0XazConnections then 
+        for _, conn in ipairs(g.B0XazConnections) do 
+            pcall(function() if conn and conn.Connected then conn:Disconnect() end end) 
+        end 
+    end
+    g.B0XazConnections = {}
+    
+    if g.B0XazThreads then 
+        for _, th in ipairs(g.B0XazThreads) do 
+            pcall(function() task.cancel(th) end) 
+        end 
+    end
+    g.B0XazThreads = {}
+    
+    if g.B0XazDrawings then 
+        for _, d in pairs(g.B0XazDrawings) do 
+            pcall(function() d:Remove() end) 
+        end 
+    end
+    g.B0XazDrawings = {}
+    
+    if g.B0XazDrawingESP then 
+        for _, espData in pairs(g.B0XazDrawingESP) do 
+            if type(espData) == "table" then 
+                for _, drawing in pairs(espData) do 
+                    pcall(function() drawing:Remove() end) 
+                end 
+            end 
+        end 
+    end
+    g.B0XazDrawingESP = {}
+    
+    if g.B0XazTracerLines then 
+        for _, line in ipairs(g.B0XazTracerLines) do 
+            pcall(function() line:Remove() end) 
+        end 
+    end
+    g.B0XazTracerLines = {}
+    
+    if g.B0XazSkeletonLines then 
+        for _, lines in pairs(g.B0XazSkeletonLines) do 
+            if type(lines) == "table" then 
+                for _, line in ipairs(lines) do 
+                    pcall(function() line:Remove() end) 
+                end 
+            end 
+        end 
+    end
+    g.B0XazSkeletonLines = {}
+    
+    if g.B0XazHighlights then 
+        for _, h in pairs(g.B0XazHighlights) do 
+            pcall(function() h:Destroy() end) 
+        end 
+    end
+    g.B0XazHighlights = {}
+    
+    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+        if player.Character then 
+            for _, obj in ipairs(player.Character:GetChildren()) do 
+                if obj:IsA("Highlight") and obj.Name:find("B0Xaz") then 
+                    pcall(function() obj:Destroy() end) 
+                end 
+            end 
+        end
+    end
+    
+    local guiParents = {}
+    pcall(function() table.insert(guiParents, game:GetService("CoreGui")) end)
+    pcall(function() 
+        local lp = game:GetService("Players").LocalPlayer
+        if lp and lp:FindFirstChild("PlayerGui") then 
+            table.insert(guiParents, lp.PlayerGui) 
+        end 
+    end)
+    pcall(function() if gethui then table.insert(guiParents, gethui()) end end)
+    
+    for _, parent in ipairs(guiParents) do 
+        pcall(function() 
+            for _, gui in ipairs(parent:GetChildren()) do 
+                if gui:IsA("ScreenGui") and (gui.Name == "B0XazShankUI" or gui.Name:find("B0Xaz")) then 
+                    pcall(function() gui:Destroy() end) 
+                end 
+            end 
+        end) 
+    end
+    
+    g.B0XazState = nil
+end
