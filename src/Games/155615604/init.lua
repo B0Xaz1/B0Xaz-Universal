@@ -18,7 +18,7 @@ return function(Context)
 	}
 
 	----------------------------------------------------------------
-	-- Door cache (shared for cleanup / re-exec)
+	-- Door caches
 	----------------------------------------------------------------
 	local _cache = getgenv().B0XazDoorCache
 	if type(_cache) ~= "table" then
@@ -33,12 +33,12 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- Spread cache: [tool] = original SpreadRadius
+	-- Gun attribute cache: [instance] = { SpreadRadius=?, FireRate=?, AutoFire=? }
 	----------------------------------------------------------------
-	local _spreadCache = getgenv().B0XazSpreadCache
-	if type(_spreadCache) ~= "table" then
-		_spreadCache = {}
-		getgenv().B0XazSpreadCache = _spreadCache
+	local _gunCache = getgenv().B0XazGunCache
+	if type(_gunCache) ~= "table" then
+		_gunCache = {}
+		getgenv().B0XazGunCache = _gunCache
 	end
 
 	FeatureConfig.Game = FeatureConfig.Game or {}
@@ -47,6 +47,9 @@ return function(Context)
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
 	FeatureConfig.Game.PhaseTransparency = FeatureConfig.Game.PhaseTransparency or 0.65
 	FeatureConfig.Game.NoSpread = FeatureConfig.Game.NoSpread or false
+	FeatureConfig.Game.FastFire = FeatureConfig.Game.FastFire or false
+	FeatureConfig.Game.ForceAuto = FeatureConfig.Game.ForceAuto or false
+	FeatureConfig.Game.FireRateValue = FeatureConfig.Game.FireRateValue or 0.001
 
 	local Game = { Name = "Prison Life" }
 
@@ -135,7 +138,6 @@ return function(Context)
 			_cache[part] = nil
 			return
 		end
-
 		if not FeatureConfig.Game.DoorPhase then return end
 
 		if part.CanCollide then
@@ -165,8 +167,10 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- NO SPREAD (SpreadRadius attribute = 0)
+	-- GUN ATTRIBUTES (SpreadRadius / FireRate / AutoFire)
 	----------------------------------------------------------------
+	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire" }
+
 	local function getGunContainers()
 		local list = {}
 		if LocalPlayer then
@@ -177,50 +181,64 @@ return function(Context)
 		return list
 	end
 
-	local function isGunTool(inst)
-		if not inst or not inst:IsA("Tool") then return false end
-		-- Any tool with SpreadRadius (or common gun children)
-		if inst:GetAttribute("SpreadRadius") ~= nil then return true end
-		if inst:FindFirstChild("GunScript") or inst:FindFirstChild("GunStates") then return true end
-		if inst:FindFirstChild("Handle") and inst:GetAttribute("SpreadRadius") ~= nil then return true end
-		return inst:GetAttribute("SpreadRadius") ~= nil
+	local function cacheGunAttrs(inst)
+		if _gunCache[inst] then return end
+		local entry = {}
+		for _, name in ipairs(ATTRS) do
+			local v = inst:GetAttribute(name)
+			if v ~= nil then
+				entry[name] = v
+			end
+		end
+		-- also cache if any descendant has them
+		_gunCache[inst] = entry
 	end
 
-	local function cacheSpread(tool)
-		if _spreadCache[tool] ~= nil then return end
-		local v = tool:GetAttribute("SpreadRadius")
-		if v ~= nil then
-			_spreadCache[tool] = v
-		end
+	local function setAttr(inst, name, value)
+		pcall(function()
+			inst:SetAttribute(name, value)
+		end)
 	end
 
-	local function applyNoSpreadTo(tool)
-		if not tool or not tool.Parent then return end
-		if not tool:IsA("Tool") then return end
+	local function applyGunModsTo(inst)
+		if not inst or not inst.Parent then return end
 
-		local current = tool:GetAttribute("SpreadRadius")
-		if current == nil then
-			-- still try set if game expects the attribute
-			cacheSpread(tool)
-			pcall(function() tool:SetAttribute("SpreadRadius", 0) end)
-			return
-		end
+		local function touch(obj)
+			cacheGunAttrs(obj)
 
-		cacheSpread(tool)
-		if current ~= 0 then
-			pcall(function() tool:SetAttribute("SpreadRadius", 0) end)
-		end
-
-		-- Some guns store spread on children too
-		for _, d in ipairs(tool:GetDescendants()) do
-			if d:GetAttribute("SpreadRadius") ~= nil then
-				if _spreadCache[d] == nil then
-					_spreadCache[d] = d:GetAttribute("SpreadRadius")
-				end
-				if d:GetAttribute("SpreadRadius") ~= 0 then
-					pcall(function() d:SetAttribute("SpreadRadius", 0) end)
+			if FeatureConfig.Game.NoSpread and obj:GetAttribute("SpreadRadius") ~= nil then
+				if obj:GetAttribute("SpreadRadius") ~= 0 then
+					setAttr(obj, "SpreadRadius", 0)
 				end
 			end
+
+			if FeatureConfig.Game.FastFire and obj:GetAttribute("FireRate") ~= nil then
+				local fr = FeatureConfig.Game.FireRateValue or 0.001
+				if obj:GetAttribute("FireRate") ~= fr then
+					setAttr(obj, "FireRate", fr)
+				end
+			end
+
+			if FeatureConfig.Game.ForceAuto and obj:GetAttribute("AutoFire") ~= nil then
+				if obj:GetAttribute("AutoFire") ~= true then
+					setAttr(obj, "AutoFire", true)
+				end
+			end
+		end
+
+		if inst:IsA("Tool") then
+			touch(inst)
+			for _, d in ipairs(inst:GetDescendants()) do
+				if d:GetAttribute("SpreadRadius") ~= nil
+					or d:GetAttribute("FireRate") ~= nil
+					or d:GetAttribute("AutoFire") ~= nil then
+					touch(d)
+				end
+			end
+		elseif inst:GetAttribute("SpreadRadius") ~= nil
+			or inst:GetAttribute("FireRate") ~= nil
+			or inst:GetAttribute("AutoFire") ~= nil then
+			touch(inst)
 		end
 	end
 
@@ -228,26 +246,34 @@ return function(Context)
 		for _, container in ipairs(getGunContainers()) do
 			for _, child in ipairs(container:GetChildren()) do
 				if child:IsA("Tool") then
-					applyNoSpreadTo(child)
+					applyGunModsTo(child)
 				end
 			end
 		end
 	end
 
-	local function restoreSpread()
-		for inst, original in pairs(_spreadCache) do
-			if inst and inst.Parent then
-				pcall(function()
-					inst:SetAttribute("SpreadRadius", original)
-				end)
+	local function restoreGuns()
+		for inst, entry in pairs(_gunCache) do
+			if inst and inst.Parent and type(entry) == "table" then
+				for name, original in pairs(entry) do
+					pcall(function()
+						inst:SetAttribute(name, original)
+					end)
+				end
 			end
-			_spreadCache[inst] = nil
+			_gunCache[inst] = nil
 		end
-		table.clear(_spreadCache)
+		table.clear(_gunCache)
 	end
 
-	local function enforceNoSpread()
-		if not FeatureConfig.Game.NoSpread then return end
+	local function anyGunModEnabled()
+		return FeatureConfig.Game.NoSpread
+			or FeatureConfig.Game.FastFire
+			or FeatureConfig.Game.ForceAuto
+	end
+
+	local function enforceGuns()
+		if not anyGunModEnabled() then return end
 		scanGuns()
 	end
 
@@ -261,8 +287,8 @@ return function(Context)
 					enforcePart(part)
 				end
 			end
-			if FeatureConfig.Game.NoSpread then
-				enforceNoSpread()
+			if anyGunModEnabled() then
+				enforceGuns()
 			end
 		end))
 
@@ -274,13 +300,12 @@ return function(Context)
 			end
 		end))
 
-		-- New tools added to backpack / character
 		local function hookContainer(container)
 			if not container then return end
 			Connections.Add(container.ChildAdded:Connect(function(child)
-				if FeatureConfig.Game.NoSpread and child:IsA("Tool") then
+				if anyGunModEnabled() and child:IsA("Tool") then
 					task.defer(function()
-						applyNoSpreadTo(child)
+						applyGunModsTo(child)
 					end)
 				end
 			end))
@@ -288,11 +313,13 @@ return function(Context)
 
 		hookContainer(LocalPlayer:FindFirstChild("Backpack"))
 		if LocalPlayer.Character then hookContainer(LocalPlayer.Character) end
+
 		Connections.Add(LocalPlayer.CharacterAdded:Connect(function(char)
 			hookContainer(char)
 			task.wait(0.5)
-			if FeatureConfig.Game.NoSpread then scanGuns() end
+			if anyGunModEnabled() then scanGuns() end
 		end))
+
 		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
 			if child.Name == "Backpack" then hookContainer(child) end
 		end))
@@ -325,8 +352,47 @@ return function(Context)
 		FeatureConfig.Game.NoSpread = enabled and true or false
 		if FeatureConfig.Game.NoSpread then
 			scanGuns()
+		elseif not anyGunModEnabled() then
+			restoreGuns()
 		else
-			restoreSpread()
+			scanGuns()
+		end
+	end
+
+	function Game.SetFastFire(enabled)
+		FeatureConfig.Game.FastFire = enabled and true or false
+		if FeatureConfig.Game.FastFire then
+			scanGuns()
+		elseif not anyGunModEnabled() then
+			restoreGuns()
+		else
+			-- restore only FireRate if other mods still on
+			for inst, entry in pairs(_gunCache) do
+				if inst and inst.Parent and entry and entry.FireRate ~= nil then
+					if not FeatureConfig.Game.FastFire then
+						pcall(function() inst:SetAttribute("FireRate", entry.FireRate) end)
+					end
+				end
+			end
+			scanGuns()
+		end
+	end
+
+	function Game.SetForceAuto(enabled)
+		FeatureConfig.Game.ForceAuto = enabled and true or false
+		if FeatureConfig.Game.ForceAuto then
+			scanGuns()
+		elseif not anyGunModEnabled() then
+			restoreGuns()
+		else
+			for inst, entry in pairs(_gunCache) do
+				if inst and inst.Parent and entry and entry.AutoFire ~= nil then
+					if not FeatureConfig.Game.ForceAuto then
+						pcall(function() inst:SetAttribute("AutoFire", entry.AutoFire) end)
+					end
+				end
+			end
+			scanGuns()
 		end
 	end
 
@@ -370,7 +436,21 @@ return function(Context)
 			end
 		end)
 
-		combat:AddButton("Force Apply No Spread", function()
+		combat:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v)
+			Game.SetFastFire(v)
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", v and "FireRate = 0.001" or "FireRate restored", nil, Theme and Theme.Success)
+			end
+		end)
+
+		combat:AddToggle("Force AutoFire", FeatureConfig.Game.ForceAuto, function(v)
+			Game.SetForceAuto(v)
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", v and "AutoFire = true" or "AutoFire restored", nil, Theme and Theme.Success)
+			end
+		end)
+
+		combat:AddButton("Force Apply Gun Mods", function()
 			scanGuns()
 			if Context and Context.UI then
 				Context.UI:Notify("Prison Life", "Guns updated", nil, Theme and Theme.Accent)
@@ -384,18 +464,18 @@ return function(Context)
 				enforcePart(part)
 			end
 		end
-		if FeatureConfig.Game.NoSpread then
-			enforceNoSpread()
+		if anyGunModEnabled() then
+			enforceGuns()
 		end
 	end
 
 	function Game.Destroy()
 		restoreAllDoors()
-		restoreSpread()
+		restoreGuns()
 	end
 
 	getgenv().B0XazRestoreDoors = restoreAllDoors
-	getgenv().B0XazRestoreSpread = restoreSpread
+	getgenv().B0XazRestoreGuns = restoreGuns
 
 	return Game
 end
