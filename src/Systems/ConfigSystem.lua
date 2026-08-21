@@ -11,100 +11,152 @@ return function(Context)
     function ConfigSystem.Serialize()
         return {
             Aimbot = {
-                Enabled = FeatureConfig.Aimbot.Enabled, Keybind = FeatureConfig.Aimbot.Keybind, 
-                Hitpart = FeatureConfig.Aimbot.Hitpart, AirHitpart = FeatureConfig.Aimbot.AirHitpart, 
-                Smoothness = FeatureConfig.Aimbot.Smoothness, LockMode = FeatureConfig.Aimbot.LockMode, 
-                Prediction = table.clone(FeatureConfig.Aimbot.Prediction), TeamCheck = FeatureConfig.Aimbot.TeamCheck, 
-                VisCheck = FeatureConfig.Aimbot.VisCheck, MaxDistance = FeatureConfig.Aimbot.MaxDistance, 
-                ShakeIntensity = FeatureConfig.Aimbot.ShakeIntensity, LockNPC = FeatureConfig.Aimbot.LockNPC, 
+                Enabled = FeatureConfig.Aimbot.Enabled,
+                Keybind = FeatureConfig.Aimbot.Keybind,
+                Hitpart = FeatureConfig.Aimbot.Hitpart,
+                AirHitpart = FeatureConfig.Aimbot.AirHitpart,
+                Smoothness = FeatureConfig.Aimbot.Smoothness,
+                LockMode = FeatureConfig.Aimbot.LockMode,
+                Prediction = table.clone(FeatureConfig.Aimbot.Prediction),
+                TeamCheck = FeatureConfig.Aimbot.TeamCheck,
+                VisCheck = FeatureConfig.Aimbot.VisCheck,
+                MaxDistance = FeatureConfig.Aimbot.MaxDistance,
+                ShakeIntensity = FeatureConfig.Aimbot.ShakeIntensity,
+                LockNPC = FeatureConfig.Aimbot.LockNPC,
+                Triggerbot = table.clone(FeatureConfig.Aimbot.Triggerbot),
                 FOV = table.clone(FeatureConfig.Aimbot.FOV)
             },
             Movement = table.clone(FeatureConfig.Movement),
             ESP = {
-                Enabled = FeatureConfig.ESP.Enabled, Box = FeatureConfig.ESP.Box, 
-                Name = FeatureConfig.ESP.Name, Health = FeatureConfig.ESP.Health, 
-                Distance = FeatureConfig.ESP.Distance, Tracers = FeatureConfig.ESP.Tracers, 
-                Skeleton = FeatureConfig.ESP.Skeleton, HeadDot = FeatureConfig.ESP.HeadDot, 
-                LookDir = FeatureConfig.ESP.LookDir, TeamCheck = FeatureConfig.ESP.TeamCheck, 
-                MaxDist = FeatureConfig.ESP.MaxDist, Color = Utils.ColorToTable(FeatureConfig.ESP.Color)
+                Enabled = FeatureConfig.ESP.Enabled,
+                Box = FeatureConfig.ESP.Box,
+                Name = FeatureConfig.ESP.Name,
+                Health = FeatureConfig.ESP.Health,
+                Distance = FeatureConfig.ESP.Distance,
+                Tracers = FeatureConfig.ESP.Tracers,
+                Skeleton = FeatureConfig.ESP.Skeleton,
+                HeadDot = FeatureConfig.ESP.HeadDot,
+                LookDir = FeatureConfig.ESP.LookDir,
+                TeamCheck = FeatureConfig.ESP.TeamCheck,
+                MaxDist = FeatureConfig.ESP.MaxDist,
+                Color = Utils.ColorToTable(FeatureConfig.ESP.Color)
             },
             Chams = {
-                Enabled = FeatureConfig.Chams.Enabled, 
-                FillColor = Utils.ColorToTable(FeatureConfig.Chams.FillColor), 
+                Enabled = FeatureConfig.Chams.Enabled,
+                FillColor = Utils.ColorToTable(FeatureConfig.Chams.FillColor),
                 OutlineColor = Utils.ColorToTable(FeatureConfig.Chams.OutlineColor)
             },
             Camera = {FOV = FeatureConfig.Camera.FOV},
             Visuals = {Fullbright = FeatureConfig.Visuals.Fullbright},
             Extras = {
-                Hitbox = table.clone(FeatureConfig.Extras.Hitbox), 
-                SpinBot = table.clone(FeatureConfig.Extras.SpinBot), 
+                Hitbox = table.clone(FeatureConfig.Extras.Hitbox),
+                SpinBot = table.clone(FeatureConfig.Extras.SpinBot),
                 Crosshair = {
-                    Visible = FeatureConfig.Extras.Crosshair.Visible, 
-                    Size = FeatureConfig.Extras.Crosshair.Size, 
-                    Gap = FeatureConfig.Extras.Crosshair.Gap, 
-                    Thickness = FeatureConfig.Extras.Crosshair.Thickness, 
+                    Visible = FeatureConfig.Extras.Crosshair.Visible,
+                    Size = FeatureConfig.Extras.Crosshair.Size,
+                    Gap = FeatureConfig.Extras.Crosshair.Gap,
+                    Thickness = FeatureConfig.Extras.Crosshair.Thickness,
                     Color = Utils.ColorToTable(FeatureConfig.Extras.Crosshair.Color)
-                }, 
-                SpeedLines = FeatureConfig.Extras.SpeedLines, 
+                },
+                SpeedLines = FeatureConfig.Extras.SpeedLines,
                 Wallbang = FeatureConfig.Extras.Wallbang
             },
+            Game = {
+                DoorPhase = FeatureConfig.Game.DoorPhase,
+                DoorGlow = FeatureConfig.Game.DoorGlow,
+                GlowColor = Utils.ColorToTable(FeatureConfig.Game.GlowColor),
+                PhaseTransparency = FeatureConfig.Game.PhaseTransparency,
+                NoSpread = FeatureConfig.Game.NoSpread,
+                FastFire = FeatureConfig.Game.FastFire,
+                ForceAuto = FeatureConfig.Game.ForceAuto,
+                ForceRange = FeatureConfig.Game.ForceRange,
+                FireRateValue = FeatureConfig.Game.FireRateValue,
+                RangeValue = FeatureConfig.Game.RangeValue
+            }
         }
     end
 
     function ConfigSystem.Deserialize(data)
         if type(data) ~= "table" then return end
-        if type(data.Aimbot) == "table" then 
-            for k, v in pairs(data.Aimbot) do 
-                if (k == "Prediction" or k == "FOV") and type(v) == "table" then 
-                    for k2, v2 in pairs(v) do FeatureConfig.Aimbot[k][k2] = v2 end 
-                else 
-                    FeatureConfig.Aimbot[k] = v 
-                end 
-            end 
+        if type(data.Aimbot) == "table" then
+            for k, v in pairs(data.Aimbot) do
+                if (k == "Prediction" or k == "FOV" or k == "Triggerbot") and type(v) == "table" then
+                    for k2, v2 in pairs(v) do FeatureConfig.Aimbot[k][k2] = v2 end
+                else
+                    FeatureConfig.Aimbot[k] = v
+                end
+            end
         end
-        if type(data.Movement) == "table" then for k,v in pairs(data.Movement) do FeatureConfig.Movement[k] = v end end
-        if type(data.ESP) == "table" then 
-            for k,v in pairs(data.ESP) do 
-                if k == "Color" then FeatureConfig.ESP.Color = Utils.TableToColor(v) else FeatureConfig.ESP[k] = v end 
-            end 
+        if type(data.Movement) == "table" then
+            for k, v in pairs(data.Movement) do FeatureConfig.Movement[k] = v end
         end
-        if type(data.Chams) == "table" then 
-            for k,v in pairs(data.Chams) do 
-                if k == "FillColor" or k == "OutlineColor" then FeatureConfig.Chams[k] = Utils.TableToColor(v) else FeatureConfig.Chams[k] = v end 
-            end 
+        if type(data.ESP) == "table" then
+            for k, v in pairs(data.ESP) do
+                if k == "Color" then FeatureConfig.ESP.Color = Utils.TableToColor(v) else FeatureConfig.ESP[k] = v end
+            end
         end
-        if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then FeatureConfig.Camera.FOV = data.Camera.FOV end
-        if type(data.Visuals) == "table" and data.Visuals.Fullbright ~= nil then FeatureConfig.Visuals.Fullbright = data.Visuals.Fullbright end
+        if type(data.Chams) == "table" then
+            for k, v in pairs(data.Chams) do
+                if k == "FillColor" or k == "OutlineColor" then
+                    FeatureConfig.Chams[k] = Utils.TableToColor(v)
+                else
+                    FeatureConfig.Chams[k] = v
+                end
+            end
+        end
+        if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then
+            FeatureConfig.Camera.FOV = data.Camera.FOV
+        end
+        if type(data.Visuals) == "table" and data.Visuals.Fullbright ~= nil then
+            FeatureConfig.Visuals.Fullbright = data.Visuals.Fullbright
+        end
         if type(data.Extras) == "table" then
-            if type(data.Extras.Hitbox) == "table" then for k,v in pairs(data.Extras.Hitbox) do FeatureConfig.Extras.Hitbox[k] = v end end
-            if type(data.Extras.SpinBot) == "table" then for k,v in pairs(data.Extras.SpinBot) do FeatureConfig.Extras.SpinBot[k] = v end end
-            if type(data.Extras.Crosshair) == "table" then 
-                for k,v in pairs(data.Extras.Crosshair) do 
-                    if k == "Color" then FeatureConfig.Extras.Crosshair.Color = Utils.TableToColor(v) else FeatureConfig.Extras.Crosshair[k] = v end 
-                end 
+            if type(data.Extras.Hitbox) == "table" then
+                for k, v in pairs(data.Extras.Hitbox) do FeatureConfig.Extras.Hitbox[k] = v end
+            end
+            if type(data.Extras.SpinBot) == "table" then
+                for k, v in pairs(data.Extras.SpinBot) do FeatureConfig.Extras.SpinBot[k] = v end
+            end
+            if type(data.Extras.Crosshair) == "table" then
+                for k, v in pairs(data.Extras.Crosshair) do
+                    if k == "Color" then
+                        FeatureConfig.Extras.Crosshair.Color = Utils.TableToColor(v)
+                    else
+                        FeatureConfig.Extras.Crosshair[k] = v
+                    end
+                end
             end
             if data.Extras.SpeedLines ~= nil then FeatureConfig.Extras.SpeedLines = data.Extras.SpeedLines end
             if data.Extras.Wallbang ~= nil then FeatureConfig.Extras.Wallbang = data.Extras.Wallbang end
+        end
+        if type(data.Game) == "table" then
+            for k, v in pairs(data.Game) do
+                if k == "GlowColor" then
+                    FeatureConfig.Game.GlowColor = Utils.TableToColor(v)
+                else
+                    FeatureConfig.Game[k] = v
+                end
+            end
         end
     end
 
     function ConfigSystem.GetSavedNames()
         local names = {}
-        for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do 
+        for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do
             local name = path:match("[/\\]?([^/\\]+)$") or path
-            if name:sub(-#CONFIG.EXT) == CONFIG.EXT then 
-                table.insert(names, name:sub(1, -#CONFIG.EXT - 1)) 
-            end 
+            if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
+                table.insert(names, name:sub(1, -#CONFIG.EXT - 1))
+            end
         end
         table.sort(names)
         return names
     end
 
-    function ConfigSystem.Save(name) 
+    function ConfigSystem.Save(name)
         if not name or #name == 0 then return false, "Empty name" end
         local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
         if not ok then return false, tostring(encoded) end
-        return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded) 
+        return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
     end
 
     function ConfigSystem.UpdateUI()
@@ -177,6 +229,15 @@ return function(Context)
         set("Extras_SpeedLines", FeatureConfig.Extras.SpeedLines)
         set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
         set("Visuals_Fullbright", FeatureConfig.Visuals.Fullbright)
+
+        set("Game_DoorPhase", FeatureConfig.Game.DoorPhase)
+        set("Game_DoorGlow", FeatureConfig.Game.DoorGlow)
+        set("Game_PhaseTransparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100))
+        set("Game_GlowColor", FeatureConfig.Game.GlowColor)
+        set("Game_NoSpread", FeatureConfig.Game.NoSpread)
+        set("Game_FastFire", FeatureConfig.Game.FastFire)
+        set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
+        set("Game_ForceRange", FeatureConfig.Game.ForceRange)
     end
 
     function ConfigSystem.Load(name)
@@ -189,8 +250,8 @@ return function(Context)
         return true
     end
 
-    function ConfigSystem.Delete(name) 
-        return pcall(function() delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT) end) 
+    function ConfigSystem.Delete(name)
+        return pcall(function() delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT) end)
     end
 
     return ConfigSystem
