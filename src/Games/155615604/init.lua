@@ -170,12 +170,6 @@ return function(Context)
 				if Context and Context.UI then Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success) end
 			end
 		end)
-
-		local info = tab:AddSection("Folders Detected")
-		for _, name in ipairs(DOOR_FOLDERS) do
-			local exists = Workspace:FindFirstChild(name) ~= nil
-			info:AddButton(name .. (exists and "  [Found]" or "  [Missing]"), function() end)
-		end
 	end
 
 	function Game.Update(dt)
