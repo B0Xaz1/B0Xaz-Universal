@@ -50,6 +50,8 @@ Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
 Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
 Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
 Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
+Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
+Context.GameModule = Context.GameLoader.Load()
 
 -- 6. Construct the UI
 import("src/UI/BuildUI.lua")(Context)
@@ -57,5 +59,9 @@ import("src/UI/BuildUI.lua")(Context)
 -- 7. Initialize ESP & Runtime Loop
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
+
+local gameName = Context.GameLoader.GetDisplayName()
+local support = Context.GameLoader.IsSupported() and "supported" or "universal only"
+Context.UI:Notify("B0Xaz Universal", gameName .. " — " .. support, 4, Context.Theme.Success)
 
 Context.UI:Notify("B0Xaz Universal", "Loaded Successfully", 4, Context.Theme.Success)
