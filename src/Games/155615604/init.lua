@@ -15,19 +15,27 @@ return function(Context)
 		"Prison_Gate",
 	}
 
+	-- Shared cache so Cleanup.lua / re-exec can restore doors
+	local _cache = getgenv().B0XazDoorCache
+	if type(_cache) ~= "table" then
+		_cache = {}
+		getgenv().B0XazDoorCache = _cache
+	end
+
+	local _doorPartsSet = getgenv().B0XazDoorParts
+	if type(_doorPartsSet) ~= "table" then
+		_doorPartsSet = {}
+		getgenv().B0XazDoorParts = _doorPartsSet
+	end
+
 	FeatureConfig.Game = FeatureConfig.Game or {}
 	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
 	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
+	FeatureConfig.Game.GlowTransparency = FeatureConfig.Game.GlowTransparency or 0.45
 
-	local _cache = {}
-	local _doorPartsSet = {}
+	local Game = { Name = "Prison Life" }
 
-	local Game = {
-		Name = "Prison Life",
-	}
-
-	-- Helper: check if a part belongs to a door folder
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
 			if name:lower() == folderName:lower() then
@@ -49,6 +57,31 @@ return function(Context)
 		return false
 	end
 
+	local function restorePart(part)
+		local c = _cache[part]
+		if c and part and part.Parent then
+			pcall(function()
+				part.CanCollide = c.CanCollide
+				part.Transparency = c.Transparency
+				part.Color = c.Color
+				part.Material = c.Material
+			end)
+		end
+		_cache[part] = nil
+		_doorPartsSet[part] = nil
+	end
+
+	local function restoreAll()
+		for part, _ in pairs(_cache) do
+			restorePart(part)
+		end
+		table.clear(_cache)
+		table.clear(_doorPartsSet)
+	end
+
+	-- Always clear previous session visuals on module load (re-exec safety)
+	restoreAll()
+
 	local function cachePart(part)
 		if _cache[part] then return end
 		_cache[part] = {
@@ -69,7 +102,7 @@ return function(Context)
 			if FeatureConfig.Game.DoorGlow then
 				part.Material = Enum.Material.Neon
 				part.Color = FeatureConfig.Game.GlowColor
-				part.Transparency = 0.25
+				part.Transparency = FeatureConfig.Game.GlowTransparency or 0.45
 			end
 		end
 	end
@@ -88,53 +121,38 @@ return function(Context)
 		end
 	end
 
-	local function restoreAll()
-		for part, c in pairs(_cache) do
-			if part and part.Parent then
-				pcall(function()
-					part.CanCollide = c.CanCollide
-					part.Transparency = c.Transparency
-					part.Color = c.Color
-					part.Material = c.Material
-				end)
+	local function enforcePart(part)
+		if not part or not part.Parent then
+			_doorPartsSet[part] = nil
+			_cache[part] = nil
+			return
+		end
+
+		part.CanCollide = false
+
+		if FeatureConfig.Game.DoorGlow then
+			local t = FeatureConfig.Game.GlowTransparency or 0.45
+			if part.Material ~= Enum.Material.Neon then
+				part.Material = Enum.Material.Neon
+			end
+			if part.Color ~= FeatureConfig.Game.GlowColor then
+				part.Color = FeatureConfig.Game.GlowColor
+			end
+			-- Always force transparency (game door scripts reset it)
+			if math.abs(part.Transparency - t) > 0.01 then
+				part.Transparency = t
 			end
 		end
-		table.clear(_cache)
-		table.clear(_doorPartsSet)
 	end
 
-	-- Pre-Physics Frame Loop: Overrides Prison Life's DoorScript every frame
 	if Connections and Connections.Add then
 		Connections.Add(RS.Stepped:Connect(function()
 			if not FeatureConfig.Game.DoorPhase then return end
-
 			for part, _ in pairs(_doorPartsSet) do
-				if part and part.Parent then
-					-- Force non-collidable
-					if part.CanCollide then
-						part.CanCollide = false
-					end
-
-					-- Force Neon & Color continuously
-					if FeatureConfig.Game.DoorGlow then
-						if part.Material ~= Enum.Material.Neon then
-							part.Material = Enum.Material.Neon
-						end
-						if part.Color ~= FeatureConfig.Game.GlowColor then
-							part.Color = FeatureConfig.Game.GlowColor
-						end
-						if part.Transparency > 0.4 or part.Transparency < 0.1 then
-							part.Transparency = 0.25
-						end
-					end
-				else
-					_doorPartsSet[part] = nil
-					_cache[part] = nil
-				end
+				enforcePart(part)
 			end
 		end))
 
-		-- Automatically catch newly spawned doors/fences
 		Connections.Add(Workspace.DescendantAdded:Connect(function(desc)
 			if FeatureConfig.Game.DoorPhase and desc:IsA("BasePart") then
 				task.defer(function()
@@ -155,18 +173,19 @@ return function(Context)
 
 	function Game.SetDoorGlow(enabled)
 		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			if not FeatureConfig.Game.DoorGlow then
-				-- Revert material and color back to original, but keep non-collidable
-				for part, c in pairs(_cache) do
-					if part and part.Parent then
-						part.Material = c.Material
-						part.Color = c.Color
-						part.Transparency = c.Transparency
-					end
+		if not FeatureConfig.Game.DoorPhase then return end
+
+		if FeatureConfig.Game.DoorGlow then
+			scanAllDoors()
+		else
+			-- Keep phase, restore look only
+			for part, c in pairs(_cache) do
+				if part and part.Parent then
+					part.Material = c.Material
+					part.Color = c.Color
+					part.Transparency = c.Transparency
+					part.CanCollide = false
 				end
-			else
-				scanAllDoors()
 			end
 		end
 	end
@@ -177,6 +196,7 @@ return function(Context)
 			for part, _ in pairs(_doorPartsSet) do
 				if part and part.Parent then
 					part.Color = color
+					part.Transparency = FeatureConfig.Game.GlowTransparency or 0.45
 				end
 			end
 		end
@@ -196,6 +216,17 @@ return function(Context)
 			Game.SetDoorGlow(v)
 		end)
 
+		doors:AddSlider("Glow Transparency", math.floor((FeatureConfig.Game.GlowTransparency or 0.45) * 100), 0, 90, function(v)
+			FeatureConfig.Game.GlowTransparency = v / 100
+			if FeatureConfig.Game.DoorPhase and FeatureConfig.Game.DoorGlow then
+				for part, _ in pairs(_doorPartsSet) do
+					if part and part.Parent then
+						part.Transparency = FeatureConfig.Game.GlowTransparency
+					end
+				end
+			end
+		end)
+
 		doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
 			Game.SetGlowColor(c)
 		end)
@@ -203,7 +234,9 @@ return function(Context)
 		doors:AddButton("Refresh Door List", function()
 			if FeatureConfig.Game.DoorPhase then
 				scanAllDoors()
-				if Context and Context.UI then Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success) end
+				if Context and Context.UI then
+					Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success)
+				end
 			end
 		end)
 	end
@@ -211,15 +244,16 @@ return function(Context)
 	function Game.Update(dt)
 		if not FeatureConfig.Game.DoorPhase then return end
 		for part, _ in pairs(_doorPartsSet) do
-			if part and part.Parent and part.CanCollide then
-				part.CanCollide = false
-			end
+			enforcePart(part)
 		end
 	end
 
 	function Game.Destroy()
 		restoreAll()
 	end
+
+	-- Expose restore for Cleanup
+	getgenv().B0XazRestoreDoors = restoreAll
 
 	return Game
 end
