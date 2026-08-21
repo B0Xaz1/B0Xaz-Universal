@@ -666,5 +666,64 @@ return function(Context)
 		end
 	end)
 
+		----------------------------------------------------------------
+	-- TAB: Optimization
+	----------------------------------------------------------------
+	local optTab = UI:AddTab("Optimization")
+	local PerfSystem = Context.PerformanceSystem
+
+	-- 1. Rendering Optimization Group
+	local gpuSec = optTab:AddSection("GPU Boosters")
+
+	UIRegistry.Perf_NoTextures = gpuSec:AddToggle("Remove Textures & Decals", FeatureConfig.Performance.NoTextures, function(v)
+		PerfSystem.SetNoTextures(v)
+	end)
+
+	UIRegistry.Perf_LowMaterials = gpuSec:AddToggle("Force Smooth Plastic", FeatureConfig.Performance.LowMaterials, function(v)
+		PerfSystem.SetLowMaterials(v)
+	end)
+
+	UIRegistry.Perf_OptimizeTerrain = gpuSec:AddToggle("Optimize 3D Terrain", FeatureConfig.Performance.OptimizeTerrain, function(v)
+		PerfSystem.SetOptimizeTerrain(v)
+	end)
+
+	UIRegistry.Perf_NoPostProcessing = gpuSec:AddToggle("Disable Post-Processing Effects", FeatureConfig.Performance.NoPostProcessing, function(v)
+		PerfSystem.SetNoPostProcessing(v)
+	end)
+
+	-- 2. Effects & Processing Controls
+	local fxSec = optTab:AddSection("Effects Optimizer")
+
+	UIRegistry.Perf_NoShadows = fxSec:AddToggle("Disable Part Shadows", FeatureConfig.Performance.NoShadows, function(v)
+		PerfSystem.SetNoShadows(v)
+	end)
+
+	UIRegistry.Perf_NoParticles = fxSec:AddToggle("Disable Particle Systems", FeatureConfig.Performance.NoParticles, function(v)
+		FeatureConfig.Performance.NoParticles = v
+		for _, o in ipairs(Workspace:GetDescendants()) do
+			if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Smoke") or o:IsA("Fire") or o:IsA("Sparkles") then
+				pcall(function() o.Enabled = not v end)
+			end
+		end
+	end)
+
+	-- 3. Framerate Tools
+	local fpsSec = optTab:AddSection("Framerate Adjusters")
+
+	fpsSec:AddButton("Unlock FPS (Internal Cap 999)", function()
+		pcall(function() setfpscap(999) end)
+		UI:Notify("Optimization", "Framerate capability unlocked", nil, Theme.Success)
+	end)
+
+	fpsSec:AddButton("Reset Frame Lock to 60 FPS", function()
+		pcall(function() setfpscap(60) end)
+		UI:Notify("Optimization", "Framerate locked to 60 FPS", nil, Theme.Warning)
+	end)
+
+	fpsSec:AddButton("Cap Framerate to 144 FPS", function()
+		pcall(function() setfpscap(144) end)
+		UI:Notify("Optimization", "Framerate locked to 144 FPS", nil, Theme.Success)
+	end)
+
 	return UI
 end
