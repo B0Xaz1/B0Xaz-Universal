@@ -41,6 +41,9 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             Speed = 16, JumpPower = 50, InfJump = false,
             FlyEnabled = false, FlySpeed = 50, MobileFlyUp = false, MobileFlyDown = false,
             SprintEnabled = false, SprintSpeed = 30,
+            CFrameSpeed = false,
+            CFrameSpeedValue = 50,
+            Bhop = false,
         },
         ESP = {
             Enabled = false, Box = false, Name = false, Health = false,
