@@ -16,7 +16,7 @@ return function(Context, import)
 		if GameLoader.Info then
 			return GameLoader.Info.Name
 		end
-		return "Unknown Game (" .. placeId .. ")"
+		return "Universal (" .. placeId .. ")"
 	end
 
 	function GameLoader.IsSupported()
@@ -38,14 +38,12 @@ return function(Context, import)
 		end
 
 		local targetName = GameLoader.Info.Folder or placeId
-		
 		local pathsToTry = {
 			"src/Games/" .. targetName .. "/init.lua",
 			"src/Games/" .. targetName .. ".lua",
 		}
 
 		local lastErr = ""
-
 		for _, path in ipairs(pathsToTry) do
 			local ok, res = pcall(function()
 				local factory = import(path)
@@ -65,7 +63,7 @@ return function(Context, import)
 		end
 
 		GameLoader.LoadError = lastErr
-		warn("[B0Xaz GameLoader] Error loading game module for " .. placeId .. ": " .. lastErr)
+		warn("[B0Xaz GameLoader] Error loading module for " .. placeId .. ": " .. lastErr)
 		GameLoader.Module = nil
 		return nil
 	end
@@ -76,7 +74,7 @@ return function(Context, import)
 				GameLoader.Module.BuildUI(tab)
 			end)
 			if not ok then
-				warn("[B0Xaz GameLoader] Error building UI: " .. tostring(err))
+				warn("[B0Xaz GameLoader] Error building game UI: " .. tostring(err))
 				return false, tostring(err)
 			end
 			return true
