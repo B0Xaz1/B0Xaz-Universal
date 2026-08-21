@@ -73,32 +73,6 @@ return function(Context)
 
     -- User Inputs
     if Connections.Add then
-        Connections.Add(UIS.InputBegan:Connect(function(input, processed)
-            if processed or IsMobile or not FeatureConfig.Aimbot or not FeatureConfig.Aimbot.Enabled then return end
-            local key = Utils.GetKeyCode and Utils.GetKeyCode(FeatureConfig.Aimbot.Keybind)
-            if not key or input.KeyCode ~= key then return end
-            if FeatureConfig.Aimbot.LockMode == "Hold" then
-                State.AimHoldActive = true
-                if AimbotSystem and type(AimbotSystem.LockOn) == "function" then AimbotSystem.LockOn() end
-            else
-                if State.AimLocked then
-                    if AimbotSystem and type(AimbotSystem.LockOff) == "function" then AimbotSystem.LockOff() end
-                else
-                    if AimbotSystem and type(AimbotSystem.LockOn) == "function" then AimbotSystem.LockOn() end
-                end
-            end
-        end))
-
-        Connections.Add(UIS.InputEnded:Connect(function(input)
-            if IsMobile or not FeatureConfig.Aimbot then return end
-            local key = Utils.GetKeyCode and Utils.GetKeyCode(FeatureConfig.Aimbot.Keybind)
-            if not key or input.KeyCode ~= key then return end
-            if FeatureConfig.Aimbot.LockMode == "Hold" then
-                State.AimHoldActive = false
-                if AimbotSystem and type(AimbotSystem.LockOff) == "function" then AimbotSystem.LockOff() end
-            end
-        end))
-
         Connections.Add(UIS.JumpRequest:Connect(function()
             if FeatureConfig.Movement and FeatureConfig.Movement.InfJump then
                 local h = Utils.GetHumanoid and Utils.GetHumanoid()
@@ -136,8 +110,12 @@ return function(Context)
             end
 
             if AimbotSystem then
-                if type(AimbotSystem.UpdateAim) == "function" then AimbotSystem.UpdateAim() end
-                if type(AimbotSystem.UpdateTriggerbot) == "function" then AimbotSystem.UpdateTriggerbot() end
+                    if type(AimbotSystem.UpdateAim) == "function" then
+                    AimbotSystem.UpdateAim(dt)  -- pass dt
+                end
+                    if type(AimbotSystem.UpdateTriggerbot) == "function" then
+                    AimbotSystem.UpdateTriggerbot()
+                end
             end
 
             if OverlayManager then
