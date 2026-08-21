@@ -1,1 +1,48 @@
+-- src/Games/_Template/init.lua
+-- Copy this folder, rename to the game's PlaceId, edit Registry.lua
+return function(Context)
+	local FeatureConfig = Context.FeatureConfig
+	local Utils = Context.Utils
+	local Theme = Context.Theme
 
+	-- Optional: game-only config on FeatureConfig
+	FeatureConfig.Game = FeatureConfig.Game or {
+		ExampleToggle = false,
+		ExampleSlider = 50,
+	}
+
+	local Game = {
+		Name = "Prison Life",
+	}
+
+	-- Called when building the "Game Specific" tab
+	function Game.BuildUI(tab)
+		local sec = tab:AddSection("Template Features")
+
+		sec:AddToggle("Example Toggle", FeatureConfig.Game.ExampleToggle, function(v)
+			FeatureConfig.Game.ExampleToggle = v
+		end)
+
+		sec:AddSlider("Example Slider", FeatureConfig.Game.ExampleSlider, 0, 100, function(v)
+			FeatureConfig.Game.ExampleSlider = v
+		end)
+
+		sec:AddButton("Example Action", function()
+			if Context.UI then
+				Context.UI:Notify("Game", "Template button pressed", nil, Theme and Theme.Success)
+			end
+		end)
+	end
+
+	-- Optional per-frame logic
+	function Game.Update(dt)
+		if not FeatureConfig.Game.ExampleToggle then return end
+		-- game-specific loop code here
+	end
+
+	function Game.Destroy()
+		-- cleanup connections / objects for this game module
+	end
+
+	return Game
+end
