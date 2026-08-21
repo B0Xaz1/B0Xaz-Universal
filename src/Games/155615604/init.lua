@@ -33,7 +33,7 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- Gun attribute cache: [instance] = { SpreadRadius=?, FireRate=?, AutoFire=? }
+	-- Gun attribute cache
 	----------------------------------------------------------------
 	local _gunCache = getgenv().B0XazGunCache
 	if type(_gunCache) ~= "table" then
@@ -46,12 +46,18 @@ return function(Context)
 	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
 	FeatureConfig.Game.PhaseTransparency = FeatureConfig.Game.PhaseTransparency or 0.65
+
 	FeatureConfig.Game.NoSpread = FeatureConfig.Game.NoSpread or false
 	FeatureConfig.Game.FastFire = FeatureConfig.Game.FastFire or false
 	FeatureConfig.Game.ForceAuto = FeatureConfig.Game.ForceAuto or false
+	FeatureConfig.Game.ForceRange = FeatureConfig.Game.ForceRange or false
+
 	FeatureConfig.Game.FireRateValue = FeatureConfig.Game.FireRateValue or 0.001
+	FeatureConfig.Game.RangeValue = FeatureConfig.Game.RangeValue or 10000
 
 	local Game = { Name = "Prison Life" }
+
+	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
 
 	----------------------------------------------------------------
 	-- DOORS
@@ -167,10 +173,8 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- GUN ATTRIBUTES (SpreadRadius / FireRate / AutoFire)
+	-- GUNS
 	----------------------------------------------------------------
-	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire" }
-
 	local function getGunContainers()
 		local list = {}
 		if LocalPlayer then
@@ -190,7 +194,6 @@ return function(Context)
 				entry[name] = v
 			end
 		end
-		-- also cache if any descendant has them
 		_gunCache[inst] = entry
 	end
 
@@ -224,6 +227,13 @@ return function(Context)
 					setAttr(obj, "AutoFire", true)
 				end
 			end
+
+			if FeatureConfig.Game.ForceRange and obj:GetAttribute("Range") ~= nil then
+				local rng = FeatureConfig.Game.RangeValue or 10000
+				if obj:GetAttribute("Range") ~= rng then
+					setAttr(obj, "Range", rng)
+				end
+			end
 		end
 
 		if inst:IsA("Tool") then
@@ -231,14 +241,18 @@ return function(Context)
 			for _, d in ipairs(inst:GetDescendants()) do
 				if d:GetAttribute("SpreadRadius") ~= nil
 					or d:GetAttribute("FireRate") ~= nil
-					or d:GetAttribute("AutoFire") ~= nil then
+					or d:GetAttribute("AutoFire") ~= nil
+					or d:GetAttribute("Range") ~= nil then
 					touch(d)
 				end
 			end
-		elseif inst:GetAttribute("SpreadRadius") ~= nil
-			or inst:GetAttribute("FireRate") ~= nil
-			or inst:GetAttribute("AutoFire") ~= nil then
-			touch(inst)
+		else
+			if inst:GetAttribute("SpreadRadius") ~= nil
+				or inst:GetAttribute("FireRate") ~= nil
+				or inst:GetAttribute("AutoFire") ~= nil
+				or inst:GetAttribute("Range") ~= nil then
+				touch(inst)
+			end
 		end
 	end
 
@@ -270,6 +284,7 @@ return function(Context)
 		return FeatureConfig.Game.NoSpread
 			or FeatureConfig.Game.FastFire
 			or FeatureConfig.Game.ForceAuto
+			or FeatureConfig.Game.ForceRange
 	end
 
 	local function enforceGuns()
@@ -348,52 +363,32 @@ return function(Context)
 		FeatureConfig.Game.GlowColor = color
 	end
 
+	local function afterGunToggle()
+		if anyGunModEnabled() then
+			scanGuns()
+		else
+			restoreGuns()
+		end
+	end
+
 	function Game.SetNoSpread(enabled)
 		FeatureConfig.Game.NoSpread = enabled and true or false
-		if FeatureConfig.Game.NoSpread then
-			scanGuns()
-		elseif not anyGunModEnabled() then
-			restoreGuns()
-		else
-			scanGuns()
-		end
+		afterGunToggle()
 	end
 
 	function Game.SetFastFire(enabled)
 		FeatureConfig.Game.FastFire = enabled and true or false
-		if FeatureConfig.Game.FastFire then
-			scanGuns()
-		elseif not anyGunModEnabled() then
-			restoreGuns()
-		else
-			-- restore only FireRate if other mods still on
-			for inst, entry in pairs(_gunCache) do
-				if inst and inst.Parent and entry and entry.FireRate ~= nil then
-					if not FeatureConfig.Game.FastFire then
-						pcall(function() inst:SetAttribute("FireRate", entry.FireRate) end)
-					end
-				end
-			end
-			scanGuns()
-		end
+		afterGunToggle()
 	end
 
 	function Game.SetForceAuto(enabled)
 		FeatureConfig.Game.ForceAuto = enabled and true or false
-		if FeatureConfig.Game.ForceAuto then
-			scanGuns()
-		elseif not anyGunModEnabled() then
-			restoreGuns()
-		else
-			for inst, entry in pairs(_gunCache) do
-				if inst and inst.Parent and entry and entry.AutoFire ~= nil then
-					if not FeatureConfig.Game.ForceAuto then
-						pcall(function() inst:SetAttribute("AutoFire", entry.AutoFire) end)
-					end
-				end
-			end
-			scanGuns()
-		end
+		afterGunToggle()
+	end
+
+	function Game.SetForceRange(enabled)
+		FeatureConfig.Game.ForceRange = enabled and true or false
+		afterGunToggle()
 	end
 
 	function Game.BuildUI(tab)
@@ -447,6 +442,13 @@ return function(Context)
 			Game.SetForceAuto(v)
 			if Context and Context.UI then
 				Context.UI:Notify("Prison Life", v and "AutoFire = true" or "AutoFire restored", nil, Theme and Theme.Success)
+			end
+		end)
+
+		combat:AddToggle("Force Range (10k)", FeatureConfig.Game.ForceRange, function(v)
+			Game.SetForceRange(v)
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", v and "Range = 10000" or "Range restored", nil, Theme and Theme.Success)
 			end
 		end)
 
