@@ -78,6 +78,33 @@ return function()
         end 
     end)
     pcall(function() if gethui then table.insert(guiParents, gethui()) end end)
+
+    	-- Restore Prison Life / game door modifications from previous session
+	pcall(function()
+		if getgenv().B0XazRestoreDoors then
+			getgenv().B0XazRestoreDoors()
+			getgenv().B0XazRestoreDoors = nil
+		end
+	end)
+
+	pcall(function()
+		local cache = getgenv().B0XazDoorCache
+		if type(cache) == "table" then
+			for part, c in pairs(cache) do
+				if part and part.Parent and type(c) == "table" then
+					pcall(function()
+						part.CanCollide = c.CanCollide
+						part.Transparency = c.Transparency
+						part.Color = c.Color
+						part.Material = c.Material
+					end)
+				end
+			end
+			table.clear(cache)
+		end
+		getgenv().B0XazDoorCache = {}
+		getgenv().B0XazDoorParts = {}
+	end)
     
     for _, parent in ipairs(guiParents) do 
         pcall(function() 
