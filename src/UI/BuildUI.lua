@@ -1,36 +1,17 @@
 -- src/UI/BuildUI.lua
 return function(Context)
-    -- Import everything from Context
-    local ShankUI = Context.ShankUI
-    local Theme = Context.Theme
-    local FeatureConfig = Context.FeatureConfig
-    local State = Context.State
-    local StatsConfig = Context.StatsConfig
-    local UIRegistry = Context.UIRegistry
-    local Utils = Context.Utils
-    local Connections = Context.Connections
-    local DefaultLighting = Context.DefaultLighting
-
-    local AimbotSystem = Context.AimbotSystem
-    local ESPSystem = Context.ESPSystem
-    local FlySystem = Context.FlySystem
-    local FlingSystem = Context.FlingSystem
-    local ConfigSystem = Context.ConfigSystem
-    local OverlayManager = Context.OverlayManager
-
-    -- Line 29: This should now work because ShankUI is defined above!
-    local UI = ShankUI.new("B0Xaz Universal")
-    Context.UI = UI
-    getgenv().B0XazLibrary = UI
     local Players = game:GetService("Players")
     local Workspace = game:GetService("Workspace")
     local Lighting = game:GetService("Lighting")
     local UIS = game:GetService("UserInputService")
     local HttpService = game:GetService("HttpService")
+
     local LocalPlayer = Players.LocalPlayer
     local Camera = Workspace.CurrentCamera
     local IsMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
+    -- Extract from Context
+    local CONFIG = Context.CONFIG
     local ShankUI = Context.ShankUI
     local Theme = Context.Theme
     local FeatureConfig = Context.FeatureConfig
@@ -48,7 +29,10 @@ return function(Context)
     local ConfigSystem = Context.ConfigSystem
     local OverlayManager = Context.OverlayManager
 
+    -- Create Main UI Instance (Only once!)
     local UI = ShankUI.new("B0Xaz Universal")
+    Context.UI = UI
+    getgenv().B0XazLibrary = UI
 
     -- Toggle Menu bind
     local _listeningForMenuKey = false
@@ -72,7 +56,7 @@ return function(Context)
     UIRegistry.Aimbot_LockMode = aimMain:AddDropdown("Lock Mode", {"Toggle","Hold"}, function(v) FeatureConfig.Aimbot.LockMode = v; AimbotSystem.LockOff() end, FeatureConfig.Aimbot.LockMode)
     UIRegistry.Aimbot_Hitpart = aimMain:AddDropdown("Hit Part", {"HumanoidRootPart","Head","UpperTorso","LowerTorso"}, function(v) FeatureConfig.Aimbot.Hitpart = v end, FeatureConfig.Aimbot.Hitpart)
     UIRegistry.Aimbot_AirHitpart = aimMain:AddDropdown("Air Hit Part", {"Head","HumanoidRootPart","UpperTorso","LowerTorso"}, function(v) FeatureConfig.Aimbot.AirHitpart = v end, FeatureConfig.Aimbot.AirHitpart)
-    UIRegistry.Aimbot_Smoothness = aimMain:AddSlider("Smoothness", math.floor(FeatureConfig.Aimbot.Smoothness*10), 1, 50, function(v) FeatureConfig.Aimbot.Smoothness = math.max(v/10, Context.CONFIG.AIM_MIN_SMOOTHNESS) end)
+    UIRegistry.Aimbot_Smoothness = aimMain:AddSlider("Smoothness", math.floor(FeatureConfig.Aimbot.Smoothness*10), 1, 50, function(v) FeatureConfig.Aimbot.Smoothness = math.max(v/10, CONFIG.AIM_MIN_SMOOTHNESS) end)
     UIRegistry.Aimbot_ShakeIntensity = aimMain:AddSlider("Shake", FeatureConfig.Aimbot.ShakeIntensity, 0, 10, function(v) FeatureConfig.Aimbot.ShakeIntensity = v end)
 
     local aimCheck = aimbotTab:AddSection("Checks")
@@ -247,7 +231,10 @@ return function(Context)
     -- TAB: Extras
     local extrasTab = UI:AddTab("Extras")
     local hitSec = extrasTab:AddSection("Hitbox")
-    UIRegistry.Extras_Hitbox_Enabled = hitSec:AddToggle("Hitbox Expander", false, function(v) FeatureConfig.Extras.Hitbox.Enabled = v; if not v then Context.ResetHitboxes() end end)
+    UIRegistry.Extras_Hitbox_Enabled = hitSec:AddToggle("Hitbox Expander", false, function(v) 
+        FeatureConfig.Extras.Hitbox.Enabled = v
+        if not v and Context.ResetHitboxes then Context.ResetHitboxes() end 
+    end)
     UIRegistry.Extras_Hitbox_Size = hitSec:AddSlider("Hitbox Size", FeatureConfig.Extras.Hitbox.Size, 4, 60, function(v) FeatureConfig.Extras.Hitbox.Size = v end)
 
     local spinSec = extrasTab:AddSection("Spin Bot")
