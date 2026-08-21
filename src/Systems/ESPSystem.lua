@@ -10,10 +10,17 @@ return function(Context)
     local Utils = Context.Utils
     local DrawingManager = Context.DrawingManager
 
-    local DrawingESP = getgenv().B0XazDrawingESP
-    local TracerLines = getgenv().B0XazTracerLines
-    local SkeletonLines = getgenv().B0XazSkeletonLines
-    local Highlights = getgenv().B0XazHighlights
+    local DrawingESP = getgenv().B0XazDrawingESP or {}
+    getgenv().B0XazDrawingESP = DrawingESP
+
+    local TracerLines = getgenv().B0XazTracerLines or {}
+    getgenv().B0XazTracerLines = TracerLines
+
+    local SkeletonLines = getgenv().B0XazSkeletonLines or {}
+    getgenv().B0XazSkeletonLines = SkeletonLines
+
+    local Highlights = getgenv().B0XazHighlights or {}
+    getgenv().B0XazHighlights = Highlights
 
     local ESPSystem = {}
 
@@ -89,13 +96,17 @@ return function(Context)
 
     local function hideDrawings(d) 
         if not d then return end
-        for _, dr in pairs(d) do if dr then pcall(function() dr.Visible = false end) end end 
+        for _, dr in pairs(d) do 
+            if dr then pcall(function() dr.Visible = false end) end 
+        end 
     end
 
     local function hideSkeletonLines(p) 
         local lines = SkeletonLines[p]
         if not lines then return end
-        for _, l in ipairs(lines) do pcall(function() l.Visible = false end) end 
+        for _, l in ipairs(lines) do 
+            if l then pcall(function() l.Visible = false end) end 
+        end 
     end
 
     local function clearTracers() 
@@ -112,26 +123,53 @@ return function(Context)
 
     function ESPSystem.Update()
         clearTracers()
-        if not FeatureConfig.ESP.Enabled and not FeatureConfig.Chams.Enabled then return end
-        local showESP = FeatureConfig.ESP.Enabled and hasAnyESPFeature()
+
+        -- Auto-register any connected or newly joined players
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                if not DrawingESP[p] then ESPSystem.CreatePlayerESP(p) end
+                if not SkeletonLines[p] then ESPSystem.CreateSkeleton(p) end
+            end
+        end
+
+        -- Clean up players who disconnected
+        for player, data in pairs(DrawingESP) do
+            if not player or not player.Parent then
+                ESPSystem.RemovePlayerESP(player)
+                ESPSystem.RemoveSkeleton(player)
+                ESPSystem.RemoveHighlight(player)
+            end
+        end
+
+        local espEnabled = FeatureConfig.ESP and FeatureConfig.ESP.Enabled and hasAnyESPFeature()
+        local chamsEnabled = FeatureConfig.Chams and FeatureConfig.Chams.Enabled
+
+        -- Explicitly hide all elements if ESP & Chams are turned off
+        if not espEnabled and not chamsEnabled then
+            for player, data in pairs(DrawingESP) do
+                hideDrawings(data)
+                hideSkeletonLines(player)
+                ESPSystem.RemoveHighlight(player)
+            end
+            return
+        end
+
         local myRoot = Utils.GetRootPart()
         local myPos = myRoot and myRoot.Position
         local col = FeatureConfig.ESP.Color
 
         for player, data in pairs(DrawingESP) do
-            if not player or not player.Parent then 
-                ESPSystem.RemovePlayerESP(player)
-                ESPSystem.RemoveSkeleton(player)
-                ESPSystem.RemoveHighlight(player)
-                continue 
-            end
+            if not player or not player.Parent then continue end
 
             local alive = Utils.IsAlive(player)
             local teamSkip = FeatureConfig.ESP.TeamCheck and Utils.SameTeam(player)
-            local shouldShow = showESP and alive and not teamSkip
+            local shouldShow = espEnabled and alive and not teamSkip
 
-            if FeatureConfig.Chams.Enabled and alive and not teamSkip then
-                if not Highlights[player] then ESPSystem.AddHighlight(player) end
+            if chamsEnabled and alive and not teamSkip then
+                if not Highlights[player] or Highlights[player].Adornee ~= player.Character then 
+                    ESPSystem.RemoveHighlight(player)
+                    ESPSystem.AddHighlight(player) 
+                end
                 local h = Highlights[player]
                 if h then 
                     h.FillColor = FeatureConfig.Chams.FillColor
