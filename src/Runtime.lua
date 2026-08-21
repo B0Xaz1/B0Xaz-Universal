@@ -171,6 +171,10 @@ return function(Context)
                 hum.WalkSpeed = FeatureConfig.Movement.Speed 
             end
         end
+
+        if MovementSystem then
+            MovementSystem.Update(dt)
+        end
         
         if FeatureConfig.Visuals.Fullbright then 
             Lighting.Ambient = Color3.fromRGB(255,255,255)
