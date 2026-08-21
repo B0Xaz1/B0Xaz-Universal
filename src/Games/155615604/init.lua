@@ -15,7 +15,7 @@ return function(Context)
 		"Prison_Gate",
 	}
 
-	-- Shared cache so Cleanup.lua / re-exec can restore doors
+	-- Global Cache for Re-Exec / Cleanup
 	local _cache = getgenv().B0XazDoorCache
 	if type(_cache) ~= "table" then
 		_cache = {}
@@ -32,7 +32,7 @@ return function(Context)
 	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
 	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
-	FeatureConfig.Game.GlowTransparency = FeatureConfig.Game.GlowTransparency or 0.45
+	FeatureConfig.Game.PhaseTransparency = FeatureConfig.Game.PhaseTransparency or 0.65
 
 	local Game = { Name = "Prison Life" }
 
@@ -79,7 +79,7 @@ return function(Context)
 		table.clear(_doorPartsSet)
 	end
 
-	-- Always clear previous session visuals on module load (re-exec safety)
+	-- Restore previous session visuals immediately on script execute
 	restoreAll()
 
 	local function cachePart(part)
@@ -96,15 +96,6 @@ return function(Context)
 		if not isDoorPart(part) then return end
 		cachePart(part)
 		_doorPartsSet[part] = true
-
-		if FeatureConfig.Game.DoorPhase then
-			part.CanCollide = false
-			if FeatureConfig.Game.DoorGlow then
-				part.Material = Enum.Material.Neon
-				part.Color = FeatureConfig.Game.GlowColor
-				part.Transparency = FeatureConfig.Game.GlowTransparency or 0.45
-			end
-		end
 	end
 
 	local function scanAllDoors()
@@ -122,25 +113,40 @@ return function(Context)
 	end
 
 	local function enforcePart(part)
-		if not part or not part.Parent then
+		local c = _cache[part]
+		if not c or not part or not part.Parent then
 			_doorPartsSet[part] = nil
 			_cache[part] = nil
 			return
 		end
 
-		part.CanCollide = false
+		if FeatureConfig.Game.DoorPhase then
+			-- 1. Always Non-Collidable
+			if part.CanCollide then
+				part.CanCollide = false
+			end
 
-		if FeatureConfig.Game.DoorGlow then
-			local t = FeatureConfig.Game.GlowTransparency or 0.45
-			if part.Material ~= Enum.Material.Neon then
-				part.Material = Enum.Material.Neon
+			-- 2. Always See-Through Phase Transparency
+			local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
+			if math.abs(part.Transparency - targetTrans) > 0.01 then
+				part.Transparency = targetTrans
 			end
-			if part.Color ~= FeatureConfig.Game.GlowColor then
-				part.Color = FeatureConfig.Game.GlowColor
-			end
-			-- Always force transparency (game door scripts reset it)
-			if math.abs(part.Transparency - t) > 0.01 then
-				part.Transparency = t
+
+			-- 3. Apply Glow vs Normal Material
+			if FeatureConfig.Game.DoorGlow then
+				if part.Material ~= Enum.Material.Neon then
+					part.Material = Enum.Material.Neon
+				end
+				if part.Color ~= FeatureConfig.Game.GlowColor then
+					part.Color = FeatureConfig.Game.GlowColor
+				end
+			else
+				if part.Material ~= c.Material then
+					part.Material = c.Material
+				end
+				if part.Color ~= c.Color then
+					part.Color = c.Color
+				end
 			end
 		end
 	end
@@ -173,20 +179,8 @@ return function(Context)
 
 	function Game.SetDoorGlow(enabled)
 		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if not FeatureConfig.Game.DoorPhase then return end
-
-		if FeatureConfig.Game.DoorGlow then
+		if FeatureConfig.Game.DoorPhase then
 			scanAllDoors()
-		else
-			-- Keep phase, restore look only
-			for part, c in pairs(_cache) do
-				if part and part.Parent then
-					part.Material = c.Material
-					part.Color = c.Color
-					part.Transparency = c.Transparency
-					part.CanCollide = false
-				end
-			end
 		end
 	end
 
@@ -196,7 +190,6 @@ return function(Context)
 			for part, _ in pairs(_doorPartsSet) do
 				if part and part.Parent then
 					part.Color = color
-					part.Transparency = FeatureConfig.Game.GlowTransparency or 0.45
 				end
 			end
 		end
@@ -216,16 +209,16 @@ return function(Context)
 			Game.SetDoorGlow(v)
 		end)
 
-		doors:AddSlider("Glow Transparency", math.floor((FeatureConfig.Game.GlowTransparency or 0.45) * 100), 0, 90, function(v)
-			FeatureConfig.Game.GlowTransparency = v / 100
-			if FeatureConfig.Game.DoorPhase and FeatureConfig.Game.DoorGlow then
+		doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
+			FeatureConfig.Game.PhaseTransparency = v / 100
+			if FeatureConfig.Game.DoorPhase then
 				for part, _ in pairs(_doorPartsSet) do
 					if part and part.Parent then
-						part.Transparency = FeatureConfig.Game.GlowTransparency
+						part.Transparency = FeatureConfig.Game.PhaseTransparency
 					end
 				end
 			end
-		end)
+		end, "%")
 
 		doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
 			Game.SetGlowColor(c)
@@ -252,7 +245,6 @@ return function(Context)
 		restoreAll()
 	end
 
-	-- Expose restore for Cleanup
 	getgenv().B0XazRestoreDoors = restoreAll
 
 	return Game
