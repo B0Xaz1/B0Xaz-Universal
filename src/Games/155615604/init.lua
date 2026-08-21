@@ -1,4 +1,4 @@
--- src/Games/155615604/init.lua
+-- src/Games/155615604/init.lua (Prison Life)
 return function(Context)
 	local Workspace = game:GetService("Workspace")
 	local Players = game:GetService("Players")
@@ -8,6 +8,7 @@ return function(Context)
 	local FeatureConfig = Context and Context.FeatureConfig or {}
 	local Theme = Context and Context.Theme or {}
 	local Connections = Context and Context.Connections or {}
+	local UIRegistry = Context and Context.UIRegistry or {}
 
 	local DOOR_FOLDERS = {
 		"Doors",
@@ -17,51 +18,18 @@ return function(Context)
 		"Prison_Gate",
 	}
 
-	----------------------------------------------------------------
-	-- Door caches
-	----------------------------------------------------------------
-	local _cache = getgenv().B0XazDoorCache
-	if type(_cache) ~= "table" then
-		_cache = {}
-		getgenv().B0XazDoorCache = _cache
-	end
+	local _cache = getgenv().B0XazDoorCache or {}
+	getgenv().B0XazDoorCache = _cache
 
-	local _doorPartsSet = getgenv().B0XazDoorParts
-	if type(_doorPartsSet) ~= "table" then
-		_doorPartsSet = {}
-		getgenv().B0XazDoorParts = _doorPartsSet
-	end
+	local _doorPartsSet = getgenv().B0XazDoorParts or {}
+	getgenv().B0XazDoorParts = _doorPartsSet
 
-	----------------------------------------------------------------
-	-- Gun attribute cache
-	----------------------------------------------------------------
-	local _gunCache = getgenv().B0XazGunCache
-	if type(_gunCache) ~= "table" then
-		_gunCache = {}
-		getgenv().B0XazGunCache = _gunCache
-	end
-
-	FeatureConfig.Game = FeatureConfig.Game or {}
-	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
-	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
-	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
-	FeatureConfig.Game.PhaseTransparency = FeatureConfig.Game.PhaseTransparency or 0.65
-
-	FeatureConfig.Game.NoSpread = FeatureConfig.Game.NoSpread or false
-	FeatureConfig.Game.FastFire = FeatureConfig.Game.FastFire or false
-	FeatureConfig.Game.ForceAuto = FeatureConfig.Game.ForceAuto or false
-	FeatureConfig.Game.ForceRange = FeatureConfig.Game.ForceRange or false
-
-	FeatureConfig.Game.FireRateValue = FeatureConfig.Game.FireRateValue or 0.001
-	FeatureConfig.Game.RangeValue = FeatureConfig.Game.RangeValue or 10000
+	local _gunCache = getgenv().B0XazGunCache or {}
+	getgenv().B0XazGunCache = _gunCache
 
 	local Game = { Name = "Prison Life" }
-
 	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
 
-	----------------------------------------------------------------
-	-- DOORS
-	----------------------------------------------------------------
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
 			if name:lower() == folderName:lower() then
@@ -104,8 +72,6 @@ return function(Context)
 		table.clear(_cache)
 		table.clear(_doorPartsSet)
 	end
-
-	restoreAllDoors()
 
 	local function cachePart(part)
 		if _cache[part] then return end
@@ -172,9 +138,6 @@ return function(Context)
 		end
 	end
 
-	----------------------------------------------------------------
-	-- GUNS
-	----------------------------------------------------------------
 	local function getGunContainers()
 		local list = {}
 		if LocalPlayer then
@@ -292,192 +255,10 @@ return function(Context)
 		scanGuns()
 	end
 
-	----------------------------------------------------------------
-	-- Connections
-	----------------------------------------------------------------
 	if Connections and Connections.Add then
 		Connections.Add(RS.Stepped:Connect(function()
 			if FeatureConfig.Game.DoorPhase then
 				for part, _ in pairs(_doorPartsSet) do
 					enforcePart(part)
 				end
-			end
-			if anyGunModEnabled() then
-				enforceGuns()
-			end
-		end))
-
-		Connections.Add(Workspace.DescendantAdded:Connect(function(desc)
-			if FeatureConfig.Game.DoorPhase and desc:IsA("BasePart") then
-				task.defer(function()
-					processPart(desc)
-				end)
-			end
-		end))
-
-		local function hookContainer(container)
-			if not container then return end
-			Connections.Add(container.ChildAdded:Connect(function(child)
-				if anyGunModEnabled() and child:IsA("Tool") then
-					task.defer(function()
-						applyGunModsTo(child)
-					end)
-				end
-			end))
-		end
-
-		hookContainer(LocalPlayer:FindFirstChild("Backpack"))
-		if LocalPlayer.Character then hookContainer(LocalPlayer.Character) end
-
-		Connections.Add(LocalPlayer.CharacterAdded:Connect(function(char)
-			hookContainer(char)
-			task.wait(0.5)
-			if anyGunModEnabled() then scanGuns() end
-		end))
-
-		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
-			if child.Name == "Backpack" then hookContainer(child) end
-		end))
-	end
-
-	----------------------------------------------------------------
-	-- API
-	----------------------------------------------------------------
-	function Game.SetDoorPhase(enabled)
-		FeatureConfig.Game.DoorPhase = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			scanAllDoors()
-		else
-			restoreAllDoors()
-		end
-	end
-
-	function Game.SetDoorGlow(enabled)
-		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			scanAllDoors()
-		end
-	end
-
-	function Game.SetGlowColor(color)
-		FeatureConfig.Game.GlowColor = color
-	end
-
-	local function afterGunToggle()
-		if anyGunModEnabled() then
-			scanGuns()
-		else
-			restoreGuns()
-		end
-	end
-
-	function Game.SetNoSpread(enabled)
-		FeatureConfig.Game.NoSpread = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetFastFire(enabled)
-		FeatureConfig.Game.FastFire = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetForceAuto(enabled)
-		FeatureConfig.Game.ForceAuto = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetForceRange(enabled)
-		FeatureConfig.Game.ForceRange = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.BuildUI(tab)
-		local doors = tab:AddSection("Doors & Fences")
-
-		doors:AddToggle("Phase Through Doors", FeatureConfig.Game.DoorPhase, function(v)
-			Game.SetDoorPhase(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Door phase enabled" or "Door phase disabled", nil, Theme and Theme.Success)
-			end
-		end)
-
-		doors:AddToggle("Door Glow (Neon)", FeatureConfig.Game.DoorGlow, function(v)
-			Game.SetDoorGlow(v)
-		end)
-
-		doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
-			FeatureConfig.Game.PhaseTransparency = v / 100
-		end, "%")
-
-		doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
-			Game.SetGlowColor(c)
-		end)
-
-		doors:AddButton("Refresh Door List", function()
-			if FeatureConfig.Game.DoorPhase then
-				scanAllDoors()
-				if Context and Context.UI then
-					Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme and Theme.Success)
-				end
-			end
-		end)
-
-		local combat = tab:AddSection("Combat")
-
-		combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
-			Game.SetNoSpread(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "SpreadRadius = 0" or "Spread restored", nil, Theme and Theme.Success)
-			end
-		end)
-
-		combat:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v)
-			Game.SetFastFire(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "FireRate = 0.001" or "FireRate restored", nil, Theme and Theme.Success)
-			end
-		end)
-
-		combat:AddToggle("Force AutoFire", FeatureConfig.Game.ForceAuto, function(v)
-			Game.SetForceAuto(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "AutoFire = true" or "AutoFire restored", nil, Theme and Theme.Success)
-			end
-		end)
-
-		combat:AddToggle("Force Range (10k)", FeatureConfig.Game.ForceRange, function(v)
-			Game.SetForceRange(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Range = 10000" or "Range restored", nil, Theme and Theme.Success)
-			end
-		end)
-
-		combat:AddButton("Force Apply Gun Mods", function()
-			scanGuns()
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", "Guns updated", nil, Theme and Theme.Accent)
-			end
-		end)
-	end
-
-	function Game.Update(dt)
-		if FeatureConfig.Game.DoorPhase then
-			for part, _ in pairs(_doorPartsSet) do
-				enforcePart(part)
-			end
-		end
-		if anyGunModEnabled() then
-			enforceGuns()
-		end
-	end
-
-	function Game.Destroy()
-		restoreAllDoors()
-		restoreGuns()
-	end
-
-	getgenv().B0XazRestoreDoors = restoreAllDoors
-	getgenv().B0XazRestoreGuns = restoreGuns
-
-	return Game
-end
+			
