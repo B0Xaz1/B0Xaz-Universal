@@ -23,7 +23,6 @@ return function(Context)
             and (state ~= Enum.HumanoidStateType.Jumping) 
             and (state ~= Enum.HumanoidStateType.Freefall)
 
-        -- Only jump when actually touching a floor/ground
         if isGrounded then
             lastJumpTime = tick()
             hum.Jump = true
@@ -31,7 +30,7 @@ return function(Context)
         end
     end))
 
-    -- CFrame Speed: Runs on RenderStepped
+    -- CFrame Speed Override: Runs on RenderStepped
     Connections.Add(RS.RenderStepped:Connect(function(dt)
         if not FeatureConfig.Movement.CFrameSpeed then return end
 
@@ -43,8 +42,12 @@ return function(Context)
         local moveDir = hum.MoveDirection
         if moveDir.Magnitude < 0.05 then return end
 
-        local speed = FeatureConfig.Movement.CFrameSpeedValue or 50
-        root.CFrame = root.CFrame + (moveDir * speed * dt)
+        local targetSpeed = FeatureConfig.Movement.CFrameSpeedValue or 50
+        local currentWalkSpeed = hum.WalkSpeed
+
+        -- Calculate the exact delta needed to match the slider value
+        local deltaSpeed = targetSpeed - currentWalkSpeed
+        root.CFrame = root.CFrame + (moveDir * deltaSpeed * dt)
     end))
 
     return MovementSystem
