@@ -1,6 +1,5 @@
 -- src/UI/UI.lua
 return function(Context, Theme)
-	local TS = game:GetService("TweenService")
 	local UIS = game:GetService("UserInputService")
 	local CoreGui = game:GetService("CoreGui")
 	local Players = game:GetService("Players")
@@ -11,8 +10,8 @@ return function(Context, Theme)
 	local Utils = Context.Utils or {}
 	local Connections = Context.Connections or {}
 
-	local UI_W = CONFIG.UI_W or 700
-	local UI_H = CONFIG.UI_H or 480
+	local UI_W = CONFIG.UI_W or 660
+	local UI_H = CONFIG.UI_H or 460
 	local TITLE_H = 28
 	local TAB_H = 26
 	local COL_GAP = 8
@@ -31,10 +30,6 @@ return function(Context, Theme)
 			end
 		end
 		return inst
-	end
-
-	local function corner(r)
-		return create("UICorner", { CornerRadius = UDim.new(0, r or 2) })
 	end
 
 	local function stroke(color, thick)
@@ -92,6 +87,7 @@ return function(Context, Theme)
 			IgnoreGuiInset = true,
 			DisplayOrder = 999,
 		})
+
 		local parented = false
 		pcall(function()
 			if gethui then
@@ -105,11 +101,10 @@ return function(Context, Theme)
 				parented = true
 			end)
 		end
-		if not parented then
+		if not parented and LocalPlayer then
 			self.ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 		end
 
-		-- Main window
 		self.Main = create("Frame", {
 			Size = UDim2.new(0, UI_W, 0, UI_H),
 			Position = UDim2.new(0.5, -UI_W / 2, 0.5, -UI_H / 2),
@@ -119,7 +114,6 @@ return function(Context, Theme)
 			Parent = self.ScreenGui,
 		}, { stroke(Theme.Border, 1) })
 
-		-- Title bar
 		self.TitleBar = create("Frame", {
 			Size = UDim2.new(1, 0, 0, TITLE_H),
 			BackgroundColor3 = Theme.Side,
@@ -163,7 +157,6 @@ return function(Context, Theme)
 			State.MenuVisible = false
 		end)
 
-		-- Horizontal tab bar
 		self.TabBar = create("Frame", {
 			Size = UDim2.new(1, 0, 0, TAB_H),
 			Position = UDim2.new(0, 0, 0, TITLE_H),
@@ -192,7 +185,6 @@ return function(Context, Theme)
 			}),
 		})
 
-		-- Content area
 		self.Content = create("Frame", {
 			Size = UDim2.new(1, 0, 1, -(TITLE_H + TAB_H)),
 			Position = UDim2.new(0, 0, 0, TITLE_H + TAB_H),
@@ -205,7 +197,6 @@ return function(Context, Theme)
 			Parent = self.Content,
 		})
 
-		-- Drag
 		do
 			local dragging, dragStart, startPos = false, nil, nil
 			self.TitleBar.InputBegan:Connect(function(input)
@@ -228,10 +219,9 @@ return function(Context, Theme)
 			end))
 		end
 
-		-- Notifications Container
 		self.NotifyContainer = create("Frame", {
-			Size = UDim2.new(0, 320, 1, -20),
-			Position = UDim2.new(1, -330, 0, 10),
+			Size = UDim2.new(0, 300, 1, -20),
+			Position = UDim2.new(1, -310, 0, 10),
 			BackgroundTransparency = 1,
 			Parent = self.ScreenGui,
 		}, {
@@ -257,14 +247,12 @@ return function(Context, Theme)
 
 	function UI:CloseAllDropdownsExcept(exceptFn)
 		for _, fn in ipairs(self._openDropdowns) do
-			if fn ~= exceptFn then fn(false) end
+			if fn ~= exceptFn then pcall(fn, false) end
 		end
 	end
 
 	function UI:Notify(title, text, duration, color)
 		local accent = color or Theme.Accent
-		warn("[B0Xaz Notification] " .. tostring(title) .. ": " .. tostring(text))
-
 		local notif = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -276,7 +264,7 @@ return function(Context, Theme)
 			pad(6, 6, 8, 8),
 			create("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
 			create("TextLabel", {
-				Text = title or "",
+				Text = title or "Notification",
 				Font = Enum.Font.Code,
 				TextSize = 12,
 				TextColor3 = Theme.Text,
@@ -299,7 +287,7 @@ return function(Context, Theme)
 			}),
 		})
 
-		task.delay(duration or (CONFIG.NOTIFY_DEFAULT_TIME or 5), function()
+		task.delay(duration or (CONFIG.NOTIFY_DEFAULT_TIME or 3.5), function()
 			if notif and notif.Parent then
 				pcall(function() notif:Destroy() end)
 			end
@@ -395,8 +383,6 @@ return function(Context, Theme)
 			}),
 			pad(0, 4, 0, scrollBarW + 2),
 		})
-
-		tab.Columns = tab.Page
 
 		tab.Button.MouseEnter:Connect(function()
 			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.Text end
@@ -557,7 +543,7 @@ return function(Context, Theme)
 				})
 
 				local valLabel = create("TextLabel", {
-					Text = tostring(default) .. "/" .. tostring(max),
+					Text = tostring(default) .. "/" .. tostring(max) .. suffix,
 					Font = Enum.Font.Code,
 					TextSize = 10,
 					TextColor3 = Theme.TextDim,
@@ -589,7 +575,7 @@ return function(Context, Theme)
 					rel = math.clamp(rel, 0, 1)
 					value = math.floor(min + (max - min) * rel + 0.5)
 					fill.Size = UDim2.new(rel, 0, 1, 0)
-					valLabel.Text = tostring(value) .. "/" .. tostring(max) .. (suffix ~= "" and suffix or "")
+					valLabel.Text = tostring(value) .. "/" .. tostring(max) .. suffix
 					if not silent and callback then Utils.SafeCall(callback, value) end
 				end
 
@@ -620,7 +606,8 @@ return function(Context, Theme)
 
 				return {
 					Set = function(v, silent)
-						commit((math.clamp(v, min, max) - min) / math.max(max - min, 1e-6), silent)
+						local clamped = math.clamp(v, min, max)
+						commit((clamped - min) / math.max(max - min, 1e-6), silent)
 					end,
 					Get = function() return value end,
 				}
@@ -670,7 +657,7 @@ return function(Context, Theme)
 				local currentOptions = table.clone(options or {})
 				local selected = default or currentOptions[1] or ""
 				local displayBtn = create("TextButton", {
-					Text = (selected ~= "" and selected or "None") .. "  v",
+					Text = (selected ~= "" and tostring(selected) or "None") .. "  v",
 					Font = Enum.Font.Code,
 					TextSize = 11,
 					TextColor3 = Theme.TextDim,
@@ -708,7 +695,7 @@ return function(Context, Theme)
 				local function setOpen(open)
 					isOpen = open
 					if open then
-						local h = math.min(#currentOptions, CONFIG.DROPDOWN_MAX_ROWS or 6) * (CONFIG.DROPDOWN_ROW_HEIGHT or 20) + 4
+						local h = math.min(#currentOptions, CONFIG.DROPDOWN_MAX_ROWS or 6) * (CONFIG.DROPDOWN_ROW_HEIGHT or 22) + 4
 						expansion.Size = UDim2.new(1, 0, 0, math.max(h, 24))
 						expansion.Visible = true
 					else
@@ -731,7 +718,7 @@ return function(Context, Theme)
 							TextColor3 = Theme.Text,
 							TextXAlignment = Enum.TextXAlignment.Left,
 							BackgroundTransparency = 1,
-							Size = UDim2.new(1, 0, 0, CONFIG.DROPDOWN_ROW_HEIGHT or 20),
+							Size = UDim2.new(1, 0, 0, CONFIG.DROPDOWN_ROW_HEIGHT or 22),
 							AutoButtonColor = false,
 							Parent = listBox,
 						})
@@ -753,6 +740,7 @@ return function(Context, Theme)
 					end
 				end
 				rebuildOptions()
+
 				displayBtn.MouseButton1Click:Connect(function()
 					ui:CloseAllDropdownsExcept(setOpen)
 					setOpen(not isOpen)
@@ -769,7 +757,7 @@ return function(Context, Theme)
 						currentOptions = table.clone(newOpts or {})
 						if not preserve or not table.find(currentOptions, selected) then
 							selected = currentOptions[1] or ""
-							displayBtn.Text = (selected ~= "" and selected or "None") .. "  v"
+							displayBtn.Text = (selected ~= "" and tostring(selected) or "None") .. "  v"
 						end
 						rebuildOptions()
 					end,
