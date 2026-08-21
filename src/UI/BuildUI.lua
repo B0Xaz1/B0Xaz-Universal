@@ -24,11 +24,8 @@ return function(Context)
 	local AimbotSystem = Context.AimbotSystem
 	local ESPSystem = Context.ESPSystem
 	local FlySystem = Context.FlySystem
-	local FlingSystem = Context.FlingSystem
 	local ConfigSystem = Context.ConfigSystem
 	local OverlayManager = Context.OverlayManager
-
-	assert(type(UIEngine) == "table" and type(UIEngine.new) == "function", "[BuildUI] Context.UIEngine is missing or invalid")
 
 	local UI = UIEngine.new("B0Xaz Universal")
 	Context.UI = UI
@@ -59,7 +56,7 @@ return function(Context)
 			FeatureConfig.Aimbot.Keybind = k
 			UI:Notify("Keybind", "Set to " .. k, nil, Theme.Success)
 		else
-			UI:Notify("Keybind", "Invalid", nil, Theme.Danger)
+			UI:Notify("Keybind", "Invalid key", nil, Theme.Danger)
 		end
 	end, "Key")
 	UIRegistry.Aimbot_LockMode = aimMain:AddDropdown("Lock Mode", {"Toggle", "Hold"}, function(v)
@@ -128,7 +125,7 @@ return function(Context)
 		FeatureConfig.Aimbot.Prediction.Vertical = 0.100
 		if UIRegistry.Aimbot_Prediction_Horizontal then UIRegistry.Aimbot_Prediction_Horizontal.Set(33, true) end
 		if UIRegistry.Aimbot_Prediction_Vertical then UIRegistry.Aimbot_Prediction_Vertical.Set(20, true) end
-		UI:Notify("Prediction", "Reset", nil, Theme.Success)
+		UI:Notify("Prediction", "Reset to default", nil, Theme.Success)
 	end)
 
 	local aimTrig = aimbotTab:AddSection("Triggerbot")
@@ -246,7 +243,6 @@ return function(Context)
 		FeatureConfig.Movement.InfJump = v
 	end)
 
-	-- NEW: CFrame Movement
 	UIRegistry.Movement_CFrameSpeed = charSec:AddToggle("CFrame Movement", FeatureConfig.Movement.CFrameSpeed, function(v)
 		FeatureConfig.Movement.CFrameSpeed = v
 	end)
@@ -255,7 +251,6 @@ return function(Context)
 		FeatureConfig.Movement.CFrameSpeedValue = v
 	end, " sps")
 
-	-- NEW: Bhop
 	UIRegistry.Movement_Bhop = charSec:AddToggle("Bhop (Hold Space)", FeatureConfig.Movement.Bhop, function(v)
 		FeatureConfig.Movement.Bhop = v
 	end)
@@ -290,7 +285,7 @@ return function(Context)
 	UIRegistry.Camera_FOV = worldSec:AddSlider("Camera FOV", FeatureConfig.Camera.FOV, 70, 120, function(v)
 		FeatureConfig.Camera.FOV = v
 	end)
-	worldSec:AddSlider("Camera Zoom", 400, 10, 500, function(v)
+	worldSec:AddSlider("Camera Zoom", 400, 10, 1000, function(v)
 		LocalPlayer.CameraMaxZoomDistance = v
 	end)
 
@@ -298,19 +293,19 @@ return function(Context)
 	tpSec:AddButton("Save Position", function()
 		local r = Utils.GetRootPart()
 		if not r then
-			UI:Notify("Pos", "No character", nil, Theme.Danger)
+			UI:Notify("Position", "No character root found", nil, Theme.Danger)
 			return
 		end
 		State.SavedPosition = r.CFrame
-		UI:Notify("Pos", "Saved", nil, Theme.Success)
+		UI:Notify("Position", "Saved successfully", nil, Theme.Success)
 	end)
 	tpSec:AddButton("Return to Saved", function()
 		local r = Utils.GetRootPart()
 		if r and State.SavedPosition then
 			r.CFrame = State.SavedPosition
-			UI:Notify("Pos", "Returned", nil, Theme.Success)
+			UI:Notify("Position", "Teleported to saved position", nil, Theme.Success)
 		else
-			UI:Notify("Pos", "No saved position", nil, Theme.Danger)
+			UI:Notify("Position", "No saved position", nil, Theme.Danger)
 		end
 	end)
 	tpSec:AddToggle(IsMobile and "Teleport on Tap" or "TP to Mouse (CTRL+Click)", false, function(v)
@@ -340,8 +335,8 @@ return function(Context)
 		end
 	else
 		local unsup = gameTab:AddSection("Not Supported")
-		unsup:AddButton("No module for this PlaceId", function()
-			UI:Notify("Game", "Universal features active", nil, Theme.Warning or Theme.Accent)
+		unsup:AddButton("No specific game script found", function()
+			UI:Notify("Game", "Universal features active", nil, Theme.Warning)
 		end)
 	end
 
@@ -389,7 +384,7 @@ return function(Context)
 	UIRegistry.Extras_SpeedLines = visSec:AddToggle("Speed Lines", false, function(v)
 		FeatureConfig.Extras.SpeedLines = v
 	end)
-	UIRegistry.Extras_Wallbang = visSec:AddToggle("Wallbang", false, function(v)
+	UIRegistry.Extras_Wallbang = visSec:AddToggle("Wallbang Transparency", false, function(v)
 		FeatureConfig.Extras.Wallbang = v
 		local myChar = Utils.GetCharacter()
 		for _, o in ipairs(Workspace:GetDescendants()) do
@@ -427,7 +422,7 @@ return function(Context)
 		for k, v in pairs(DefaultLighting) do
 			pcall(function() Lighting[k] = v end)
 		end
-		UI:Notify("Lighting", "Reset", nil, Theme.Success)
+		UI:Notify("Lighting", "Reset to original values", nil, Theme.Success)
 	end)
 
 	local perfSec = extrasTab:AddSection("Performance")
@@ -458,7 +453,7 @@ return function(Context)
 	end)
 	perfSec:AddButton("Cap FPS 60", function()
 		pcall(function() setfpscap(60) end)
-		UI:Notify("FPS", "Capped")
+		UI:Notify("FPS", "Capped to 60")
 	end)
 
 	local miscSec = extrasTab:AddSection("Misc")
@@ -471,19 +466,19 @@ return function(Context)
 					VU:ClickButton2(Vector2.new())
 				end)
 			end))
-			UI:Notify("Anti-AFK", "On", nil, Theme.Success)
+			UI:Notify("Anti-AFK", "Enabled", nil, Theme.Success)
 		end
 	end)
 	miscSec:AddToggle("Auto Rejoin on Kick", false, function(v)
 		if v then
 			Connections.Add(LocalPlayer.Kicked:Connect(function()
 				Utils.PrepareTeleport()
-				task.wait(3)
+				task.wait(2)
 				pcall(function()
 					game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
 				end)
 			end))
-			UI:Notify("Auto Rejoin", "On", nil, Theme.Success)
+			UI:Notify("Auto Rejoin", "Enabled", nil, Theme.Success)
 		end
 	end)
 	miscSec:AddButton("Server Hop", function()
@@ -505,7 +500,7 @@ return function(Context)
 					return
 				end
 			end
-			UI:Notify("Server Hop", "No servers found", nil, Theme.Danger)
+			UI:Notify("Server Hop", "No open servers found", nil, Theme.Danger)
 		end)
 	end)
 
@@ -514,33 +509,32 @@ return function(Context)
 		;(function()
 			local secRef = miscSec
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, 0, 0, 34)
+			row.Size = UDim2.new(1, 0, 0, 30)
 			row.BackgroundTransparency = 1
 			row.Parent = secRef.Frame
 
 			local lbl = Instance.new("TextLabel")
 			lbl.Text = "Menu Toggle Key"
-			lbl.Font = Enum.Font.Gotham
-			lbl.TextSize = 12
+			lbl.Font = Enum.Font.Code
+			lbl.TextSize = 11
 			lbl.TextColor3 = Theme.Text
 			lbl.TextXAlignment = Enum.TextXAlignment.Left
 			lbl.BackgroundTransparency = 1
-			lbl.Position = UDim2.new(0, 10, 0, 0)
-			lbl.Size = UDim2.new(1, -80, 1, 0)
+			lbl.Position = UDim2.new(0, 8, 0, 0)
+			lbl.Size = UDim2.new(1, -70, 1, 0)
 			lbl.Parent = row
 
 			menuKeyBtn = Instance.new("TextButton")
 			menuKeyBtn.Text = State.MenuKeybind.Name
-			menuKeyBtn.Font = Enum.Font.Gotham
-			menuKeyBtn.TextSize = 11
+			menuKeyBtn.Font = Enum.Font.Code
+			menuKeyBtn.TextSize = 10
 			menuKeyBtn.TextColor3 = Theme.Text
 			menuKeyBtn.BackgroundColor3 = Theme.Elem
 			menuKeyBtn.BorderSizePixel = 0
-			menuKeyBtn.Size = UDim2.new(0, 58, 0, 20)
-			menuKeyBtn.Position = UDim2.new(1, -66, 0.5, -10)
+			menuKeyBtn.Size = UDim2.new(0, 56, 0, 18)
+			menuKeyBtn.Position = UDim2.new(1, -64, 0.5, -9)
 			menuKeyBtn.AutoButtonColor = false
 			menuKeyBtn.Parent = row
-			Instance.new("UICorner", menuKeyBtn).CornerRadius = UDim.new(0, 4)
 
 			table.insert(secRef.Elements, {Container = row, Name = "Menu Toggle Key"})
 		end)()
@@ -579,7 +573,7 @@ return function(Context)
 	end)
 	cfgSec:AddButton("Refresh", function()
 		cfgDropdown.Refresh(getCfgList(), true)
-		UI:Notify("Configs", "Refreshed")
+		UI:Notify("Configs", "Refreshed list")
 	end)
 	cfgSec:AddTextbox("Config Name", cfgState.Name, function(t)
 		if type(t) == "string" and #t > 0 then
@@ -589,7 +583,7 @@ return function(Context)
 	cfgSec:AddButton("Save Config", function()
 		local name = Utils.SanitizeFileName(cfgState.Name or "")
 		if #name == 0 then
-			UI:Notify("Config", "Enter name", nil, Theme.Danger)
+			UI:Notify("Config", "Enter config name", nil, Theme.Danger)
 			return
 		end
 		local ok, err = ConfigSystem.Save(name)
@@ -602,7 +596,7 @@ return function(Context)
 	end)
 	cfgSec:AddButton("Load Selected", function()
 		if not cfgState.Selected then
-			UI:Notify("Config", "Select one", nil, Theme.Danger)
+			UI:Notify("Config", "Select a config first", nil, Theme.Danger)
 			return
 		end
 		local ok, err = ConfigSystem.Load(cfgState.Selected)
@@ -614,13 +608,13 @@ return function(Context)
 	end)
 	cfgSec:AddButton("Delete Selected", function()
 		if not cfgState.Selected then
-			UI:Notify("Config", "Select one", nil, Theme.Danger)
+			UI:Notify("Config", "Select a config first", nil, Theme.Danger)
 			return
 		end
 		ConfigSystem.Delete(cfgState.Selected)
 		cfgState.Selected = nil
 		cfgDropdown.Refresh(getCfgList())
-		UI:Notify("Deleted", "OK", nil, Theme.Success)
+		UI:Notify("Deleted", "Config removed", nil, Theme.Success)
 	end)
 
 	local cfgIO = cfgTab:AddSection("Import / Export")
@@ -648,7 +642,7 @@ return function(Context)
 
 	cfgIO:AddButton("Import Config from Textbox", function()
 		if not rawImportString or #rawImportString == 0 then
-			UI:Notify("Import", "Please paste config data first", nil, Theme.Danger)
+			UI:Notify("Import", "Paste config data first", nil, Theme.Danger)
 			return
 		end
 		local ok, data = pcall(function()
@@ -665,7 +659,7 @@ return function(Context)
 				cfgDropdown.Refresh(getCfgList(), true)
 				UI:Notify("Import", "Applied & saved as: " .. saveName, nil, Theme.Success)
 			else
-				UI:Notify("Import", "Applied, but failed to save: " .. tostring(saveErr), nil, Theme.Danger)
+				UI:Notify("Import", "Applied, save error: " .. tostring(saveErr), nil, Theme.Danger)
 			end
 		else
 			UI:Notify("Import", "Invalid config format", nil, Theme.Danger)
