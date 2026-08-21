@@ -326,150 +326,24 @@ return function(Context)
 	local infoSec = gameTab:AddSection("Current Game")
 	infoSec:AddButton("PlaceId: " .. tostring(game.PlaceId), function()
 		pcall(function() setclipboard(tostring(game.PlaceId)) end)
-		UI:Notify("Game", "PlaceId copied (if clipboard allowed)", nil, Theme.Accent)
+		UI:Notify("Game", "PlaceId copied to clipboard", nil, Theme.Accent)
 	end)
 	infoSec:AddButton("Game: " .. (gameLoader and gameLoader.GetDisplayName() or "Unknown"), function() end)
 
 	if gameLoader and gameLoader.IsSupported() then
-		local ok = gameLoader.BuildUI(gameTab)
+		local ok, err = gameLoader.BuildUI(gameTab)
 		if not ok then
-			local fallback = gameTab:AddSection("Module")
-			fallback:AddButton("Supported, but module has no UI", function() end)
+			local errSec = gameTab:AddSection("Module Error")
+			errSec:AddButton("Load failed — click for details", function()
+				UI:Notify("Module Error", tostring(err), 8, Theme.Danger)
+			end)
 		end
 	else
 		local unsup = gameTab:AddSection("Not Supported")
 		unsup:AddButton("No module for this PlaceId", function()
-			UI:Notify("Game", "Universal features only", nil, Theme.Warning or Theme.Accent)
+			UI:Notify("Game", "Universal features active", nil, Theme.Warning or Theme.Accent)
 		end)
-
-		local listSec = gameTab:AddSection("Supported Games")
-		if gameLoader then
-			for _, g in ipairs(gameLoader.ListSupported()) do
-				listSec:AddButton(g.Name .. " (" .. g.PlaceId .. ")", function()
-					UI:Notify(g.Name, g.Description ~= "" and g.Description or g.PlaceId, nil, Theme.Accent)
-				end)
-			end
-		end
 	end
-
-	----------------------------------------------------------------
-	-- TAB: Players
-	----------------------------------------------------------------
-	local playersTab = UI:AddTab("Players")
-	local selSec = playersTab:AddSection("Selection")
-	local playerDropdown = selSec:AddDropdown("Target", Utils.GetPlayerNameList(true), function(v)
-		State.SelectedPlayer = (v ~= "None" and v ~= "") and v or nil
-	end)
-	selSec:AddButton("Refresh List", function()
-		local list = Utils.GetPlayerNameList(true)
-		playerDropdown.Refresh(list, true)
-		if State.SelectedPlayer and not table.find(list, State.SelectedPlayer) then
-			State.SelectedPlayer = list[1]
-			playerDropdown.Set(State.SelectedPlayer or "None", true)
-		end
-		UI:Notify("Players", "Refreshed (" .. #list .. ")", nil, Theme.Success)
-	end)
-
-	Connections.Add(Players.PlayerAdded:Connect(function()
-		task.wait(0.5)
-		playerDropdown.Refresh(Utils.GetPlayerNameList(true), true)
-	end))
-	Connections.Add(Players.PlayerRemoving:Connect(function(p)
-		task.wait(0.1)
-		local list = Utils.GetPlayerNameList(true)
-		playerDropdown.Refresh(list, State.SelectedPlayer ~= p.Name)
-		if State.SelectedPlayer == p.Name then
-			State.SelectedPlayer = list[1]
-			playerDropdown.Set(State.SelectedPlayer or "None", true)
-		end
-	end))
-
-	local actSec = playersTab:AddSection("Actions")
-	actSec:AddButton("TP to Selected", function()
-		if not State.SelectedPlayer then
-			UI:Notify("TP", "Select player", nil, Theme.Danger)
-			return
-		end
-		local t = Utils.GetPlayerByName(State.SelectedPlayer)
-		local mr = Utils.GetRootPart()
-		if t and t.Character and mr then
-			local r = t.Character:FindFirstChild("HumanoidRootPart")
-			if r then
-				mr.CFrame = r.CFrame + Vector3.new(3, 0, 0)
-				UI:Notify("TP", "Done", nil, Theme.Success)
-				return
-			end
-		end
-		UI:Notify("TP", "Failed", nil, Theme.Danger)
-	end)
-	actSec:AddButton("TP to Aim Target", function()
-		local mr = Utils.GetRootPart()
-		if State.AimTarget and mr then
-			local r = State.AimTarget.model:FindFirstChild("HumanoidRootPart")
-			if r then
-				mr.CFrame = r.CFrame * CFrame.new(0, 0, 3)
-				UI:Notify("TP", "Done", nil, Theme.Success)
-				return
-			end
-		end
-		UI:Notify("TP", "No target", nil, Theme.Danger)
-	end)
-	actSec:AddButton("Spectate Selected", function()
-		if not State.SelectedPlayer then
-			UI:Notify("Spectate", "Select player", nil, Theme.Danger)
-			return
-		end
-		local t = Utils.GetPlayerByName(State.SelectedPlayer)
-		if t and t.Character then
-			local h = t.Character:FindFirstChildOfClass("Humanoid")
-			if h then
-				Camera.CameraSubject = h
-				Camera.CameraType = Enum.CameraType.Follow
-				UI:Notify("Spectate", State.SelectedPlayer, nil, Theme.Success)
-				return
-			end
-		end
-		UI:Notify("Spectate", "Failed", nil, Theme.Danger)
-	end)
-	actSec:AddButton("Stop Spectating", function()
-		local h = Utils.GetHumanoid()
-		if h then
-			Camera.CameraSubject = h
-			Camera.CameraType = Enum.CameraType.Custom
-		end
-		UI:Notify("Spectate", "Reset")
-	end)
-	actSec:AddToggle("Loop TP to Selected", false, function(v)
-		State.LoopTeleport = v
-	end)
-
-	local flingSec = playersTab:AddSection("Fling")
-	flingSec:AddToggle("Touch Fling", false, function(v)
-		if v then
-			FlingSystem.Start()
-			UI:Notify("Fling", "Enabled - walk into players", nil, Theme.Success)
-		else
-			FlingSystem.Stop()
-			UI:Notify("Fling", "Disabled")
-		end
-	end)
-
-	local orbitSec = playersTab:AddSection("Orbit")
-	orbitSec:AddSlider("Radius", State.OrbitRadius, 3, 50, function(v)
-		State.OrbitRadius = v
-	end)
-	orbitSec:AddSlider("Speed", State.OrbitSpeed, 1, 20, function(v)
-		State.OrbitSpeed = v
-	end)
-	orbitSec:AddToggle("Orbit Selected", false, function(v)
-		State.OrbitEnabled = v
-	end)
-	orbitSec:AddToggle("Loop Jump on Target", false, function(v)
-		State.LoopJump = v
-	end)
-	orbitSec:AddToggle("Spin Around Target", false, function(v)
-		State.SpinTarget = v
-	end)
 
 	----------------------------------------------------------------
 	-- TAB: Extras
