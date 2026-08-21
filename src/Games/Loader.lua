@@ -8,6 +8,7 @@ return function(Context, import)
 		UniverseId = tostring(game.GameId),
 		Info = Registry[placeId],
 		Module = nil,
+		LoadError = nil,
 		Supported = Registry[placeId] ~= nil,
 	}
 
@@ -40,30 +41,42 @@ return function(Context, import)
 		local path = "src/Games/" .. folder .. "/init.lua"
 
 		local ok, result = pcall(function()
-			return import(path)(Context)
+			local factory = import(path)
+			if type(factory) == "function" then
+				return factory(Context)
+			end
+			return factory
 		end)
 
 		if ok and type(result) == "table" then
 			GameLoader.Module = result
+			GameLoader.LoadError = nil
 			return result
 		end
 
-		warn("[B0Xaz] Failed to load game module:", path, result)
+		GameLoader.LoadError = tostring(result)
+		warn("[B0Xaz GameLoader] Error loading " .. path .. ": " .. tostring(result))
 		GameLoader.Module = nil
 		return nil
 	end
 
 	function GameLoader.BuildUI(tab)
 		if GameLoader.Module and type(GameLoader.Module.BuildUI) == "function" then
-			GameLoader.Module.BuildUI(tab)
+			local ok, err = pcall(function()
+				GameLoader.Module.BuildUI(tab)
+			end)
+			if not ok then
+				warn("[B0Xaz GameLoader] Error building UI: " .. tostring(err))
+				return false, tostring(err)
+			end
 			return true
 		end
-		return false
+		return false, GameLoader.LoadError or "Module missing or no BuildUI function"
 	end
 
 	function GameLoader.Update(dt)
 		if GameLoader.Module and type(GameLoader.Module.Update) == "function" then
-			GameLoader.Module.Update(dt)
+			pcall(function() GameLoader.Module.Update(dt) end)
 		end
 	end
 
