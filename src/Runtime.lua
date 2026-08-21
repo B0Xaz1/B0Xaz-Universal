@@ -24,22 +24,19 @@ return function(Context)
     local OverlayManager = Context.OverlayManager
     local GameLoader = Context.GameLoader
 
-    local DrawingESP = getgenv().B0XazDrawingESP or {}
-    local SkeletonLines = getgenv().B0XazSkeletonLines or {}
-
     local _fpsCounter = 0
     local _fpsTimer = 0
     local _fpsDisplay = 0
 
     local function applyHitboxes()
-        if not FeatureConfig.Extras or not FeatureConfig.Extras.Hitbox then return end
+        if not FeatureConfig.Extras or not FeatureConfig.Extras.Hitbox or not FeatureConfig.Extras.Hitbox.Enabled then return end
         local sz = FeatureConfig.Extras.Hitbox.Size or 10
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character then
                 local root = p.Character:FindFirstChild("HumanoidRootPart")
                 if root and root:IsA("BasePart") then
-                    if State.OriginalHitboxSizes and not State.OriginalHitboxSizes[p] then 
-                        State.OriginalHitboxSizes[p] = root.Size 
+                    if State.OriginalHitboxSizes and not State.OriginalHitboxSizes[p] then
+                        State.OriginalHitboxSizes[p] = root.Size
                     end
                     if root.Size.X ~= sz then root.Size = Vector3.new(sz, sz, sz) end
                     root.Transparency = 0.9
@@ -52,15 +49,18 @@ return function(Context)
     Context.ResetHitboxes = function()
         if not State.OriginalHitboxSizes then return end
         for p, sz in pairs(State.OriginalHitboxSizes) do
-            if p.Character then
+            if p and p.Character then
                 local root = p.Character:FindFirstChild("HumanoidRootPart")
-                if root then root.Size = sz; root.Transparency = 1 end
+                if root then
+                    root.Size = sz
+                    root.Transparency = 1
+                end
             end
         end
         table.clear(State.OriginalHitboxSizes)
     end
 
-    -- Teleport Hook
+    -- Teleportation safety hook
     if Connections.Add then
         pcall(function()
             Connections.Add(LocalPlayer.OnTeleport:Connect(function(teleportState)
@@ -71,7 +71,7 @@ return function(Context)
         end)
     end
 
-    -- Aimbot Key Bindings
+    -- User Inputs
     if Connections.Add then
         Connections.Add(UIS.InputBegan:Connect(function(input, processed)
             if processed or IsMobile or not FeatureConfig.Aimbot or not FeatureConfig.Aimbot.Enabled then return end
@@ -128,7 +128,7 @@ return function(Context)
         end))
     end
 
-    -- RenderStepped Loop
+    -- Render Loop
     if Connections.Add then
         Connections.Add(RS.RenderStepped:Connect(function(dt)
             if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
@@ -150,8 +150,8 @@ return function(Context)
                 FlySystem.Update()
             end
 
-            _fpsCounter += 1
-            _fpsTimer += dt
+            _fpsCounter = _fpsCounter + 1
+            _fpsTimer = _fpsTimer + dt
             if _fpsTimer >= 1 then
                 _fpsDisplay = _fpsCounter
                 _fpsCounter = 0
@@ -194,7 +194,7 @@ return function(Context)
         end))
     end
 
-    -- Heartbeat Loop
+    -- Physics / Game Logic Loop
     if Connections.Add then
         Connections.Add(RS.Heartbeat:Connect(function(dt)
             local hum = Utils.GetHumanoid and Utils.GetHumanoid()
@@ -215,8 +215,8 @@ return function(Context)
             end
 
             if FeatureConfig.Visuals and FeatureConfig.Visuals.Fullbright then
-                Lighting.Ambient = Color3.fromRGB(255,255,255)
-                Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
                 Lighting.Brightness = 2
                 Lighting.GlobalShadows = false
             end
@@ -231,18 +231,18 @@ return function(Context)
                 local tr = t and t.Character and t.Character:FindFirstChild("HumanoidRootPart")
 
                 if State.LoopTeleport and mr and tr then
-                    mr.CFrame = tr.CFrame + Vector3.new(3,0,0)
+                    mr.CFrame = tr.CFrame + Vector3.new(3, 0, 0)
                 end
                 if State.OrbitEnabled and t and Utils.IsAlive(t) and mr and tr then
                     State.OrbitAngle = (State.OrbitAngle or 0) + (State.OrbitSpeed or 2) * dt
-                    mr.CFrame = CFrame.new(tr.Position.X + math.cos(State.OrbitAngle)*(State.OrbitRadius or 8), tr.Position.Y, tr.Position.Z + math.sin(State.OrbitAngle)*(State.OrbitRadius or 8)) * CFrame.Angles(0, -State.OrbitAngle - math.pi/2, 0)
+                    mr.CFrame = CFrame.new(tr.Position.X + math.cos(State.OrbitAngle) * (State.OrbitRadius or 8), tr.Position.Y, tr.Position.Z + math.sin(State.OrbitAngle) * (State.OrbitRadius or 8)) * CFrame.Angles(0, -State.OrbitAngle - math.pi / 2, 0)
                 end
                 if State.LoopJump and t and Utils.IsAlive(t) and mr and tr then
-                    mr.CFrame = tr.CFrame + Vector3.new(0,4,0)
+                    mr.CFrame = tr.CFrame + Vector3.new(0, 4, 0)
                 end
                 if State.SpinTarget and t and Utils.IsAlive(t) and mr and tr then
                     State.SpinTargetAngle = (State.SpinTargetAngle or 0) + 10 * dt
-                    mr.CFrame = CFrame.new(tr.Position.X + math.cos(State.SpinTargetAngle)*2, tr.Position.Y, tr.Position.Z + math.sin(State.SpinTargetAngle)*2)
+                    mr.CFrame = CFrame.new(tr.Position.X + math.cos(State.SpinTargetAngle) * 2, tr.Position.Y, tr.Position.Z + math.sin(State.SpinTargetAngle) * 2)
                 end
             end
         end))
