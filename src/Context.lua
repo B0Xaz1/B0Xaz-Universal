@@ -101,6 +101,14 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             FireRateValue = 0.001,
             RangeValue = 10000,
         }
+                Performance = {
+            NoTextures = false,
+            LowMaterials = false,
+            OptimizeTerrain = false,
+            NoPostProcessing = false,
+            NoShadows = false,
+            NoParticles = false,
+        }
     }
 
     local State = {
