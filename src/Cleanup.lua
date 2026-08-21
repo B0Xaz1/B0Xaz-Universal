@@ -35,14 +35,20 @@ return function()
     g.B0XazDrawings = {}
 
     -- 5. Clean up ESP Drawings
-    if type(g.B0XazDrawingESP) == "table" then
-        for _, espData in pairs(g.B0XazDrawingESP) do
-            if type(espData) == "table" then
-                for _, drawing in pairs(espData) do
-                    pcall(function() drawing:Remove() end)
-                end
-            end
-        end
+    if type(g.B0XazDrawingESP) == "table" then 
+        for _, espData in pairs(g.B0XazDrawingESP) do 
+            if type(espData) == "table" then 
+                for _, drawing in pairs(espData) do 
+                    if type(drawing) == "table" then
+                        for _, line in ipairs(drawing) do
+                            pcall(function() line:Remove() end)
+                        end
+                    else
+                        pcall(function() drawing:Remove() end)
+                    end
+                end 
+            end 
+        end 
     end
     g.B0XazDrawingESP = {}
 
