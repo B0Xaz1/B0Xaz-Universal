@@ -1,12 +1,13 @@
 -- init.lua
-local GITHUB_USER = "YOUR_GITHUB_USERNAME"
-local GITHUB_REPO = "YOUR_REPOSITORY_NAME"
+local GITHUB_USER = "B0Xaz1"
+local GITHUB_REPO = "B0Xaz-Universal"
 local GITHUB_BRANCH = "main"
 
 local BASE_URL = string.format("https://raw.githubusercontent.com/%s/%s/%s/", GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH)
 getgenv().B0XazScriptURL = BASE_URL .. "init.lua"
 
 local function import(path)
+    -- Added timestamp query to bypass GitHub raw cache when you update files
     local url = BASE_URL .. path .. "?t=" .. tostring(os.time())
     local ok, source = pcall(function()
         return game:HttpGet(url)
