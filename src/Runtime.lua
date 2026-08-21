@@ -22,6 +22,7 @@ return function(Context)
     local FlySystem = Context.FlySystem
     local MovementSystem = Context.MovementSystem
     local OverlayManager = Context.OverlayManager
+    local GameLoader = Context.GameLoader
 
     local DrawingESP = getgenv().B0XazDrawingESP or {}
     local SkeletonLines = getgenv().B0XazSkeletonLines or {}
@@ -127,7 +128,7 @@ return function(Context)
         end))
     end
 
-    -- RenderStepped
+    -- RenderStepped Loop
     if Connections.Add then
         Connections.Add(RS.RenderStepped:Connect(function(dt)
             if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
@@ -193,7 +194,7 @@ return function(Context)
         end))
     end
 
-    -- Heartbeat
+    -- Heartbeat Loop
     if Connections.Add then
         Connections.Add(RS.Heartbeat:Connect(function(dt)
             local hum = Utils.GetHumanoid and Utils.GetHumanoid()
@@ -209,8 +210,8 @@ return function(Context)
                 MovementSystem.Update(dt)
             end
 
-            if Context.GameLoader and type(Context.GameLoader.Update) == "function" then
-	            Context.GameLoader.Update(dt)
+            if GameLoader and type(GameLoader.Update) == "function" then
+                GameLoader.Update(dt)
             end
 
             if FeatureConfig.Visuals and FeatureConfig.Visuals.Fullbright then
