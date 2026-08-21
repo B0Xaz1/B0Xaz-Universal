@@ -318,6 +318,41 @@ return function(Context)
 	end)
 
 	----------------------------------------------------------------
+	-- TAB: Game Specific
+	----------------------------------------------------------------
+	local gameTab = UI:AddTab("Game")
+	local gameLoader = Context.GameLoader
+
+	local infoSec = gameTab:AddSection("Current Game")
+	infoSec:AddButton("PlaceId: " .. tostring(game.PlaceId), function()
+		pcall(function() setclipboard(tostring(game.PlaceId)) end)
+		UI:Notify("Game", "PlaceId copied (if clipboard allowed)", nil, Theme.Accent)
+	end)
+	infoSec:AddButton("Game: " .. (gameLoader and gameLoader.GetDisplayName() or "Unknown"), function() end)
+
+	if gameLoader and gameLoader.IsSupported() then
+		local ok = gameLoader.BuildUI(gameTab)
+		if not ok then
+			local fallback = gameTab:AddSection("Module")
+			fallback:AddButton("Supported, but module has no UI", function() end)
+		end
+	else
+		local unsup = gameTab:AddSection("Not Supported")
+		unsup:AddButton("No module for this PlaceId", function()
+			UI:Notify("Game", "Universal features only", nil, Theme.Warning or Theme.Accent)
+		end)
+
+		local listSec = gameTab:AddSection("Supported Games")
+		if gameLoader then
+			for _, g in ipairs(gameLoader.ListSupported()) do
+				listSec:AddButton(g.Name .. " (" .. g.PlaceId .. ")", function()
+					UI:Notify(g.Name, g.Description ~= "" and g.Description or g.PlaceId, nil, Theme.Accent)
+				end)
+			end
+		end
+	end
+
+	----------------------------------------------------------------
 	-- TAB: Players
 	----------------------------------------------------------------
 	local playersTab = UI:AddTab("Players")
