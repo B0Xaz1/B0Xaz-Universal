@@ -1,8 +1,10 @@
 -- src/Games/155615604/init.lua
 return function(Context)
 	local Workspace = game:GetService("Workspace")
+	local Players = game:GetService("Players")
 	local RS = game:GetService("RunService")
 
+	local LocalPlayer = Players.LocalPlayer
 	local FeatureConfig = Context and Context.FeatureConfig or {}
 	local Theme = Context and Context.Theme or {}
 	local Connections = Context and Context.Connections or {}
@@ -15,7 +17,9 @@ return function(Context)
 		"Prison_Gate",
 	}
 
-	-- Global Cache for Re-Exec / Cleanup
+	----------------------------------------------------------------
+	-- Door cache (shared for cleanup / re-exec)
+	----------------------------------------------------------------
 	local _cache = getgenv().B0XazDoorCache
 	if type(_cache) ~= "table" then
 		_cache = {}
@@ -28,14 +32,27 @@ return function(Context)
 		getgenv().B0XazDoorParts = _doorPartsSet
 	end
 
+	----------------------------------------------------------------
+	-- Spread cache: [tool] = original SpreadRadius
+	----------------------------------------------------------------
+	local _spreadCache = getgenv().B0XazSpreadCache
+	if type(_spreadCache) ~= "table" then
+		_spreadCache = {}
+		getgenv().B0XazSpreadCache = _spreadCache
+	end
+
 	FeatureConfig.Game = FeatureConfig.Game or {}
 	FeatureConfig.Game.DoorPhase = FeatureConfig.Game.DoorPhase or false
 	FeatureConfig.Game.DoorGlow = FeatureConfig.Game.DoorGlow ~= false
 	FeatureConfig.Game.GlowColor = FeatureConfig.Game.GlowColor or Color3.fromRGB(0, 200, 220)
 	FeatureConfig.Game.PhaseTransparency = FeatureConfig.Game.PhaseTransparency or 0.65
+	FeatureConfig.Game.NoSpread = FeatureConfig.Game.NoSpread or false
 
 	local Game = { Name = "Prison Life" }
 
+	----------------------------------------------------------------
+	-- DOORS
+	----------------------------------------------------------------
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
 			if name:lower() == folderName:lower() then
@@ -71,7 +88,7 @@ return function(Context)
 		_doorPartsSet[part] = nil
 	end
 
-	local function restoreAll()
+	local function restoreAllDoors()
 		for part, _ in pairs(_cache) do
 			restorePart(part)
 		end
@@ -79,8 +96,7 @@ return function(Context)
 		table.clear(_doorPartsSet)
 	end
 
-	-- Restore previous session visuals immediately on script execute
-	restoreAll()
+	restoreAllDoors()
 
 	local function cachePart(part)
 		if _cache[part] then return end
@@ -120,42 +136,133 @@ return function(Context)
 			return
 		end
 
-		if FeatureConfig.Game.DoorPhase then
-			-- 1. Always Non-Collidable
-			if part.CanCollide then
-				part.CanCollide = false
-			end
+		if not FeatureConfig.Game.DoorPhase then return end
 
-			-- 2. Always See-Through Phase Transparency
-			local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
-			if math.abs(part.Transparency - targetTrans) > 0.01 then
-				part.Transparency = targetTrans
-			end
+		if part.CanCollide then
+			part.CanCollide = false
+		end
 
-			-- 3. Apply Glow vs Normal Material
-			if FeatureConfig.Game.DoorGlow then
-				if part.Material ~= Enum.Material.Neon then
-					part.Material = Enum.Material.Neon
+		local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
+		if math.abs(part.Transparency - targetTrans) > 0.01 then
+			part.Transparency = targetTrans
+		end
+
+		if FeatureConfig.Game.DoorGlow then
+			if part.Material ~= Enum.Material.Neon then
+				part.Material = Enum.Material.Neon
+			end
+			if part.Color ~= FeatureConfig.Game.GlowColor then
+				part.Color = FeatureConfig.Game.GlowColor
+			end
+		else
+			if part.Material ~= c.Material then
+				part.Material = c.Material
+			end
+			if part.Color ~= c.Color then
+				part.Color = c.Color
+			end
+		end
+	end
+
+	----------------------------------------------------------------
+	-- NO SPREAD (SpreadRadius attribute = 0)
+	----------------------------------------------------------------
+	local function getGunContainers()
+		local list = {}
+		if LocalPlayer then
+			local bp = LocalPlayer:FindFirstChild("Backpack")
+			if bp then table.insert(list, bp) end
+			if LocalPlayer.Character then table.insert(list, LocalPlayer.Character) end
+		end
+		return list
+	end
+
+	local function isGunTool(inst)
+		if not inst or not inst:IsA("Tool") then return false end
+		-- Any tool with SpreadRadius (or common gun children)
+		if inst:GetAttribute("SpreadRadius") ~= nil then return true end
+		if inst:FindFirstChild("GunScript") or inst:FindFirstChild("GunStates") then return true end
+		if inst:FindFirstChild("Handle") and inst:GetAttribute("SpreadRadius") ~= nil then return true end
+		return inst:GetAttribute("SpreadRadius") ~= nil
+	end
+
+	local function cacheSpread(tool)
+		if _spreadCache[tool] ~= nil then return end
+		local v = tool:GetAttribute("SpreadRadius")
+		if v ~= nil then
+			_spreadCache[tool] = v
+		end
+	end
+
+	local function applyNoSpreadTo(tool)
+		if not tool or not tool.Parent then return end
+		if not tool:IsA("Tool") then return end
+
+		local current = tool:GetAttribute("SpreadRadius")
+		if current == nil then
+			-- still try set if game expects the attribute
+			cacheSpread(tool)
+			pcall(function() tool:SetAttribute("SpreadRadius", 0) end)
+			return
+		end
+
+		cacheSpread(tool)
+		if current ~= 0 then
+			pcall(function() tool:SetAttribute("SpreadRadius", 0) end)
+		end
+
+		-- Some guns store spread on children too
+		for _, d in ipairs(tool:GetDescendants()) do
+			if d:GetAttribute("SpreadRadius") ~= nil then
+				if _spreadCache[d] == nil then
+					_spreadCache[d] = d:GetAttribute("SpreadRadius")
 				end
-				if part.Color ~= FeatureConfig.Game.GlowColor then
-					part.Color = FeatureConfig.Game.GlowColor
-				end
-			else
-				if part.Material ~= c.Material then
-					part.Material = c.Material
-				end
-				if part.Color ~= c.Color then
-					part.Color = c.Color
+				if d:GetAttribute("SpreadRadius") ~= 0 then
+					pcall(function() d:SetAttribute("SpreadRadius", 0) end)
 				end
 			end
 		end
 	end
 
+	local function scanGuns()
+		for _, container in ipairs(getGunContainers()) do
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then
+					applyNoSpreadTo(child)
+				end
+			end
+		end
+	end
+
+	local function restoreSpread()
+		for inst, original in pairs(_spreadCache) do
+			if inst and inst.Parent then
+				pcall(function()
+					inst:SetAttribute("SpreadRadius", original)
+				end)
+			end
+			_spreadCache[inst] = nil
+		end
+		table.clear(_spreadCache)
+	end
+
+	local function enforceNoSpread()
+		if not FeatureConfig.Game.NoSpread then return end
+		scanGuns()
+	end
+
+	----------------------------------------------------------------
+	-- Connections
+	----------------------------------------------------------------
 	if Connections and Connections.Add then
 		Connections.Add(RS.Stepped:Connect(function()
-			if not FeatureConfig.Game.DoorPhase then return end
-			for part, _ in pairs(_doorPartsSet) do
-				enforcePart(part)
+			if FeatureConfig.Game.DoorPhase then
+				for part, _ in pairs(_doorPartsSet) do
+					enforcePart(part)
+				end
+			end
+			if FeatureConfig.Game.NoSpread then
+				enforceNoSpread()
 			end
 		end))
 
@@ -166,14 +273,40 @@ return function(Context)
 				end)
 			end
 		end))
+
+		-- New tools added to backpack / character
+		local function hookContainer(container)
+			if not container then return end
+			Connections.Add(container.ChildAdded:Connect(function(child)
+				if FeatureConfig.Game.NoSpread and child:IsA("Tool") then
+					task.defer(function()
+						applyNoSpreadTo(child)
+					end)
+				end
+			end))
+		end
+
+		hookContainer(LocalPlayer:FindFirstChild("Backpack"))
+		if LocalPlayer.Character then hookContainer(LocalPlayer.Character) end
+		Connections.Add(LocalPlayer.CharacterAdded:Connect(function(char)
+			hookContainer(char)
+			task.wait(0.5)
+			if FeatureConfig.Game.NoSpread then scanGuns() end
+		end))
+		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
+			if child.Name == "Backpack" then hookContainer(child) end
+		end))
 	end
 
+	----------------------------------------------------------------
+	-- API
+	----------------------------------------------------------------
 	function Game.SetDoorPhase(enabled)
 		FeatureConfig.Game.DoorPhase = enabled and true or false
 		if FeatureConfig.Game.DoorPhase then
 			scanAllDoors()
 		else
-			restoreAll()
+			restoreAllDoors()
 		end
 	end
 
@@ -186,12 +319,14 @@ return function(Context)
 
 	function Game.SetGlowColor(color)
 		FeatureConfig.Game.GlowColor = color
-		if FeatureConfig.Game.DoorPhase and FeatureConfig.Game.DoorGlow then
-			for part, _ in pairs(_doorPartsSet) do
-				if part and part.Parent then
-					part.Color = color
-				end
-			end
+	end
+
+	function Game.SetNoSpread(enabled)
+		FeatureConfig.Game.NoSpread = enabled and true or false
+		if FeatureConfig.Game.NoSpread then
+			scanGuns()
+		else
+			restoreSpread()
 		end
 	end
 
@@ -211,13 +346,6 @@ return function(Context)
 
 		doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
 			FeatureConfig.Game.PhaseTransparency = v / 100
-			if FeatureConfig.Game.DoorPhase then
-				for part, _ in pairs(_doorPartsSet) do
-					if part and part.Parent then
-						part.Transparency = FeatureConfig.Game.PhaseTransparency
-					end
-				end
-			end
 		end, "%")
 
 		doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
@@ -232,20 +360,42 @@ return function(Context)
 				end
 			end
 		end)
+
+		local combat = tab:AddSection("Combat")
+
+		combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
+			Game.SetNoSpread(v)
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", v and "SpreadRadius = 0" or "Spread restored", nil, Theme and Theme.Success)
+			end
+		end)
+
+		combat:AddButton("Force Apply No Spread", function()
+			scanGuns()
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", "Guns updated", nil, Theme and Theme.Accent)
+			end
+		end)
 	end
 
 	function Game.Update(dt)
-		if not FeatureConfig.Game.DoorPhase then return end
-		for part, _ in pairs(_doorPartsSet) do
-			enforcePart(part)
+		if FeatureConfig.Game.DoorPhase then
+			for part, _ in pairs(_doorPartsSet) do
+				enforcePart(part)
+			end
+		end
+		if FeatureConfig.Game.NoSpread then
+			enforceNoSpread()
 		end
 	end
 
 	function Game.Destroy()
-		restoreAll()
+		restoreAllDoors()
+		restoreSpread()
 	end
 
-	getgenv().B0XazRestoreDoors = restoreAll
+	getgenv().B0XazRestoreDoors = restoreAllDoors
+	getgenv().B0XazRestoreSpread = restoreSpread
 
 	return Game
 end
