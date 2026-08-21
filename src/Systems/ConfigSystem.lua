@@ -242,6 +242,13 @@ return function(Context)
         set("Game_FastFire", FeatureConfig.Game.FastFire)
         set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
         set("Game_ForceRange", FeatureConfig.Game.ForceRange)
+
+        set("Perf_NoTextures", FeatureConfig.Performance.NoTextures)
+        set("Perf_LowMaterials", FeatureConfig.Performance.LowMaterials)
+        set("Perf_OptimizeTerrain", FeatureConfig.Performance.OptimizeTerrain)
+        set("Perf_NoPostProcessing", FeatureConfig.Performance.NoPostProcessing)
+        set("Perf_NoShadows", FeatureConfig.Performance.NoShadows)
+        set("Perf_NoParticles", FeatureConfig.Performance.NoParticles)
     end
 
     function ConfigSystem.Load(name)
