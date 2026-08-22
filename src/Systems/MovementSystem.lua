@@ -1,79 +1,54 @@
-local SETTINGS = {
-	LIMITS = {
-		BHOP_COOLDOWN = 0.2,
-		MIN_MOVE_MAGNITUDE = 0.05,
-		DEFAULT_DT = 0.016666666666667,
-		DEFAULT_CFRAME_SPEED = 50,
-		MIN_CFRAME_SPEED = 0,
-		MAX_CFRAME_SPEED = 300,
-	},
-	KEYS = {
-		JUMP = Enum.KeyCode.Space,
-	},
-	INVALID_JUMP_STATES = {
+-- // src/Systems/MovementSystem.lua
+return function(Context)
+	local UserInputService = game:GetService("UserInputService")
+	local FeatureConfig = Context.FeatureConfig or {}
+	local Utils = Context.Utils or {}
+
+	local MovementSystem = {}
+	local lastJump = 0
+
+	local INVALID = {
 		[Enum.HumanoidStateType.Jumping] = true,
 		[Enum.HumanoidStateType.Freefall] = true,
 		[Enum.HumanoidStateType.Dead] = true,
-	},
-}
-
-return function(Context)
-	local UserInputService = game:GetService("UserInputService")
-
-	local FeatureConfig = (Context and Context.FeatureConfig) or {}
-	local Utils = (Context and Context.Utils) or {}
-
-	local MovementSystem = {}
-	local lastJumpTime = 0
-
-	local function getHumanoid()
-		return Utils.GetHumanoid and Utils.GetHumanoid()
-	end
-
-	local function getRootPart()
-		return Utils.GetRootPart and Utils.GetRootPart()
-	end
+	}
 
 	function MovementSystem.UpdateBhop()
-		local movement = FeatureConfig.Movement
-		if not (movement and movement.Bhop) then return end
-		if not UserInputService:IsKeyDown(SETTINGS.KEYS.JUMP) and not UserInputService.TouchEnabled then return end
+		local mov = FeatureConfig.Movement
+		if not (mov and mov.Bhop) then return end
+		if not UserInputService:IsKeyDown(Enum.KeyCode.Space) and not UserInputService.TouchEnabled then return end
 
-		local humanoid = getHumanoid()
-		if not humanoid or humanoid.Health <= 0 then return end
+		local hum = Utils.GetHumanoid and Utils.GetHumanoid()
+		if not hum or hum.Health <= 0 then return end
 
-		local currentTime = os.clock()
-		if (currentTime - lastJumpTime) < SETTINGS.LIMITS.BHOP_COOLDOWN then return end
+		local now = os.clock()
+		if (now - lastJump) < 0.2 then return end
 
-		local currentState = humanoid:GetState()
-		local isGrounded = (humanoid.FloorMaterial ~= Enum.Material.Air) and not SETTINGS.INVALID_JUMP_STATES[currentState]
-
-		if isGrounded then
-			lastJumpTime = currentTime
+		local state = hum:GetState()
+		local grounded = hum.FloorMaterial ~= Enum.Material.Air and not INVALID[state]
+		if grounded then
+			lastJump = now
 			pcall(function()
-				humanoid.Jump = true
-				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+				hum.Jump = true
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
 			end)
 		end
 	end
 
 	function MovementSystem.UpdateCFrameSpeed(dt)
-		local movement = FeatureConfig.Movement
-		if not (movement and movement.CFrameSpeed) or movement.FlyEnabled then return end
+		local mov = FeatureConfig.Movement
+		if not (mov and mov.CFrameSpeed) or mov.FlyEnabled then return end
 
-		local humanoid = getHumanoid()
-		local rootPart = getRootPart()
-		if not humanoid or not rootPart or humanoid.Health <= 0 then return end
+		local hum = Utils.GetHumanoid and Utils.GetHumanoid()
+		local root = Utils.GetRootPart and Utils.GetRootPart()
+		if not hum or not root or hum.Health <= 0 then return end
 
-		local moveDir = humanoid.MoveDirection
-		if moveDir.Magnitude < SETTINGS.LIMITS.MIN_MOVE_MAGNITUDE then return end
+		local md = hum.MoveDirection
+		if md.Magnitude < 0.05 then return end
 
-		local rawSpeed = movement.CFrameSpeedValue or SETTINGS.LIMITS.DEFAULT_CFRAME_SPEED
-		local speed = math.clamp(rawSpeed, SETTINGS.LIMITS.MIN_CFRAME_SPEED, SETTINGS.LIMITS.MAX_CFRAME_SPEED)
-		local deltaTime = dt or SETTINGS.LIMITS.DEFAULT_DT
-
+		local speed = math.clamp(mov.CFrameSpeedValue or 50, 0, 300)
 		pcall(function()
-			rootPart.CFrame = rootPart.CFrame + (moveDir * speed * deltaTime)
+			root.CFrame = root.CFrame + (md * speed * (dt or 1/60))
 		end)
 	end
 
