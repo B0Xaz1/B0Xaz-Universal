@@ -70,6 +70,18 @@ Context.GameModule = Context.GameLoader.Load()
 -- 7. Build User Interface
 import("src/UI/BuildUI.lua")(Context)
 
+pcall(function()
+    if Context.ConfigSystem then
+        local loaded = Context.ConfigSystem.LoadAutoload()
+        if loaded then
+            Context.ConfigSystem.UpdateUI()
+            print("[B0Xaz] Last session settings successfully restored!")
+        end
+        -- Spin up the debounced auto-save engine loop
+        Context.ConfigSystem.StartAutosaveLoop()
+    end
+end)
+
 -- 8. Runtime & ESP Loops
 Context.ESPSystem.InitializeAll()
 import("src/Runtime.lua")(Context)
