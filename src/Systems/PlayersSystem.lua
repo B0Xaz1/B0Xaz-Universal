@@ -1,165 +1,253 @@
--- src/Systems/PlayersSystem.lua
+local SETTINGS = {
+	TELEPORT_OFFSET = Vector3.new(0, 3, 3),
+	PHYSICS = {
+		VELOCITY_MULTIPLIER = 10000,
+		VERTICAL_BURST = Vector3.new(0, 10000, 0),
+		INITIAL_OFFSET = 0.1,
+		ROOT_CANDIDATES = { "HumanoidRootPart", "Torso" },
+	},
+	LIMITS = {
+		SPECTATE_RESPAWN_DELAY = 0.5,
+	},
+	ERRORS = {
+		INVALID_TARGET = "Invalid target",
+		TARGET_NOT_ALIVE = "Target is not alive",
+		MISSING_CHARACTER = "Missing character",
+	},
+}
+
 return function(Context)
-    local Players = game:GetService("Players")
-    local Workspace = game:GetService("Workspace")
-    local RS = game:GetService("RunService")
+	local Players = game:GetService("Players")
+	local Workspace = game:GetService("Workspace")
+	local RunService = game:GetService("RunService")
 
-    local LocalPlayer = Players.LocalPlayer
-    local Camera = Workspace.CurrentCamera
+	local LocalPlayer = Players.LocalPlayer
+	local Utils = (Context and Context.Utils) or {}
+	local Connections = (Context and Context.Connections) or {}
 
-    local Utils = Context.Utils
-    local State = Context.State
-    local Connections = Context.Connections
-    local FlingSystem = Context.FlingSystem
+	local PlayersSystem = {}
 
-    local PlayersSystem = {}
+	local spectatingPlayer = nil
+	local spectateConnection = nil
+	local originalCameraSubject = nil
 
-    local _spectating = nil
-    local _spectateConn = nil
-    local _originalCameraSubject = nil
+	local flingTarget = nil
+	local flingThread = nil
 
-    local _flingTarget = nil
-    local _flingThread = nil
+	local function getCamera()
+		return Workspace.CurrentCamera
+	end
 
-    ----------------------------------------------------------------
-    -- Spectate
-    ----------------------------------------------------------------
-    function PlayersSystem.StartSpectate(playerName)
-        local target = Utils.GetPlayerByName(playerName)
-        if not target or target == LocalPlayer then return false, "Invalid target" end
-        if not Utils.IsAlive(target) then return false, "Target is not alive" end
+	local function getRootPart(character)
+		if not character then return nil end
+		for _, partName in ipairs(SETTINGS.PHYSICS.ROOT_CANDIDATES) do
+			local part = character:FindFirstChild(partName)
+			if part and part:IsA("BasePart") then
+				return part
+			end
+		end
+		return nil
+	end
 
-        PlayersSystem.StopSpectate()
+	local function setLinearVelocity(part, velocity)
+		pcall(function()
+			part.AssemblyLinearVelocity = velocity
+		end)
+	end
 
-        _spectating = target
-        if not _originalCameraSubject then
-            _originalCameraSubject = Camera.CameraSubject
-        end
+	local function getLinearVelocity(part)
+		return part.AssemblyLinearVelocity or part.Velocity or Vector3.zero
+	end
 
-        Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid") or target.Character:FindFirstChild("HumanoidRootPart")
+	local function getTargetSubject(character)
+		if not character then return nil end
+		return character:FindFirstChildOfClass("Humanoid") or getRootPart(character)
+	end
 
-        _spectateConn = target.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
-            if _spectating == target then
-                local hum = char:FindFirstChildOfClass("Humanoid") or char:FindFirstChild("HumanoidRootPart")
-                if hum then Camera.CameraSubject = hum end
-            end
-        end)
-        Connections.Add(_spectateConn)
+	function PlayersSystem.StartSpectate(playerName)
+		local target = Utils.GetPlayerByName and Utils.GetPlayerByName(playerName)
+		if not target or target == LocalPlayer then
+			return false, SETTINGS.ERRORS.INVALID_TARGET
+		end
+		if Utils.IsAlive and not Utils.IsAlive(target) then
+			return false, SETTINGS.ERRORS.TARGET_NOT_ALIVE
+		end
 
-        return true
-    end
+		PlayersSystem.StopSpectate()
 
-    function PlayersSystem.StopSpectate()
-        if _spectateConn then
-            pcall(function() _spectateConn:Disconnect() end)
-            _spectateConn = nil
-        end
+		local camera = getCamera()
+		if not camera then
+			return false, SETTINGS.ERRORS.MISSING_CHARACTER
+		end
 
-        if _originalCameraSubject then
-            pcall(function() Camera.CameraSubject = _originalCameraSubject end)
-        else
-            local myHum = Utils.GetHumanoid()
-            if myHum then Camera.CameraSubject = myHum end
-        end
-        _originalCameraSubject = nil
-        _spectating = nil
-    end
+		spectatingPlayer = target
+		if not originalCameraSubject then
+			originalCameraSubject = camera.CameraSubject
+		end
 
-    function PlayersSystem.GetSpectating()
-        return _spectating
-    end
+		local subject = getTargetSubject(target.Character)
+		if subject then
+			camera.CameraSubject = subject
+		end
 
-    ----------------------------------------------------------------
-    -- Teleport To
-    ----------------------------------------------------------------
-    function PlayersSystem.TeleportTo(playerName, offset)
-        local target = Utils.GetPlayerByName(playerName)
-        if not target or target == LocalPlayer then return false, "Invalid target" end
-        if not Utils.IsAlive(target) then return false, "Target is not alive" end
+		spectateConnection = target.CharacterAdded:Connect(function(character)
+			task.wait(SETTINGS.LIMITS.SPECTATE_RESPAWN_DELAY)
+			if spectatingPlayer == target then
+				local cam = getCamera()
+				local newSubject = getTargetSubject(character)
+				if cam and newSubject then
+					cam.CameraSubject = newSubject
+				end
+			end
+		end)
 
-        local myRoot = Utils.GetRootPart()
-        local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-        if not myRoot or not targetRoot then return false, "Missing character" end
+		if Connections and type(Connections.Add) == "function" then
+			Connections.Add(spectateConnection)
+		end
 
-        offset = offset or Vector3.new(0, 3, 3)
-        myRoot.CFrame = targetRoot.CFrame + offset
-        return true
-    end
+		return true
+	end
 
-    ----------------------------------------------------------------
-    -- Fling Attack (targeted)
-    ----------------------------------------------------------------
-    function PlayersSystem.StartFling(playerName)
-        local target = Utils.GetPlayerByName(playerName)
-        if not target or target == LocalPlayer then return false, "Invalid target" end
+	function PlayersSystem.StopSpectate()
+		if spectateConnection then
+			pcall(function()
+				spectateConnection:Disconnect()
+			end)
+			spectateConnection = nil
+		end
 
-        PlayersSystem.StopFling()
-        _flingTarget = target
+		local camera = getCamera()
+		if camera then
+			if originalCameraSubject and originalCameraSubject.Parent then
+				pcall(function()
+					camera.CameraSubject = originalCameraSubject
+				end)
+			else
+				local myHumanoid = Utils.GetHumanoid and Utils.GetHumanoid()
+				if myHumanoid then
+					camera.CameraSubject = myHumanoid
+				end
+			end
+		end
 
-        _flingThread = Connections.Track(task.spawn(function()
-            local movel = 0.1
-            while _flingTarget == target and target.Parent do
-                RS.Heartbeat:Wait()
+		originalCameraSubject = nil
+		spectatingPlayer = nil
+	end
 
-                local myChar = Utils.GetCharacter()
-                local targetChar = target.Character
-                if not myChar or not targetChar then continue end
+	function PlayersSystem.GetSpectating()
+		return spectatingPlayer
+	end
 
-                local myRoot = myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso")
-                local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
-                if not myRoot or not targetRoot then continue end
+	function PlayersSystem.TeleportTo(playerName, offset)
+		local target = Utils.GetPlayerByName and Utils.GetPlayerByName(playerName)
+		if not target or target == LocalPlayer then
+			return false, SETTINGS.ERRORS.INVALID_TARGET
+		end
+		if Utils.IsAlive and not Utils.IsAlive(target) then
+			return false, SETTINGS.ERRORS.TARGET_NOT_ALIVE
+		end
 
-                -- Position on target
-                pcall(function()
-                    myRoot.CFrame = targetRoot.CFrame
-                end)
+		local myRoot = Utils.GetRootPart and Utils.GetRootPart()
+		local targetRoot = getRootPart(target.Character)
+		if not myRoot or not targetRoot then
+			return false, SETTINGS.ERRORS.MISSING_CHARACTER
+		end
 
-                local oldVel = myRoot.Velocity
-                myRoot.Velocity = oldVel * 10000 + Vector3.new(0, 10000, 0)
-                RS.RenderStepped:Wait()
+		local targetOffset = offset or SETTINGS.TELEPORT_OFFSET
+		myRoot.CFrame = targetRoot.CFrame + targetOffset
+		return true
+	end
 
-                if myRoot and myRoot.Parent then myRoot.Velocity = oldVel end
-                RS.Stepped:Wait()
+	function PlayersSystem.StartFling(playerName)
+		local target = Utils.GetPlayerByName and Utils.GetPlayerByName(playerName)
+		if not target or target == LocalPlayer then
+			return false, SETTINGS.ERRORS.INVALID_TARGET
+		end
 
-                if myRoot and myRoot.Parent then
-                    myRoot.Velocity = oldVel + Vector3.new(0, movel, 0)
-                    movel = movel * -1
-                end
-            end
-        end))
+		PlayersSystem.StopFling()
+		flingTarget = target
 
-        return true
-    end
+		local flingLoop = task.spawn(function()
+			local stepOffset = SETTINGS.PHYSICS.INITIAL_OFFSET
+			while flingTarget == target and target.Parent do
+				RunService.Heartbeat:Wait()
 
-    function PlayersSystem.StopFling()
-        _flingTarget = nil
-        if _flingThread then
-            pcall(function() task.cancel(_flingThread) end)
-            _flingThread = nil
-        end
-        local myHum = Utils.GetHumanoid()
-        local myRoot = Utils.GetRootPart()
-        if myHum then myHum.PlatformStand = false end
-        if myRoot then
-            pcall(function()
-                myRoot.AssemblyLinearVelocity = Vector3.zero
-                myRoot.AssemblyAngularVelocity = Vector3.zero
-            end)
-        end
-    end
+				local myChar = Utils.GetCharacter and Utils.GetCharacter()
+				local targetChar = target.Character
+				if not myChar or not targetChar then continue end
 
-    function PlayersSystem.GetFlingTarget()
-        return _flingTarget
-    end
+				local myRoot = getRootPart(myChar)
+				local targetRoot = getRootPart(targetChar)
+				if not myRoot or not targetRoot then continue end
 
-    ----------------------------------------------------------------
-    -- Cleanup on player leave
-    ----------------------------------------------------------------
-    Connections.Add(Players.PlayerRemoving:Connect(function(p)
-        if _spectating == p then PlayersSystem.StopSpectate() end
-        if _flingTarget == p then PlayersSystem.StopFling() end
-    end))
+				pcall(function()
+					myRoot.CFrame = targetRoot.CFrame
+				end)
 
-    return PlayersSystem
+				local previousVelocity = getLinearVelocity(myRoot)
+				local burstVelocity = (previousVelocity * SETTINGS.PHYSICS.VELOCITY_MULTIPLIER) + SETTINGS.PHYSICS.VERTICAL_BURST
+
+				setLinearVelocity(myRoot, burstVelocity)
+
+				RunService.RenderStepped:Wait()
+				if myRoot and myRoot.Parent then
+					setLinearVelocity(myRoot, previousVelocity)
+				end
+
+				RunService.Stepped:Wait()
+				if myRoot and myRoot.Parent then
+					setLinearVelocity(myRoot, previousVelocity + Vector3.new(0, stepOffset, 0))
+					stepOffset = -stepOffset
+				end
+			end
+		end)
+
+		if Connections and type(Connections.Track) == "function" then
+			flingThread = Connections.Track(flingLoop)
+		else
+			flingThread = flingLoop
+		end
+
+		return true
+	end
+
+	function PlayersSystem.StopFling()
+		flingTarget = nil
+		if flingThread then
+			pcall(function()
+				task.cancel(flingThread)
+			end)
+			flingThread = nil
+		end
+
+		local myHumanoid = Utils.GetHumanoid and Utils.GetHumanoid()
+		local myRoot = Utils.GetRootPart and Utils.GetRootPart()
+
+		if myHumanoid then
+			myHumanoid.PlatformStand = false
+		end
+		if myRoot then
+			setLinearVelocity(myRoot, Vector3.zero)
+			pcall(function()
+				myRoot.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
+	end
+
+	function PlayersSystem.GetFlingTarget()
+		return flingTarget
+	end
+
+	if Connections and type(Connections.Add) == "function" then
+		Connections.Add(Players.PlayerRemoving:Connect(function(player)
+			if spectatingPlayer == player then
+				PlayersSystem.StopSpectate()
+			end
+			if flingTarget == player then
+				PlayersSystem.StopFling()
+			end
+		end))
+	end
+
+	return PlayersSystem
 end
