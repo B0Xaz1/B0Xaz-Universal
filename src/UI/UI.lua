@@ -171,15 +171,23 @@ return function(Context, Theme)
 			BorderSizePixel = 0,
 			Parent = self.TabBar,
 		})
-		self.TabList = create("Frame", {
+
+		-- Horizontal scrolling ensures all tabs are always visible/accessible
+		self.TabList = create("ScrollingFrame", {
 			Size = UDim2.new(1, -8, 1, 0),
 			Position = UDim2.new(0, 4, 0, 0),
 			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 0,
+			ScrollingDirection = Enum.ScrollingDirection.X,
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.X,
+			ClipsDescendants = true,
 			Parent = self.TabBar,
 		}, {
 			create("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
-				Padding = UDim.new(0, 2),
+				Padding = UDim.new(0, 4),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
 			}),
