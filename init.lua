@@ -1,4 +1,4 @@
--- // init.lua (Main Loader)
+-- // init.lua (Main Loader - FIXED)
 local SETTINGS = {
 	PATHS = {
 		CONFIG = "src/Config.lua",
@@ -60,20 +60,26 @@ end
 
 local function fetchSource(path)
 	local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	local fullUrl = baseUrl .. cleanPath
+	
+	-- Try original path, then try lowercase path (fixes case-sensitivity issues)
+	local variants = {
+		path:gsub("^%./", ""):gsub("^/", ""),
+		path:lower():gsub("^%./", ""):gsub("^/", "")
+	}
 
-	for attempt = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
-		local success, response = pcall(function()
-			return game:HttpGet(fullUrl)
-		end)
-		if success and isValidSource(response) then
-			return response
+	for _, cleanPath in ipairs(variants) do
+		local fullUrl = baseUrl .. cleanPath
+		for attempt = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
+			local success, response = pcall(function()
+				return game:HttpGet(fullUrl)
+			end)
+			if success and isValidSource(response) then
+				return response
+			end
 		end
-		task.wait(0.2)
 	end
 
-	warn("[B0Xaz] Failed to fetch module (404/Case Sensitivity?): " .. path)
+	warn("[B0Xaz] Failed to fetch module: " .. path)
 	return nil
 end
 
@@ -84,13 +90,13 @@ local function import(path)
 
 	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
 	if not loaderFn then
-		warn("[B0Xaz] Syntax error compiling " .. path .. ": " .. tostring(compileErr))
+		warn("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
 		moduleCache[path] = false return nil
 	end
 
 	local runSuccess, moduleResult = pcall(loaderFn)
 	if not runSuccess then
-		warn("[B0Xaz] Runtime error executing " .. path .. ": " .. tostring(moduleResult))
+		warn("[B0Xaz] Runtime error in " .. path .. ": " .. tostring(moduleResult))
 		moduleCache[path] = false return nil
 	end
 
@@ -99,7 +105,7 @@ local function import(path)
 	return moduleResult
 end
 
--- Load sequence with fix for typos
+-- Core Setup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
@@ -138,35 +144,19 @@ local keySysFn = import(SETTINGS.PATHS.KEY_SYSTEM)
 local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or {}
 context.KeySystem = keySystem
 
-local configSysFn = import(SETTINGS.PATHS.CONFIG_SYSTEM)
-context.ConfigSystem = type(configSysFn) == "function" and configSysFn(context) or {}
+-- Systems (FIXED CRASH HERE)
+local function safeInit(fn) return type(fn) == "function" and fn(context) or {} end
 
-local aimbotSysFn = import(SETTINGS.PATHS.AIMBOT_SYSTEM)
-context.AimbotSystem = type(aimbotSysFn) == "function" and aimbotSysFn(context) or {}
-
-local espSysFn = import(SETTINGS.PATHS.ESP_SYSTEM)
-context.ESPSystem = type(espSysFn) == "function" and espSysFn(context) or {}
-
-local flingSysFn = import(SETTINGS.PATHS.FLING_SYSTEM)
-context.FlingSystem = type(flingSysFn) == "function" and flingSysFn(context) or {}
-
-local flySysFn = import(SETTINGS.PATHS.FLY_SYSTEM)
-context.FlySystem = type(flySysFn) == "function" and flySysFn(context) or {}
-
-local moveSysFn = import(SETTINGS.PATHS.MOVEMENT_SYSTEM)
-context.MovementSystem = type(moveSysFn) == "function" and moveSysFn(context) or {}
-
-local perfSysFn = import(SETTINGS.PATHS.PERFORMANCE_SYSTEM)
-context.PerformanceSystem = type(perfSysFn) == "function" and perfSysFn(context) or {}
-
-local playersSysFn = import(SETTINGS.PATHS.PLAYERS_SYSTEM)
-context.PlayersSystem = type(playersSysFn) == "function" and playersSysFn(context) or {}
-
-local overlayMgrFn = import(SETTINGS.PATHS.OVERLAY_MANAGER)
-context.OverlayManager = type(overlayMgrFn) == "function" and overlayMgrFn(context) or {}
-
-local gameLoaderFn = import(SETTINGS.PATHS.GAME_LOADER)
-context.GameLoader = type(gameLoaderFn) == "function" and gameLoaderFn(context, import) or {}
+context.ConfigSystem = safeInit(import(SETTINGS.PATHS.CONFIG_SYSTEM))
+context.AimbotSystem = safeInit(import(SETTINGS.PATHS.AIMBOT_SYSTEM))
+context.ESPSystem = safeInit(import(SETTINGS.PATHS.ESP_SYSTEM))
+context.FlingSystem = safeInit(import(SETTINGS.PATHS.FLING_SYSTEM))
+context.FlySystem = safeInit(import(SETTINGS.PATHS.FLY_SYSTEM))
+context.MovementSystem = safeInit(import(SETTINGS.PATHS.MOVEMENT_SYSTEM))
+context.PerformanceSystem = safeInit(import(SETTINGS.PATHS.PERFORMANCE_SYSTEM))
+context.PlayersSystem = safeInit(import(SETTINGS.PATHS.PLAYERS_SYSTEM))
+context.OverlayManager = safeInit(import(SETTINGS.PATHS.OVERLAY_MANAGER))
+context.GameLoader = type(import(SETTINGS.PATHS.GAME_LOADER)) == "function" and import(SETTINGS.PATHS.GAME_LOADER)(context, import) or {}
 
 globalEnv.B0XazContext = context
 
@@ -195,7 +185,9 @@ if isVerified then
 	startApplication()
 else
 	if uiEngine and uiEngine.CreateKeyPrompt then
-		uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, "")
+		pcall(function()
+			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, "")
+		end)
 	else
 		startApplication()
 	end
