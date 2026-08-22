@@ -61,6 +61,8 @@ end
 local function fetchSource(path)
 	local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	-- Append timestamp parameter to bypass GitHub Raw CDN 404 caching:
+	local cacheBust = "?t=" .. tostring(os.time())
 
 	local variants = {
 		cleanPath,
@@ -69,7 +71,7 @@ local function fetchSource(path)
 	}
 
 	for _, variant in ipairs(variants) do
-		local fullUrl = baseUrl .. variant
+		local fullUrl = baseUrl .. variant .. cacheBust
 		for attempt = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
 			local success, response = pcall(function()
 				return game:HttpGet(fullUrl)
@@ -80,37 +82,47 @@ local function fetchSource(path)
 		end
 	end
 
-	warn("[B0Xaz] Failed to fetch module: " .. path)
 	return nil
 end
 
-local function import(path)
+local function import(path, isOptional)
 	if moduleCache[path] ~= nil then return moduleCache[path] end
 	local sourceCode = fetchSource(path)
-	if not sourceCode then moduleCache[path] = false return nil end
+	if not sourceCode then
+		moduleCache[path] = false
+		if not isOptional then
+			warn("[B0Xaz] Could not load required module: " .. tostring(path))
+		end
+		return nil
+	end
 
 	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
 	if not loaderFn then
-		warn("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
-		moduleCache[path] = false return nil
+		if not isOptional then
+			warn("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
+		end
+		moduleCache[path] = false
+		return nil
 	end
 
 	local runSuccess, moduleResult = pcall(loaderFn)
 	if not runSuccess then
-		warn("[B0Xaz] Runtime error in " .. path .. ": " .. tostring(moduleResult))
-		moduleCache[path] = false return nil
+		if not isOptional then
+			warn("[B0Xaz] Runtime error in " .. path .. ": " .. tostring(moduleResult))
+		end
+		moduleCache[path] = false
+		return nil
 	end
 
-	print("[B0Xaz] Successfully imported: " .. path)
+	print("[B0Xaz] Loaded module: " .. path)
 	moduleCache[path] = moduleResult
 	return moduleResult
 end
 
--- Cleanup
+-- Core Setup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
--- Core Configuration
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
@@ -174,7 +186,7 @@ local function startApplication()
 
 	local runtimeFn = import(SETTINGS.PATHS.RUNTIME)
 	if type(runtimeFn) == "function" then pcall(runtimeFn, context) end
-	print("[B0Xaz] Successfully loaded and active!")
+	print("[B0Xaz] Universal Hub loaded successfully!")
 end
 
 local isVerified = false
