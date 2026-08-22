@@ -26,7 +26,7 @@ return function(Context)
         if FeatureConfig.Movement.FlyEnabled then return end
         local hum, root = Utils.GetHumanoid(), Utils.GetRootPart()
         if not hum or not root then return end
-        
+
         FlySystem.Cleanup()
         FeatureConfig.Movement.FlyEnabled = true
 
