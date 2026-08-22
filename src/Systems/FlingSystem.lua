@@ -1,88 +1,52 @@
-local SETTINGS = {
-	PHYSICS = {
-		VELOCITY_MULTIPLIER = 10000,
-		VERTICAL_BURST = Vector3.new(0, 10000, 0),
-		INITIAL_OFFSET = 0.1,
-		ROOT_CANDIDATES = { "HumanoidRootPart", "Torso" },
-	},
-}
-
+-- // src/Systems/FlingSystem.lua
 return function(Context)
 	local RunService = game:GetService("RunService")
-	local Utils = (Context and Context.Utils) or {}
-	local Connections = (Context and Context.Connections) or {}
+	local Utils = Context.Utils or {}
+	local Connections = Context.Connections or {}
 
-	local FlingSystem = {
-		_active = false,
-		_thread = nil,
-		_stepOffset = SETTINGS.PHYSICS.INITIAL_OFFSET,
-	}
+	local FlingSystem = { _active = false, _thread = nil, _offset = 0.1 }
 
-	local function getRootPart(character)
-		if not character then return nil end
-		for _, partName in ipairs(SETTINGS.PHYSICS.ROOT_CANDIDATES) do
-			local part = character:FindFirstChild(partName)
-			if part and part:IsA("BasePart") then
-				return part
-			end
-		end
-		return nil
-	end
-
-	local function setLinearVelocity(part, velocity)
-		pcall(function()
-			part.AssemblyLinearVelocity = velocity
-		end)
-	end
-
-	local function getLinearVelocity(part)
-		return part.AssemblyLinearVelocity or part.Velocity or Vector3.zero
+	local function getRoot(char)
+		if not char then return nil end
+		return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
 	end
 
 	function FlingSystem.Start()
 		if FlingSystem._active then return end
 		FlingSystem._active = true
-		FlingSystem._stepOffset = SETTINGS.PHYSICS.INITIAL_OFFSET
+		FlingSystem._offset = 0.1
 
-		local flingLoop = task.spawn(function()
+		local loop = task.spawn(function()
 			while FlingSystem._active do
 				RunService.Heartbeat:Wait()
-				local character = Utils.GetCharacter and Utils.GetCharacter()
-				local rootPart = getRootPart(character)
-
-				if rootPart and rootPart.Parent then
-					local previousVelocity = getLinearVelocity(rootPart)
-					local burstVelocity = (previousVelocity * SETTINGS.PHYSICS.VELOCITY_MULTIPLIER) + SETTINGS.PHYSICS.VERTICAL_BURST
-
-					setLinearVelocity(rootPart, burstVelocity)
-
+				local root = getRoot(Utils.GetCharacter and Utils.GetCharacter())
+				if root and root.Parent then
+					local prev = root.AssemblyLinearVelocity or Vector3.zero
+					pcall(function()
+						root.AssemblyLinearVelocity = prev * 10000 + Vector3.new(0, 10000, 0)
+					end)
 					RunService.RenderStepped:Wait()
-					if rootPart and rootPart.Parent then
-						setLinearVelocity(rootPart, previousVelocity)
+					if root.Parent then
+						pcall(function() root.AssemblyLinearVelocity = prev end)
 					end
-
 					RunService.Stepped:Wait()
-					if rootPart and rootPart.Parent then
-						setLinearVelocity(rootPart, previousVelocity + Vector3.new(0, FlingSystem._stepOffset, 0))
-						FlingSystem._stepOffset = -FlingSystem._stepOffset
+					if root.Parent then
+						pcall(function()
+							root.AssemblyLinearVelocity = prev + Vector3.new(0, FlingSystem._offset, 0)
+						end)
+						FlingSystem._offset = -FlingSystem._offset
 					end
 				end
 			end
 		end)
 
-		if Connections and type(Connections.Track) == "function" then
-			FlingSystem._thread = Connections.Track(flingLoop)
-		else
-			FlingSystem._thread = flingLoop
-		end
+		FlingSystem._thread = (Connections.Track and Connections.Track(loop)) or loop
 	end
 
 	function FlingSystem.Stop()
 		FlingSystem._active = false
 		if FlingSystem._thread then
-			pcall(function()
-				task.cancel(FlingSystem._thread)
-			end)
+			pcall(function() task.cancel(FlingSystem._thread) end)
 			FlingSystem._thread = nil
 		end
 	end
