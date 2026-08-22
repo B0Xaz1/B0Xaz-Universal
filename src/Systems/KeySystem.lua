@@ -17,6 +17,9 @@ return function(Context)
 		-- Full Keys
 		["B0XAZ-FULL-G7H8I9"] = 3,
 		["B0XAZ-FULL-M9N8B7"] = 3,
+		["B0XAZ-FULL-A5NAD3"] = 3,
+		["B0XAZ-FULL-9PAL31"] = 3,
+		["B0XAZ-FULL-9XAP12"] = 3, 
 	}
 
 	local TIER_NAMES = {
