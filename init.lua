@@ -1,8 +1,8 @@
 -- // init.lua (Main Loader)
 local BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/main/"
 local LOAD_TIMEOUT = 15
-local FETCH_DELAY = 0.15
-local RETRY_ATTEMPTS = 3
+local FETCH_DELAY = 0.05
+local RETRY_ATTEMPTS = 2
 
 local PATHS = {
 	CLEANUP             = "src/Cleanup.lua",
@@ -50,9 +50,6 @@ local env = (getgenv and getgenv()) or _G
 local cache = {}
 local lastFetchAt = 0
 
-----------------------------------------------------------------
--- HTTP fetch (throttled + retried + detailed errors)
-----------------------------------------------------------------
 local function isValidSource(code)
 	if type(code) ~= "string" or #code < 8 then
 		return false, "empty/short response"
@@ -84,27 +81,26 @@ local function fetchSource(path)
 	local lastErr = "unknown"
 	for attempt = 1, RETRY_ATTEMPTS do
 		throttle()
-		-- cache-bust only on retries so first hit can use CDN
-		local full = url
+		local fullUrl = url
 		if attempt > 1 then
-			full = url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. tostring(os.time()) .. "_" .. attempt
+			fullUrl = url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. tostring(os.time())
 		end
 
 		local ok, response = pcall(function()
-			return game:HttpGet(full)
+			return game:HttpGet(fullUrl)
 		end)
 
-		if not ok then
-			lastErr = "HttpGet threw: " .. tostring(response)
-		else
+		if ok then
 			local valid, reason = isValidSource(response)
 			if valid then
 				return response, nil
 			end
 			lastErr = reason or "invalid body"
+		else
+			lastErr = "HttpGet error: " .. tostring(response)
 		end
 
-		task.wait(0.25 * attempt)
+		task.wait(0.1 * attempt)
 	end
 
 	return nil, lastErr
@@ -149,9 +145,6 @@ local function import(path, isOptional)
 	return result
 end
 
-----------------------------------------------------------------
--- Bootstrap
-----------------------------------------------------------------
 local function callFactory(factory, ...)
 	if type(factory) ~= "function" then
 		return nil
@@ -164,13 +157,13 @@ local function callFactory(factory, ...)
 	return nil
 end
 
--- 1) Cleanup previous session
+-- 1) Cleanup previous instance
 do
 	local fn = import(PATHS.CLEANUP, true)
 	if type(fn) == "function" then pcall(fn) end
 end
 
--- 2) Config
+-- 2) Config & Default Lighting
 local configData, defaultLighting = {}, {}
 do
 	local fn = import(PATHS.CONFIG)
@@ -189,7 +182,7 @@ if type(utils.WaitForGameLoad) == "function" then
 	pcall(utils.WaitForGameLoad, LOAD_TIMEOUT)
 end
 
--- 4) Drawing
+-- 4) Drawing Manager
 local drawingManager = callFactory(import(PATHS.DRAWING_MANAGER)) or { Available = false }
 
 -- 5) Context
@@ -214,13 +207,13 @@ end
 context.Theme = context.Theme or {}
 context.ThemeManager = context.ThemeManager or {}
 
--- 7) UI engine (factory table/class, not the window yet)
+-- 7) UI Engine
 context.UIEngine = callFactory(import(PATHS.UI_ENGINE), context, context.Theme) or {}
 
--- 8) Key system
+-- 8) Key System
 context.KeySystem = callFactory(import(PATHS.KEY_SYSTEM), context, import) or {}
 
--- 9) Systems
+-- 9) Feature Systems
 local function initSystem(path)
 	return callFactory(import(path), context) or {}
 end
@@ -235,12 +228,12 @@ context.PerformanceSystem = initSystem(PATHS.PERFORMANCE_SYSTEM)
 context.PlayersSystem     = initSystem(PATHS.PLAYERS_SYSTEM)
 context.OverlayManager    = initSystem(PATHS.OVERLAY_MANAGER)
 
--- 10) Game loader (uses folder modules: src/Games/<placeId>/init.lua)
+-- 10) Game Loader
 context.GameLoader = callFactory(import(PATHS.GAME_LOADER), context, import) or {
 	GetDisplayName = function() return "Universal" end,
 	IsSupported = function() return false end,
 	Load = function() return nil end,
-	BuildUI = function() return false, "loader missing" end,
+	BuildUI = function() return false, "Loader unavailable" end,
 	Update = function() end,
 	Destroy = function() end,
 }
@@ -248,18 +241,18 @@ context.GameLoader = callFactory(import(PATHS.GAME_LOADER), context, import) or 
 env.B0XazContext = context
 
 ----------------------------------------------------------------
--- Start
+-- Application Launch
 ----------------------------------------------------------------
 local function startApplication()
 	print("[B0Xaz] Launching UI & runtime...")
 
-	if context.ESPSystem.InitializeAll then
+	if context.ESPSystem and context.ESPSystem.InitializeAll then
 		pcall(context.ESPSystem.InitializeAll)
 	end
-	if context.ConfigSystem.LoadAutoload then
+	if context.ConfigSystem and context.ConfigSystem.LoadAutoload then
 		pcall(context.ConfigSystem.LoadAutoload)
 	end
-	if context.ConfigSystem.StartAutosaveLoop then
+	if context.ConfigSystem and context.ConfigSystem.StartAutosaveLoop then
 		pcall(context.ConfigSystem.StartAutosaveLoop)
 	end
 
@@ -279,14 +272,14 @@ local function startApplication()
 end
 
 local verified = false
-if context.KeySystem.LoadAndVerify then
+if context.KeySystem and context.KeySystem.LoadAndVerify then
 	local ok, result = pcall(context.KeySystem.LoadAndVerify)
 	verified = ok and result == true
 end
 
 if verified then
 	startApplication()
-elseif type(context.UIEngine.CreateKeyPrompt) == "function" then
+elseif context.UIEngine and type(context.UIEngine.CreateKeyPrompt) == "function" then
 	local ok, err = pcall(
 		context.UIEngine.CreateKeyPrompt,
 		context.UIEngine,
