@@ -7,12 +7,12 @@ return function()
         AIM_DEADZONE = 0.5,
         AIM_MAX_STEP = 25,
         AIM_MIN_SMOOTHNESS = 1,
-        
+
         ESP_TRACER_THICKNESS = 1.5,
         ESP_SKELETON_THICKNESS = 1,
         ESP_TEXT_SIZE_NAME = 13,
         ESP_TEXT_SIZE_DIST = 11,
-        
+
         SPEED_LINES_COUNT = 30,
         SPEED_LINES_MIN_DIST = 150,
         SPEED_LINES_MAX_DIST = 500,
@@ -21,7 +21,7 @@ return function()
         SPEED_LINES_SPEED = 600,
         SPEED_LINES_MAX_RANGE = 700,
         SPEED_LINES_LENGTH = 60,
-        
+
         FOLDER = "B0XazUniversal",
         EXT = ".json",
         UI_W = 660,
