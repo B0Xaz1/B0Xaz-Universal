@@ -56,6 +56,11 @@ return function(Context)
             end
         end
 
+        local stretchRes = FeatureConfig.Extras.StretchRes
+        if type(stretchRes) ~= "table" then
+            stretchRes = { Enabled = false, X = 1.333, Y = 1.0 }
+        end
+
         return {
             Aimbot = {
                 Enabled = FeatureConfig.Aimbot.Enabled,
@@ -109,8 +114,12 @@ return function(Context)
                     Color = Utils.ColorToTable(FeatureConfig.Extras.Crosshair.Color)
                 },
                 SpeedLines = FeatureConfig.Extras.SpeedLines,
-                Wallbang = FeatureConfig.Extras.Wallbang
-                StretchRes = FeatureConfig.Extras.StretchRes and table.clone(FeatureConfig.Extras.StretchRes) or { Enabled = false, X = 1.333, Y = 1.0 },
+                Wallbang = FeatureConfig.Extras.Wallbang,
+                StretchRes = {
+                    Enabled = stretchRes.Enabled == true,
+                    X = tonumber(stretchRes.X) or 1.333,
+                    Y = tonumber(stretchRes.Y) or 1.0
+                }
             },
             Performance = table.clone(FeatureConfig.Performance),
             Game = {
@@ -150,14 +159,21 @@ return function(Context)
                 end
             end
         end
+
         if type(data.Movement) == "table" then
             for k, v in pairs(data.Movement) do FeatureConfig.Movement[k] = v end
         end
+
         if type(data.ESP) == "table" then
             for k, v in pairs(data.ESP) do
-                if k == "Color" then FeatureConfig.ESP.Color = Utils.TableToColor(v) else FeatureConfig.ESP[k] = v end
+                if k == "Color" then
+                    FeatureConfig.ESP.Color = Utils.TableToColor(v)
+                else
+                    FeatureConfig.ESP[k] = v
+                end
             end
         end
+
         if type(data.Chams) == "table" then
             for k, v in pairs(data.Chams) do
                 if k == "FillColor" or k == "OutlineColor" then
@@ -167,24 +183,21 @@ return function(Context)
                 end
             end
         end
+
         if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then
             FeatureConfig.Camera.FOV = data.Camera.FOV
         end
+
         if type(data.Visuals) == "table" and data.Visuals.Fullbright ~= nil then
             FeatureConfig.Visuals.Fullbright = data.Visuals.Fullbright
         end
+
         if type(data.Extras) == "table" then
             if type(data.Extras.Hitbox) == "table" then
                 for k, v in pairs(data.Extras.Hitbox) do FeatureConfig.Extras.Hitbox[k] = v end
             end
             if type(data.Extras.SpinBot) == "table" then
                 for k, v in pairs(data.Extras.SpinBot) do FeatureConfig.Extras.SpinBot[k] = v end
-            end
-            if type(data.Extras.StretchRes) == "table" then
-                FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or { Enabled = false, X = 1.333, Y = 1.0 }
-                for k, v in pairs(data.Extras.StretchRes) do
-                    FeatureConfig.Extras.StretchRes[k] = v
-                end
             end
             if type(data.Extras.Crosshair) == "table" then
                 for k, v in pairs(data.Extras.Crosshair) do
@@ -197,10 +210,23 @@ return function(Context)
             end
             if data.Extras.SpeedLines ~= nil then FeatureConfig.Extras.SpeedLines = data.Extras.SpeedLines end
             if data.Extras.Wallbang ~= nil then FeatureConfig.Extras.Wallbang = data.Extras.Wallbang end
+
+            if type(data.Extras.StretchRes) == "table" then
+                FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {
+                    Enabled = false,
+                    X = 1.333,
+                    Y = 1.0
+                }
+                for k, v in pairs(data.Extras.StretchRes) do
+                    FeatureConfig.Extras.StretchRes[k] = v
+                end
+            end
         end
+
         if type(data.Performance) == "table" then
             for k, v in pairs(data.Performance) do FeatureConfig.Performance[k] = v end
         end
+
         if type(data.Game) == "table" then
             for k, v in pairs(data.Game) do
                 if k == "GlowColor" then
@@ -210,6 +236,7 @@ return function(Context)
                 end
             end
         end
+
         if type(data.Theme) == "table" then
             if ThemeManager and data.Theme.PresetName then
                 ThemeManager.ActivePreset = data.Theme.PresetName
@@ -222,12 +249,12 @@ return function(Context)
                 Context.UI:SetTheme(tColors)
             end
         end
+
         if type(data.Settings) == "table" then
             State.MenuKeybind = deserializeKeybind(data.Settings.MenuKeybind) or State.MenuKeybind
             State.includeSelf = data.Settings.IncludeSelf or false
         end
 
-        -- Cleanup residual active states if disabled by config
         if not FeatureConfig.Aimbot.Enabled and Context.AimbotSystem then
             Context.AimbotSystem.LockOff()
         end
@@ -305,12 +332,14 @@ return function(Context)
         set("Extras_Crosshair_Gap", FeatureConfig.Extras.Crosshair.Gap)
         set("Extras_Crosshair_Thickness", FeatureConfig.Extras.Crosshair.Thickness)
         set("Extras_Crosshair_Color", FeatureConfig.Extras.Crosshair.Color)
+        set("Extras_SpeedLines", FeatureConfig.Extras.SpeedLines)
+        set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
+
         local sr = FeatureConfig.Extras.StretchRes or {}
         set("Extras_StretchRes_Enabled", sr.Enabled == true)
         set("Extras_StretchRes_X", math.floor((sr.X or 1.333) * 100))
         set("Extras_StretchRes_Y", math.floor((sr.Y or 1.0) * 100))
-        set("Extras_SpeedLines", FeatureConfig.Extras.SpeedLines)
-        set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
+
         set("Visuals_Fullbright", FeatureConfig.Visuals.Fullbright)
 
         set("Perf_NoTextures", FeatureConfig.Performance.NoTextures)
@@ -354,7 +383,6 @@ return function(Context)
         end
         table.sort(customNames)
 
-        -- "Default" is always guaranteed at the top
         local names = { "Default" }
         for _, n in ipairs(customNames) do
             table.insert(names, n)
@@ -364,13 +392,13 @@ return function(Context)
 
     function ConfigSystem.Save(name)
         if not name or #name == 0 then return false, "Empty name" end
-        
-        -- Disallow overwriting Default config or system files
         if name:lower() == "default" then
             return false, "Cannot overwrite Default configuration"
         end
 
-        local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
+        local ok, encoded = pcall(function()
+            return HttpService:JSONEncode(ConfigSystem.Serialize())
+        end)
         if not ok then return false, tostring(encoded) end
         return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
     end
@@ -387,8 +415,12 @@ return function(Context)
 
         local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT)
         if not content then return false, "Not found" end
-        local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
+
+        local ok, data = pcall(function()
+            return HttpService:JSONDecode(content)
+        end)
         if not ok then return false, tostring(data) end
+
         ConfigSystem.Deserialize(data)
         ConfigSystem.UpdateUI()
         return true
@@ -401,13 +433,17 @@ return function(Context)
         if name:lower() == ConfigSystem.AutoloadFile:lower() then
             return false, "Cannot delete system autoload file"
         end
-        return pcall(function() delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT) end)
+        return pcall(function()
+            delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT)
+        end)
     end
 
     function ConfigSystem.LoadAutoload()
         local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT)
         if content then
-            local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
+            local ok, data = pcall(function()
+                return HttpService:JSONDecode(content)
+            end)
             if ok and type(data) == "table" then
                 ConfigSystem.Deserialize(data)
                 return true
@@ -425,7 +461,9 @@ return function(Context)
                     ConfigSystem.Dirty = false
                     isSaving = true
                     pcall(function()
-                        local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
+                        local ok, encoded = pcall(function()
+                            return HttpService:JSONEncode(ConfigSystem.Serialize())
+                        end)
                         if ok then
                             Utils.WriteFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT, encoded)
                         end
@@ -436,7 +474,6 @@ return function(Context)
         end))
     end
 
-    -- Capture baseline vanilla state snapshot
     ConfigSystem.DefaultSnapshot = ConfigSystem.Serialize()
 
     return ConfigSystem
