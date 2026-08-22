@@ -611,6 +611,69 @@ return function(Context)
 		FeatureConfig.Extras.Crosshair.Color = c
 	end)
 
+		local stretchSec = extrasTab:AddSection("Stretch Res")
+
+	UIRegistry.Extras_StretchRes_Enabled = stretchSec:AddToggle("Enable Stretch Res", FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.Enabled or false, function(v)
+		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {
+			Enabled = false, FOV = 100, Amount = 1.25, Bars = false, BarOpacity = 0.85
+		}
+		FeatureConfig.Extras.StretchRes.Enabled = v
+		if not v then
+			-- restore normal camera fov
+			if Workspace.CurrentCamera and FeatureConfig.Camera then
+				Workspace.CurrentCamera.FieldOfView = FeatureConfig.Camera.FOV or 90
+			end
+			if Context.DestroyStretchRes then
+				Context.DestroyStretchRes()
+			end
+			UI:Notify("Stretch Res", "Disabled", nil, Theme.Accent)
+		else
+			UI:Notify("Stretch Res", "Enabled", nil, Theme.Success)
+		end
+	end)
+
+	UIRegistry.Extras_StretchRes_FOV = stretchSec:AddSlider("Stretch FOV", (FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.FOV) or 100, 70, 120, function(v)
+		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
+		FeatureConfig.Extras.StretchRes.FOV = v
+	end, " fov")
+
+	UIRegistry.Extras_StretchRes_Amount = stretchSec:AddSlider("Stretch Amount", math.floor(((FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.Amount) or 1.25) * 100), 100, 200, function(v)
+		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
+		FeatureConfig.Extras.StretchRes.Amount = v / 100
+	end, "%")
+
+	UIRegistry.Extras_StretchRes_Bars = stretchSec:AddToggle("4:3 Side Bars", FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.Bars or false, function(v)
+		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
+		FeatureConfig.Extras.StretchRes.Bars = v
+	end)
+
+	UIRegistry.Extras_StretchRes_BarOpacity = stretchSec:AddSlider("Bar Opacity", math.floor(((FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.BarOpacity) or 0.85) * 100), 30, 100, function(v)
+		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
+		FeatureConfig.Extras.StretchRes.BarOpacity = v / 100
+	end, "%")
+
+	stretchSec:AddButton("Reset Stretch Res", function()
+		FeatureConfig.Extras.StretchRes = {
+			Enabled = false,
+			FOV = 100,
+			Amount = 1.25,
+			Bars = false,
+			BarOpacity = 0.85,
+		}
+		if UIRegistry.Extras_StretchRes_Enabled then UIRegistry.Extras_StretchRes_Enabled.Set(false, true) end
+		if UIRegistry.Extras_StretchRes_FOV then UIRegistry.Extras_StretchRes_FOV.Set(100, true) end
+		if UIRegistry.Extras_StretchRes_Amount then UIRegistry.Extras_StretchRes_Amount.Set(125, true) end
+		if UIRegistry.Extras_StretchRes_Bars then UIRegistry.Extras_StretchRes_Bars.Set(false, true) end
+		if UIRegistry.Extras_StretchRes_BarOpacity then UIRegistry.Extras_StretchRes_BarOpacity.Set(85, true) end
+		if Workspace.CurrentCamera and FeatureConfig.Camera then
+			Workspace.CurrentCamera.FieldOfView = FeatureConfig.Camera.FOV or 90
+		end
+		if Context.DestroyStretchRes then
+			Context.DestroyStretchRes()
+		end
+		UI:Notify("Stretch Res", "Reset to defaults", nil, Theme.Success)
+	end)
+
 	local visSec = extrasTab:AddSection("Visuals")
 	UIRegistry.Extras_SpeedLines = visSec:AddToggle("Speed Lines", false, function(v)
 		FeatureConfig.Extras.SpeedLines = v
