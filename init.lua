@@ -52,14 +52,14 @@ local lastFetchAt = 0
 
 local function isValidSource(code)
 	if type(code) ~= "string" or #code < 8 then
-		return false, "empty/short response"
+		return false, "empty response"
 	end
 	local head = code:sub(1, 80):lower()
 	if head:find("404", 1, true) or head:find("not found", 1, true) then
 		return false, "404 not found"
 	end
 	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then
-		return false, "html error page"
+		return false, "html page"
 	end
 	return true, nil
 end
@@ -157,7 +157,7 @@ local function callFactory(factory, ...)
 	return nil
 end
 
--- 1) Cleanup previous instance
+-- 1) Cleanup
 do
 	local fn = import(PATHS.CLEANUP, true)
 	if type(fn) == "function" then pcall(fn) end
