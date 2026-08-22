@@ -34,7 +34,7 @@ return function(Context)
     local _fpsDisplay = 0
 
     ----------------------------------------------------------------
-    -- Matrix Stretch Res
+    -- Rock-Solid Matrix Stretch Res (Works at all pitch/yaw angles)
     ----------------------------------------------------------------
     local function applyMatrixStretchRes()
         local cfg = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
@@ -43,19 +43,23 @@ return function(Context)
         local xFactor = tonumber(cfg.X) or 1.333
         local yFactor = tonumber(cfg.Y) or 1.0
 
-        local currentCF = Camera.CFrame
-        local pos = currentCF.Position
+        if xFactor == 1 and yFactor == 1 then return end
 
-        -- Extract and normalize unit vectors to eliminate scale compounding
-        local right = currentCF.RightVector.Unit
-        local up = currentCF.UpVector.Unit
-        local look = currentCF.LookVector.Unit
+        local cf = Camera.CFrame
+        local pos = cf.Position
 
-        -- Reconstruct unscaled rotation CFrame
-        local cleanCF = CFrame.fromMatrix(pos, right, up, -look)
+        -- Extract normalized unit vectors to prevent compounding scale & NaN matrix collapse
+        local right = cf.RightVector.Unit
+        local up = cf.UpVector.Unit
+        local look = cf.LookVector.Unit
 
-        -- Multiply by 3D projection scale matrix
-        Camera.CFrame = cleanCF * CFrame.new(0, 0, 0, xFactor, 0, 0, 0, yFactor, 0, 0, 0, 1)
+        -- Direct raw component matrix construction (bypasses CFrame.fromMatrix auto-normalization)
+        Camera.CFrame = CFrame.new(
+            pos.X, pos.Y, pos.Z,
+            right.X * xFactor, up.X * yFactor, -look.X,
+            right.Y * xFactor, up.Y * yFactor, -look.Y,
+            right.Z * xFactor, up.Z * yFactor, -look.Z
+        )
     end
 
     ----------------------------------------------------------------
@@ -145,7 +149,7 @@ return function(Context)
                 Camera.FieldOfView = FeatureConfig.Camera.FOV
             end
 
-            -- Matrix stretch res transformation
+            -- Apply Matrix Stretch Res AFTER FOV updates
             applyMatrixStretchRes()
 
             if AimbotSystem then
