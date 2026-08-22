@@ -60,7 +60,6 @@ return function(Context)
         table.clear(State.OriginalHitboxSizes)
     end
 
-    -- Teleportation safety hook
     if Connections.Add then
         pcall(function()
             Connections.Add(LocalPlayer.OnTeleport:Connect(function(teleportState)
@@ -71,7 +70,6 @@ return function(Context)
         end)
     end
 
-    -- User Inputs
     if Connections.Add then
         Connections.Add(UIS.JumpRequest:Connect(function()
             if FeatureConfig.Movement and FeatureConfig.Movement.InfJump then
@@ -102,7 +100,6 @@ return function(Context)
         end))
     end
 
-    -- Render Loop
     if Connections.Add then
         Connections.Add(RS.RenderStepped:Connect(function(dt)
             if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
@@ -110,10 +107,10 @@ return function(Context)
             end
 
             if AimbotSystem then
-                    if type(AimbotSystem.UpdateAim) == "function" then
-                    AimbotSystem.UpdateAim(dt)  -- pass dt
+                if type(AimbotSystem.UpdateAim) == "function" then
+                    AimbotSystem.UpdateAim(dt)
                 end
-                    if type(AimbotSystem.UpdateTriggerbot) == "function" then
+                if type(AimbotSystem.UpdateTriggerbot) == "function" then
                     AimbotSystem.UpdateTriggerbot()
                 end
             end
@@ -172,7 +169,6 @@ return function(Context)
         end))
     end
 
-    -- Physics / Game Logic Loop
     if Connections.Add then
         Connections.Add(RS.Heartbeat:Connect(function(dt)
             local hum = Utils.GetHumanoid and Utils.GetHumanoid()
