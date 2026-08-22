@@ -1,28 +1,34 @@
 -- // init.lua (Main Loader)
 local BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/main/"
-local LOAD_TIMEOUT = 10
+local LOAD_TIMEOUT = 15
+local FETCH_DELAY = 0.15
+local RETRY_ATTEMPTS = 3
 
 local PATHS = {
-	CONFIG             = "src/Config.lua",
-	CLEANUP            = "src/Cleanup.lua",
-	UTILS              = "src/Utils.lua",
-	DRAWING_MANAGER    = "src/Visuals/DrawingManager.lua",
-	CONTEXT            = "src/Context.lua",
-	THEME              = "src/UI/Theme.lua",
-	UI_ENGINE          = "src/UI/UI.lua",
-	KEY_SYSTEM         = "src/Systems/KeySystem.lua",
-	CONFIG_SYSTEM      = "src/Systems/ConfigSystem.lua",
-	AIMBOT_SYSTEM      = "src/Systems/AimbotSystem.lua",
-	ESP_SYSTEM         = "src/Systems/ESPSystem.lua",
-	FLING_SYSTEM       = "src/Systems/FlingSystem.lua",
-	FLY_SYSTEM         = "src/Systems/FlySystem.lua",
-	MOVEMENT_SYSTEM    = "src/Systems/MovementSystem.lua",
-	PERFORMANCE_SYSTEM = "src/Systems/PerformanceSystem.lua",
-	PLAYERS_SYSTEM     = "src/Systems/PlayersSystem.lua",
-	OVERLAY_MANAGER    = "src/Visuals/OverlayManager.lua",
-	GAME_LOADER        = "src/Games/Loader.lua",
-	BUILD_UI           = "src/UI/BuildUI.lua",
-	RUNTIME            = "src/Runtime.lua",
+	CLEANUP             = "src/Cleanup.lua",
+	CONFIG              = "src/Config.lua",
+	UTILS               = "src/Utils.lua",
+	CONTEXT             = "src/Context.lua",
+	RUNTIME             = "src/Runtime.lua",
+
+	DRAWING_MANAGER     = "src/Visuals/DrawingManager.lua",
+	OVERLAY_MANAGER     = "src/Visuals/OverlayManager.lua",
+
+	THEME               = "src/UI/Theme.lua",
+	UI_ENGINE           = "src/UI/UI.lua",
+	BUILD_UI            = "src/UI/BuildUI.lua",
+
+	KEY_SYSTEM          = "src/Systems/KeySystem.lua",
+	CONFIG_SYSTEM       = "src/Systems/ConfigSystem.lua",
+	AIMBOT_SYSTEM       = "src/Systems/AimbotSystem.lua",
+	ESP_SYSTEM          = "src/Systems/ESPSystem.lua",
+	FLING_SYSTEM        = "src/Systems/FlingSystem.lua",
+	FLY_SYSTEM          = "src/Systems/FlySystem.lua",
+	MOVEMENT_SYSTEM     = "src/Systems/MovementSystem.lua",
+	PERFORMANCE_SYSTEM  = "src/Systems/PerformanceSystem.lua",
+	PLAYERS_SYSTEM      = "src/Systems/PlayersSystem.lua",
+
+	GAME_LOADER         = "src/Games/Loader.lua",
 }
 
 print("[B0Xaz] Initializing Universal Suite...")
@@ -33,278 +39,264 @@ if not game:IsLoaded() then
 	pcall(function() game.Loaded:Wait() end)
 end
 
-local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-	local startTime = os.clock()
-	while not Players.LocalPlayer and (os.clock() - startTime) < LOAD_TIMEOUT do
+if not Players.LocalPlayer then
+	local t0 = os.clock()
+	while not Players.LocalPlayer and (os.clock() - t0) < LOAD_TIMEOUT do
 		task.wait(0.1)
 	end
-	LocalPlayer = Players.LocalPlayer
 end
 
-local globalEnv = (getgenv and getgenv()) or _G
-local moduleCache = {}
+local env = (getgenv and getgenv()) or _G
+local cache = {}
+local lastFetchAt = 0
 
--- ============================================================
--- GitHub Fetching with Case-Variant Fallbacks
--- ============================================================
+----------------------------------------------------------------
+-- HTTP fetch (throttled + retried + detailed errors)
+----------------------------------------------------------------
 local function isValidSource(code)
-	if type(code) ~= "string" or #code < 5 then return false end
-	local lower = code:lower()
-	if lower:sub(1, 3) == "404"
-		or lower:find("not found", 1, true)
-		or lower:find("<!doctype", 1, true)
-		or lower:find("<html", 1, true) then
-		return false
+	if type(code) ~= "string" or #code < 8 then
+		return false, "empty/short response"
 	end
-	return true
+	local head = code:sub(1, 80):lower()
+	if head:find("404", 1, true) or head:find("not found", 1, true) then
+		return false, "404 not found"
+	end
+	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then
+		return false, "html error page"
+	end
+	return true, nil
 end
 
-local function generatePathVariants(path)
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	local variants = { cleanPath }
-	local folder, filename = cleanPath:match("^(.-)/([^/]+)$")
-
-	if folder and filename then
-		table.insert(variants, folder:lower() .. "/" .. filename)
-		table.insert(variants, folder .. "/" .. filename:lower())
-		table.insert(variants, folder:lower() .. "/" .. filename:lower())
-		table.insert(variants, filename)
+local function throttle()
+	local now = os.clock()
+	local waitFor = FETCH_DELAY - (now - lastFetchAt)
+	if waitFor > 0 then
+		task.wait(waitFor)
 	end
-
-	return variants
+	lastFetchAt = os.clock()
 end
 
 local function fetchSource(path)
-	local baseUrl = globalEnv.B0XazBaseURL or BASE_URL
-	local cacheBust = "?t=" .. tostring(os.time())
-	local variants = generatePathVariants(path)
+	local base = env.B0XazBaseURL or BASE_URL
+	local clean = path:gsub("^%./", ""):gsub("^/", "")
+	local url = base .. clean
 
-	for _, variant in ipairs(variants) do
-		local fullUrl = baseUrl .. variant .. cacheBust
-		local success, response = pcall(function()
-			return game:HttpGet(fullUrl)
+	local lastErr = "unknown"
+	for attempt = 1, RETRY_ATTEMPTS do
+		throttle()
+		-- cache-bust only on retries so first hit can use CDN
+		local full = url
+		if attempt > 1 then
+			full = url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. tostring(os.time()) .. "_" .. attempt
+		end
+
+		local ok, response = pcall(function()
+			return game:HttpGet(full)
 		end)
-		if success and isValidSource(response) then
-			return response
-		end
-	end
-	return nil
-end
 
--- Inline emergency fallbacks in case GitHub HTTP fails completely
-local EMERGENCY_FALLBACKS = {
-	["src/Systems/ConfigSystem.lua"] = function()
-		return function(Context)
-			local ConfigSystem = { Dirty = false, AutoloadFile = "_autoload", DefaultSnapshot = nil }
-			function ConfigSystem.NotifyChange() ConfigSystem.Dirty = true end
-			function ConfigSystem.Serialize() return {} end
-			function ConfigSystem.Deserialize() end
-			function ConfigSystem.UpdateUI() end
-			function ConfigSystem.GetSavedNames() return { "Default" } end
-			function ConfigSystem.Save() return true end
-			function ConfigSystem.Load() return true end
-			function ConfigSystem.Delete() return true end
-			function ConfigSystem.LoadAutoload() return false end
-			function ConfigSystem.StartAutosaveLoop() end
-			return ConfigSystem
+		if not ok then
+			lastErr = "HttpGet threw: " .. tostring(response)
+		else
+			local valid, reason = isValidSource(response)
+			if valid then
+				return response, nil
+			end
+			lastErr = reason or "invalid body"
 		end
-	end,
-	["src/Games/Loader.lua"] = function()
-		return function(Context)
-			local Loader = { PlaceId = tostring(game.PlaceId), Supported = true }
-			function Loader.GetDisplayName() return "Universal" end
-			function Loader.IsSupported() return true end
-			function Loader.Load() return nil end
-			function Loader.BuildUI() return true end
-			function Loader.Update() end
-			function Loader.Destroy() end
-			return Loader
-		end
+
+		task.wait(0.25 * attempt)
 	end
-}
+
+	return nil, lastErr
+end
 
 local function import(path, isOptional)
-	if moduleCache[path] ~= nil then
-		return moduleCache[path] or nil
+	if cache[path] ~= nil then
+		return cache[path] or nil
 	end
 
-	local source = fetchSource(path)
-	local resolved = nil
-
-	if source then
-		local loaderFn, compileErr = loadstring(source, "=" .. path)
-		if loaderFn then
-			local ok, result = pcall(loaderFn)
-			if ok then
-				resolved = result
-			else
-				warn("[B0Xaz] Runtime error in " .. path .. ": " .. tostring(result))
-			end
-		else
-			warn("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
+	local source, fetchErr = fetchSource(path)
+	if not source then
+		cache[path] = false
+		if not isOptional then
+			warn("[B0Xaz] Fetch failed: " .. path .. " (" .. tostring(fetchErr) .. ")")
 		end
+		return nil
 	end
 
-	-- Use emergency fallback if fetch or loadstring failed
-	if resolved == nil and EMERGENCY_FALLBACKS[path] then
-		warn("[B0Xaz] Using emergency fallback for: " .. path)
-		local ok, fallbackFn = pcall(EMERGENCY_FALLBACKS[path])
-		if ok then resolved = fallbackFn end
+	local chunk, compileErr = loadstring(source, "@" .. path)
+	if not chunk then
+		cache[path] = false
+		warn("[B0Xaz] Compile failed: " .. path .. " → " .. tostring(compileErr))
+		return nil
 	end
 
-	if resolved ~= nil then
-		print("[B0Xaz] Loaded: " .. path)
-		moduleCache[path] = resolved
-		return resolved
+	local ok, result = pcall(chunk)
+	if not ok then
+		cache[path] = false
+		warn("[B0Xaz] Runtime failed: " .. path .. " → " .. tostring(result))
+		return nil
 	end
 
-	moduleCache[path] = false
-	if not isOptional then
-		warn("[B0Xaz] Failed to load required module: " .. tostring(path))
+	if result == nil then
+		cache[path] = false
+		warn("[B0Xaz] Module returned nil: " .. path)
+		return nil
 	end
+
+	print("[B0Xaz] Loaded: " .. path)
+	cache[path] = result
+	return result
+end
+
+----------------------------------------------------------------
+-- Bootstrap
+----------------------------------------------------------------
+local function callFactory(factory, ...)
+	if type(factory) ~= "function" then
+		return nil
+	end
+	local ok, result = pcall(factory, ...)
+	if ok then
+		return result
+	end
+	warn("[B0Xaz] Factory error: " .. tostring(result))
 	return nil
 end
 
--- ============================================================
--- Bootstrap Sequence
--- ============================================================
+-- 1) Cleanup previous session
+do
+	local fn = import(PATHS.CLEANUP, true)
+	if type(fn) == "function" then pcall(fn) end
+end
 
--- 1. Cleanup previous session
-local cleanupFn = import(PATHS.CLEANUP)
-if type(cleanupFn) == "function" then pcall(cleanupFn) end
-
--- 2. Config & Lighting snapshot
-local configFn = import(PATHS.CONFIG)
+-- 2) Config
 local configData, defaultLighting = {}, {}
-if type(configFn) == "function" then
-	local ok, cfg, lighting = pcall(configFn)
-	if ok then
-		configData = cfg or {}
-		defaultLighting = lighting or {}
+do
+	local fn = import(PATHS.CONFIG)
+	if type(fn) == "function" then
+		local ok, cfg, lighting = pcall(fn)
+		if ok then
+			configData = cfg or {}
+			defaultLighting = lighting or {}
+		end
 	end
 end
 
--- 3. Utils
-local utilsFn = import(PATHS.UTILS)
-local utils = (type(utilsFn) == "function" and utilsFn(configData)) or {}
+-- 3) Utils
+local utils = callFactory(import(PATHS.UTILS), configData) or {}
 if type(utils.WaitForGameLoad) == "function" then
 	pcall(utils.WaitForGameLoad, LOAD_TIMEOUT)
 end
 
--- 4. Drawing Manager
-local drawingMgrFn = import(PATHS.DRAWING_MANAGER)
-local drawingManager = (type(drawingMgrFn) == "function" and drawingMgrFn()) or { Available = false }
+-- 4) Drawing
+local drawingManager = callFactory(import(PATHS.DRAWING_MANAGER)) or { Available = false }
 
--- 5. Context
-local contextFn = import(PATHS.CONTEXT)
-local context = (type(contextFn) == "function" and contextFn(configData, defaultLighting, utils, drawingManager)) or {}
+-- 5) Context
+local context = callFactory(import(PATHS.CONTEXT), configData, defaultLighting, utils, drawingManager) or {}
 context.import = import
+context.CONFIG = context.CONFIG or configData
+context.Utils = context.Utils or utils
+context.DrawingManager = context.DrawingManager or drawingManager
+context.DefaultLighting = context.DefaultLighting or defaultLighting
 
--- 6. Theme
-local themeFn = import(PATHS.THEME)
-local activeTheme, themeManager = {}, {}
-if type(themeFn) == "function" then
-	local ok, th, thMgr = pcall(themeFn)
-	if ok then
-		activeTheme = th or {}
-		themeManager = thMgr or {}
+-- 6) Theme
+do
+	local fn = import(PATHS.THEME)
+	if type(fn) == "function" then
+		local ok, theme, manager = pcall(fn)
+		if ok then
+			context.Theme = theme or {}
+			context.ThemeManager = manager or {}
+		end
 	end
 end
-context.Theme = activeTheme
-context.ThemeManager = themeManager
+context.Theme = context.Theme or {}
+context.ThemeManager = context.ThemeManager or {}
 
--- 7. UI Engine
-local uiEngineFn = import(PATHS.UI_ENGINE)
-local uiEngine = (type(uiEngineFn) == "function" and uiEngineFn(context, activeTheme)) or {}
-context.UIEngine = uiEngine
+-- 7) UI engine (factory table/class, not the window yet)
+context.UIEngine = callFactory(import(PATHS.UI_ENGINE), context, context.Theme) or {}
 
--- 8. Key System
-local keySysFn = import(PATHS.KEY_SYSTEM)
-local keySystem = (type(keySysFn) == "function" and keySysFn(context, import)) or {}
-context.KeySystem = keySystem
+-- 8) Key system
+context.KeySystem = callFactory(import(PATHS.KEY_SYSTEM), context, import) or {}
 
--- 9. Systems
-local function safeInit(fn)
-	if type(fn) ~= "function" then return {} end
-	local ok, result = pcall(fn, context)
-	if ok and type(result) == "table" then
-		return result
-	end
-	return {}
+-- 9) Systems
+local function initSystem(path)
+	return callFactory(import(path), context) or {}
 end
 
-context.ConfigSystem      = safeInit(import(PATHS.CONFIG_SYSTEM))
-context.AimbotSystem      = safeInit(import(PATHS.AIMBOT_SYSTEM))
-context.ESPSystem         = safeInit(import(PATHS.ESP_SYSTEM))
-context.FlingSystem       = safeInit(import(PATHS.FLING_SYSTEM))
-context.FlySystem         = safeInit(import(PATHS.FLY_SYSTEM))
-context.MovementSystem    = safeInit(import(PATHS.MOVEMENT_SYSTEM))
-context.PerformanceSystem = safeInit(import(PATHS.PERFORMANCE_SYSTEM))
-context.PlayersSystem     = safeInit(import(PATHS.PLAYERS_SYSTEM))
-context.OverlayManager    = safeInit(import(PATHS.OVERLAY_MANAGER))
+context.ConfigSystem      = initSystem(PATHS.CONFIG_SYSTEM)
+context.AimbotSystem      = initSystem(PATHS.AIMBOT_SYSTEM)
+context.ESPSystem         = initSystem(PATHS.ESP_SYSTEM)
+context.FlingSystem       = initSystem(PATHS.FLING_SYSTEM)
+context.FlySystem         = initSystem(PATHS.FLY_SYSTEM)
+context.MovementSystem    = initSystem(PATHS.MOVEMENT_SYSTEM)
+context.PerformanceSystem = initSystem(PATHS.PERFORMANCE_SYSTEM)
+context.PlayersSystem     = initSystem(PATHS.PLAYERS_SYSTEM)
+context.OverlayManager    = initSystem(PATHS.OVERLAY_MANAGER)
 
--- 10. Game Loader
-local gameLoaderFactory = import(PATHS.GAME_LOADER)
-if type(gameLoaderFactory) == "function" then
-	local ok, res = pcall(gameLoaderFactory, context, import)
-	if ok and type(res) == "table" then
-		context.GameLoader = res
-	end
-end
+-- 10) Game loader (uses folder modules: src/Games/<placeId>/init.lua)
+context.GameLoader = callFactory(import(PATHS.GAME_LOADER), context, import) or {
+	GetDisplayName = function() return "Universal" end,
+	IsSupported = function() return false end,
+	Load = function() return nil end,
+	BuildUI = function() return false, "loader missing" end,
+	Update = function() end,
+	Destroy = function() end,
+}
 
-globalEnv.B0XazContext = context
+env.B0XazContext = context
 
--- ============================================================
--- Launcher
--- ============================================================
+----------------------------------------------------------------
+-- Start
+----------------------------------------------------------------
 local function startApplication()
 	print("[B0Xaz] Launching UI & runtime...")
 
-	if context.ESPSystem and context.ESPSystem.InitializeAll then
+	if context.ESPSystem.InitializeAll then
 		pcall(context.ESPSystem.InitializeAll)
 	end
-
-	if context.ConfigSystem and context.ConfigSystem.LoadAutoload then
+	if context.ConfigSystem.LoadAutoload then
 		pcall(context.ConfigSystem.LoadAutoload)
 	end
-
-	if context.ConfigSystem and context.ConfigSystem.StartAutosaveLoop then
+	if context.ConfigSystem.StartAutosaveLoop then
 		pcall(context.ConfigSystem.StartAutosaveLoop)
 	end
 
-	local buildUiFn = import(PATHS.BUILD_UI)
-	if type(buildUiFn) == "function" then
-		local ok, err = pcall(buildUiFn, context)
-		if not ok then
-			warn("[B0Xaz] BuildUI error: " .. tostring(err))
-		end
+	local buildUi = import(PATHS.BUILD_UI)
+	if type(buildUi) == "function" then
+		local ok, err = pcall(buildUi, context)
+		if not ok then warn("[B0Xaz] BuildUI error: " .. tostring(err)) end
 	end
 
-	local runtimeFn = import(PATHS.RUNTIME)
-	if type(runtimeFn) == "function" then
-		local ok, err = pcall(runtimeFn, context)
-		if not ok then
-			warn("[B0Xaz] Runtime error: " .. tostring(err))
-		end
+	local runtime = import(PATHS.RUNTIME)
+	if type(runtime) == "function" then
+		local ok, err = pcall(runtime, context)
+		if not ok then warn("[B0Xaz] Runtime error: " .. tostring(err)) end
 	end
 
 	print("[B0Xaz] Universal Hub loaded.")
 end
 
--- Key verification
 local verified = false
-if keySystem and keySystem.LoadAndVerify then
-	local ok, result = pcall(keySystem.LoadAndVerify)
+if context.KeySystem.LoadAndVerify then
+	local ok, result = pcall(context.KeySystem.LoadAndVerify)
 	verified = ok and result == true
 end
 
 if verified then
 	startApplication()
-elseif uiEngine and type(uiEngine.CreateKeyPrompt) == "function" then
-	local ok, err = pcall(uiEngine.CreateKeyPrompt, uiEngine, keySystem, activeTheme, startApplication, "")
+elseif type(context.UIEngine.CreateKeyPrompt) == "function" then
+	local ok, err = pcall(
+		context.UIEngine.CreateKeyPrompt,
+		context.UIEngine,
+		context.KeySystem,
+		context.Theme,
+		startApplication,
+		""
+	)
 	if not ok then
-		warn("[B0Xaz] Key prompt error: " .. tostring(err) .. " — launching anyway.")
+		warn("[B0Xaz] Key prompt failed: " .. tostring(err) .. " — launching anyway")
 		startApplication()
 	end
 else
