@@ -1,128 +1,85 @@
 -- // src/Visuals/DrawingManager.lua
-local SETTINGS = {
-	DEFAULTS = {
-		COLOR = Color3.new(1, 1, 1),
-		TRANSPARENCY = 1,
-		LINE = {
-			Thickness = 1,
-		},
-		CIRCLE = {
-			Radius = 10,
-			Thickness = 1,
-			Filled = false,
-			NumSides = 64,
-		},
-		SQUARE = {
-			Thickness = 2,
-			Filled = false,
-		},
-		TEXT = {
-			Size = 14,
-			Center = true,
-			Outline = true,
-			Font = 2,
-			Text = "",
-		},
-	},
-	GLOBAL_DRAWINGS_KEY = "B0XazAllDrawings",
-}
-
 return function()
-	local globalEnv = getgenv and getgenv() or _G
-	globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] or {}
+	local env = (getgenv and getgenv()) or _G
+	env.B0XazAllDrawings = env.B0XazAllDrawings or {}
 
 	local drawingAvailable = false
 	pcall(function()
-		if typeof(Drawing) == "table" or typeof(Drawing) == "userdata" then
-			if type(Drawing.new) == "function" then
-				local testObject = Drawing.new("Line")
-				if testObject then
-					drawingAvailable = true
-					testObject.Visible = false
-					if testObject.Remove then
-						testObject:Remove()
-					elseif testObject.Destroy then
-						testObject:Destroy()
-					end
-				end
+		if Drawing and type(Drawing.new) == "function" then
+			local test = Drawing.new("Line")
+			if test then
+				drawingAvailable = true
+				test.Visible = false
+				if test.Remove then test:Remove()
+				elseif test.Destroy then test:Destroy() end
 			end
 		end
 	end)
 
-	local allDrawings = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY]
+	local allDrawings = env.B0XazAllDrawings
 
 	local function track(obj)
-		if obj then
-			table.insert(allDrawings, obj)
-		end
+		if obj then table.insert(allDrawings, obj) end
 		return obj
 	end
 
-	local DrawingManager = {
-		Available = drawingAvailable,
-	}
+	local DrawingManager = { Available = drawingAvailable }
 
-	local function createDrawing(drawingType, defaultProperties, customProperties)
+	local function create(className, defaults, props)
 		if not drawingAvailable then return nil end
-
-		local success, instance = pcall(Drawing.new, drawingType)
-		if not success or not instance then return nil end
+		local ok, inst = pcall(Drawing.new, className)
+		if not ok or not inst then return nil end
 
 		pcall(function()
-			instance.Visible = false
-			instance.Color = (customProperties and customProperties.Color) or SETTINGS.DEFAULTS.COLOR
-			instance.Transparency = (customProperties and customProperties.Transparency) or SETTINGS.DEFAULTS.TRANSPARENCY
-
-			for property, defaultValue in pairs(defaultProperties) do
-				if property ~= "Color" and property ~= "Transparency" then
-					if customProperties and customProperties[property] ~= nil then
-						instance[property] = customProperties[property]
-					else
-						instance[property] = defaultValue
-					end
+			inst.Visible = false
+			inst.Color = (props and props.Color) or Color3.new(1, 1, 1)
+			inst.Transparency = (props and props.Transparency) or 1
+			for key, def in pairs(defaults) do
+				if key ~= "Color" and key ~= "Transparency" then
+					inst[key] = (props and props[key] ~= nil) and props[key] or def
 				end
 			end
 		end)
 
-		return track(instance)
+		return track(inst)
 	end
 
 	function DrawingManager.NewLine(props)
-		return createDrawing("Line", SETTINGS.DEFAULTS.LINE, props)
+		return create("Line", { Thickness = 1 }, props)
 	end
 
 	function DrawingManager.NewCircle(props)
-		return createDrawing("Circle", SETTINGS.DEFAULTS.CIRCLE, props)
+		return create("Circle", {
+			Radius = 10, Thickness = 1, Filled = false, NumSides = 64,
+		}, props)
 	end
 
 	function DrawingManager.NewSquare(props)
-		return createDrawing("Square", SETTINGS.DEFAULTS.SQUARE, props)
+		return create("Square", { Thickness = 2, Filled = false }, props)
 	end
 
 	function DrawingManager.NewText(props)
-		return createDrawing("Text", SETTINGS.DEFAULTS.TEXT, props)
+		-- Font left unset intentionally — numeric fonts crash some executors
+		return create("Text", {
+			Size = 14, Center = true, Outline = true, Text = "",
+		}, props)
 	end
 
 	function DrawingManager.SafeRemove(drawing)
 		if not drawing then return end
 		pcall(function()
-			if drawing.Visible ~= nil then
-				drawing.Visible = false
-			end
+			if drawing.Visible ~= nil then drawing.Visible = false end
 		end)
 		pcall(function()
-			if drawing.Remove then
-				drawing:Remove()
-			elseif drawing.Destroy then
-				drawing:Destroy()
-			end
+			if drawing.Remove then drawing:Remove()
+			elseif drawing.Destroy then drawing:Destroy() end
 		end)
 	end
 
 	function DrawingManager.RemoveAll()
-		for index = #allDrawings, 1, -1 do
-			DrawingManager.SafeRemove(allDrawings[index])
-			allDrawings[index] = nil
+		for i = #allDrawings, 1, -1 do
+			DrawingManager.SafeRemove(allDrawings[i])
+			allDrawings[i] = nil
 		end
 	end
 
