@@ -1,16 +1,31 @@
 -- src/Systems/KeySystem.lua
-return function(Context)
+return function(Context, import)
 	local KeySystem = {}
 	local HttpService = game:GetService("HttpService")
 	local Players = game:GetService("Players")
 	local Utils = Context.Utils
 	local CONFIG = Context.CONFIG
 
-	----------------------------------------------------------------
-	-- OFFLINE KEY CONFIGURATION
-	----------------------------------------------------------------
-	local MASTER_KEY = "Main Access"
-	local KEY_INFO_MESSAGE = "This script uses a direct key. Contact the administrator to obtain access."
+	local importFn = import or Context.import
+
+	-- Load Key Tables from src/Keys/
+	local EntryKeys = {}
+	local NormalKeys = {}
+	local FullKeys = {}
+
+	if type(importFn) == "function" then
+		pcall(function()
+			EntryKeys = importFn("src/Keys/Entry.lua") or {}
+		end)
+		pcall(function()
+			NormalKeys = importFn("src/Keys/Normal.lua") or {}
+		end)
+		pcall(function()
+			FullKeys = importFn("src/Keys/Full.lua") or {}
+		end)
+	end
+
+	local KEY_INFO_MESSAGE = "This script uses tier-based access. Contact the owner to get an Entry, Normal, or Full key."
 
 	KeySystem.CurrentTier = 0
 	KeySystem.CurrentKey = ""
@@ -31,13 +46,23 @@ return function(Context)
 		return hwid
 	end
 
+	local function listContains(keyTable, targetKey)
+		if type(keyTable) ~= "table" then return false end
+		for _, k in pairs(keyTable) do
+			if tostring(k) == targetKey then
+				return true
+			end
+		end
+		return false
+	end
+
 	function KeySystem.GetTierName()
 		if KeySystem.CurrentTier == 3 then
 			return "Tier 3 (Full Access)"
 		elseif KeySystem.CurrentTier == 2 then
-			return "Tier 2 (Enhanced)"
+			return "Tier 2 (Normal)"
 		elseif KeySystem.CurrentTier == 1 then
-			return "Tier 1 (Standard)"
+			return "Tier 1 (Entry)"
 		else
 			return "None"
 		end
@@ -60,12 +85,25 @@ return function(Context)
 			return false, 0, "Key cannot be empty." 
 		end
 
-		if userInput == MASTER_KEY then
+		-- 1. Check Full Tier (Tier 3)
+		if listContains(FullKeys, userInput) then
 			KeySystem.CurrentTier = 3
-			return true, 3, "Access Granted!", userInput
-		else
-			return false, 0, "Incorrect key. Access denied."
+			return true, 3, "Full Access Granted!", userInput
 		end
+
+		-- 2. Check Normal Tier (Tier 2)
+		if listContains(NormalKeys, userInput) then
+			KeySystem.CurrentTier = 2
+			return true, 2, "Normal Access Granted!", userInput
+		end
+
+		-- 3. Check Entry Tier (Tier 1)
+		if listContains(EntryKeys, userInput) then
+			KeySystem.CurrentTier = 1
+			return true, 1, "Entry Access Granted!", userInput
+		end
+
+		return false, 0, "Incorrect Key. Access Denied."
 	end
 
 	function KeySystem.SaveKey(key)
@@ -85,6 +123,7 @@ return function(Context)
 		if not ok then return false, 0, msg end
 
 		KeySystem.CurrentKey = canonical
+		KeySystem.CurrentTier = tier
 		KeySystem.SaveKey(KeySystem.CurrentKey)
 		return true, tier, msg
 	end
@@ -117,7 +156,7 @@ return function(Context)
 		pcall(function()
 			setclipboard(KEY_INFO_MESSAGE)
 		end)
-		return true, "Key instructions copied to clipboard."
+		return true, "Information copied to clipboard."
 	end
 
 	return KeySystem
