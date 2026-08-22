@@ -135,7 +135,7 @@ return function(Context, Theme)
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = themeCol.Text or Color3.fromRGB(230, 230, 230),
-			Text = "B0Xaz Universal - Authentication",
+			Text = "Authentication Required",
 			Parent = modal,
 		})
 
@@ -150,7 +150,7 @@ return function(Context, Theme)
 			TextColor3 = (initialError and initialError ~= "" and (themeCol.Danger or Color3.fromRGB(220, 80, 80)))
 				or (themeCol.TextDim or Color3.fromRGB(160, 160, 170)),
 			Text = (initialError and initialError ~= "" and initialError)
-				or "Enter your Platoboost key to continue.",
+				or "Enter your access key to continue.",
 			Parent = modal,
 		})
 
@@ -171,7 +171,7 @@ return function(Context, Theme)
 			Font = Enum.Font.Code,
 			TextSize = 12,
 			Text = "",
-			PlaceholderText = "Paste key here...",
+			PlaceholderText = "Paste access key here...",
 			TextColor3 = themeCol.Text or Color3.fromRGB(230, 230, 230),
 			PlaceholderColor3 = themeCol.TextMuted or Color3.fromRGB(100, 100, 110),
 			ClearTextOnFocus = false,
@@ -195,7 +195,7 @@ return function(Context, Theme)
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -20, 0, 20),
 			Position = UDim2.new(0, 10, 1, -28),
-			Text = "Get Key (copy Platoboost / LootLabs link)",
+			Text = "Get Key Info",
 			Font = Enum.Font.Code,
 			TextSize = 10,
 			TextColor3 = themeCol.TextDim or Color3.fromRGB(150, 150, 160),
@@ -206,16 +206,8 @@ return function(Context, Theme)
 			local ok, msg = false, "No link"
 			if KeySystem and KeySystem.CopyGetKeyLink then
 				ok, msg = KeySystem.CopyGetKeyLink()
-			else
-				local link = KeySystem and KeySystem.GET_KEY_URL
-				if link and not tostring(link):find("YOUR_GATEWAY") then
-					ok = pcall(function()
-						setclipboard(link)
-					end)
-					msg = ok and "Link copied." or "Clipboard failed."
-				end
 			end
-			err.Text = msg or (ok and "Link copied!" or "Configure GET_KEY_URL first.")
+			err.Text = msg or (ok and "Information copied." or "Failed to copy info.")
 			err.TextColor3 = ok and (themeCol.Success or themeCol.Accent or Color3.fromRGB(90, 200, 120))
 				or (themeCol.Danger or Color3.fromRGB(220, 80, 80))
 		end)
