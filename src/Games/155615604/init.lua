@@ -4,6 +4,7 @@ return function(Context)
 	local Players = game:GetService("Players")
 	local RS = game:GetService("RunService")
 	local UIS = game:GetService("UserInputService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 	local LocalPlayer = Players.LocalPlayer
 	local FeatureConfig = Context and Context.FeatureConfig or {}
@@ -30,6 +31,11 @@ return function(Context)
 		FakeMacroMode = "Toggle",
 		FakeMacroDelay = 0.03,
 		AntiRestrict = false,
+		-- Bannable category features
+		PunchAura = false,
+		PunchAuraRange = 15,
+		SuperPunch = false,
+		SuperPunchHits = 10,
 	}
 	for k, v in pairs(defaults) do
 		if FeatureConfig.Game[k] == nil then FeatureConfig.Game[k] = v end
@@ -78,6 +84,9 @@ return function(Context)
 	local isKeyPressed = false
 	local isGrabbingGun = false
 	local isSwitchingCriminal = false
+
+	-- Remotes
+	local MeleeEvent = ReplicatedStorage:FindFirstChild("meleeEvent")
 
 	----------------------------------------------------------------
 	-- GUN TELEPORT ENGINE (Touch-Teleport Return)
@@ -144,6 +153,28 @@ return function(Context)
 		root.CFrame = CFrame.new(-943, 95, 2058)
 		if Context.UI then
 			Context.UI:Notify("Prison Life", "Warped Outside to Criminal Base!", 2, Theme.Success)
+		end
+	end
+
+	----------------------------------------------------------------
+	-- BANNABLE MELEE / PUNCH AURA LOGIC
+	----------------------------------------------------------------
+	local function runPunchAura()
+		if not FeatureConfig.Game.PunchAura or not MeleeEvent then return end
+		local myRoot = Utils.GetRootPart()
+		if not myRoot then return end
+
+		local maxDist = FeatureConfig.Game.PunchAuraRange or 15
+
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and Utils.IsAlive(p) and not Utils.SameTeam(p) then
+				local tRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+				if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= maxDist then
+					pcall(function()
+						MeleeEvent:FireServer(p)
+					end)
+				end
+			end
 		end
 	end
 
@@ -434,6 +465,9 @@ return function(Context)
 		end
 
 		Connections.Add(RS.Heartbeat:Connect(function()
+			-- Bannable Melee / Punch Aura
+			runPunchAura()
+
 			-- Anti-Taser / Anti-Restrict Engine
 			if FeatureConfig.Game.AntiRestrict then
 				local hum = Utils.GetHumanoid()
@@ -497,6 +531,17 @@ return function(Context)
 		Connections.Add(UIS.InputBegan:Connect(function(input, gp)
 			if gp then return end
 			handleFakeMacroInput(input, true)
+
+			-- Super Multi-Punch Listener (Bannable)
+			if FeatureConfig.Game.SuperPunch and input.UserInputType == Enum.UserInputType.MouseButton1 then
+				local char = LocalPlayer.Character
+				if MeleeEvent and char and not char:FindFirstChildOfClass("Tool") then
+					local hits = FeatureConfig.Game.SuperPunchHits or 10
+					for _ = 1, hits do
+						pcall(function() MeleeEvent:FireServer() end)
+					end
+				end
+			end
 		end))
 
 		Connections.Add(UIS.InputEnded:Connect(function(input, gp)
@@ -506,11 +551,48 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- UI BUILDER FOR PRISON LIFE
+	-- UI BUILDER FOR PRISON LIFE (Normal & Bannable Sub-Tabs)
 	----------------------------------------------------------------
 	function Game.BuildUI(tab)
-		-- Section 1: Gun Grabbers (Touch-Teleport)
+		local normalSections = {}
+		local bannableSections = {}
+
+		-- Sub-Tab Navigation Bar Section (always visible at top of Game tab)
+		local navSec = tab:AddSection("Prison Life Categories")
+
+		local function updateSubTabs(active)
+			for _, sec in ipairs(normalSections) do
+				if sec and sec.Frame then sec.Frame.Visible = (active == "Normal") end
+			end
+			for _, sec in ipairs(bannableSections) do
+				if sec and sec.Frame then sec.Frame.Visible = (active == "Bannable") end
+			end
+		end
+
+		navSec:AddButton("Switch to: [ Normal Mode ]", function()
+			updateSubTabs("Normal")
+			if Context and Context.UI then
+				Context.UI:Notify("Prison Life", "Switched to Normal Features", 2, Theme.Success)
+			end
+		end)
+
+		navSec:AddButton("Switch to: [ ⚠️ Bannable Exploits ]", function()
+			updateSubTabs("Bannable")
+			if Context and Context.UI then
+				Context.UI:Notify(
+					"CRITICAL WARNING",
+					"Any functions in this tab will get your account banned from Prison Life",
+					6,
+					Theme.Danger
+				)
+			end
+		end)
+
+		------------------------------------------------------------
+		-- 1. NORMAL SUB-TAB SECTIONS
+		------------------------------------------------------------
 		local gunGrabSec = tab:AddSection("Gun Grabbers (Warp-Return)")
+		table.insert(normalSections, gunGrabSec)
 		gunGrabSec:AddButton("Grab MP5", function()
 			grabGun("MP5", GUN_SPAWNS["MP5"])
 		end)
@@ -521,31 +603,31 @@ return function(Context)
 			grabGun("AK-47", GUN_SPAWNS["AK-47"])
 		end)
 
-		-- Section 2: Combat Modifications
-		local combat = tab:AddSection("Combat Modifications")
-		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
+		local combatSec = tab:AddSection("Combat Modifications")
+		table.insert(normalSections, combatSec)
+		UIRegistry.Game_NoSpread = combatSec:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
 			FeatureConfig.Game.NoSpread = v
 			if anyGunModEnabled() then scanGuns() else restoreGuns() end
 		end)
-		UIRegistry.Game_FastFire = combat:AddToggle("Fast Fire (0.001s)", FeatureConfig.Game.FastFire, function(v)
+		UIRegistry.Game_FastFire = combatSec:AddToggle("Fast Fire (0.001s)", FeatureConfig.Game.FastFire, function(v)
 			FeatureConfig.Game.FastFire = v
 			if anyGunModEnabled() then scanGuns() else restoreGuns() end
 		end)
-		UIRegistry.Game_ForceAuto = combat:AddToggle("Force Automatic Fire", FeatureConfig.Game.ForceAuto, function(v)
+		UIRegistry.Game_ForceAuto = combatSec:AddToggle("Force Automatic Fire", FeatureConfig.Game.ForceAuto, function(v)
 			FeatureConfig.Game.ForceAuto = v
 			if anyGunModEnabled() then scanGuns() else restoreGuns() end
 		end)
-		UIRegistry.Game_ForceRange = combat:AddToggle("Force Range (10,000)", FeatureConfig.Game.ForceRange, function(v)
+		UIRegistry.Game_ForceRange = combatSec:AddToggle("Force Range (10,000)", FeatureConfig.Game.ForceRange, function(v)
 			FeatureConfig.Game.ForceRange = v
 			if anyGunModEnabled() then scanGuns() else restoreGuns() end
 		end)
-		combat:AddButton("Force Apply Gun Mods", function()
+		combatSec:AddButton("Force Apply Gun Mods", function()
 			scanGuns()
 			if Context and Context.UI then Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent) end
 		end)
 
-		-- Section 3: Fake Macro
 		local macroSec = tab:AddSection("Fake Macro (Gun Spam)")
+		table.insert(normalSections, macroSec)
 		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
 			FeatureConfig.Game.FakeMacro = v
 			if not v then stopFakeMacro(); isKeyPressed = false end
@@ -564,25 +646,25 @@ return function(Context)
 			FeatureConfig.Game.FakeMacroDelay = v / 1000
 		end, " ms")
 
-		-- Section 4: Doors & Obstacles
-		local doors = tab:AddSection("Doors & Obstacles")
-		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Doors, Fences & Vending", FeatureConfig.Game.DoorPhase, function(v)
+		local doorsSec = tab:AddSection("Doors & Obstacles")
+		table.insert(normalSections, doorsSec)
+		UIRegistry.Game_DoorPhase = doorsSec:AddToggle("Phase Doors, Fences & Vending", FeatureConfig.Game.DoorPhase, function(v)
 			FeatureConfig.Game.DoorPhase = v
 			if v then scanAllDoors() else restoreAllDoors() end
 		end)
-		UIRegistry.Game_DoorGlow = doors:AddToggle("Obstacle Glow Effect", FeatureConfig.Game.DoorGlow, function(v)
+		UIRegistry.Game_DoorGlow = doorsSec:AddToggle("Obstacle Glow Effect", FeatureConfig.Game.DoorGlow, function(v)
 			FeatureConfig.Game.DoorGlow = v
 			if FeatureConfig.Game.DoorPhase then scanAllDoors() end
 		end)
-		UIRegistry.Game_PhaseTransparency = doors:AddSlider("Phase Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
+		UIRegistry.Game_PhaseTransparency = doorsSec:AddSlider("Phase Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
 			FeatureConfig.Game.PhaseTransparency = v / 100
 		end, "%")
-		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
+		UIRegistry.Game_GlowColor = doorsSec:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
 			Game.SetGlowColor(c)
 		end)
 
-		-- Section 5: Defenses
 		local defSec = tab:AddSection("Defenses")
+		table.insert(normalSections, defSec)
 		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser", FeatureConfig.Game.AntiRestrict, function(v)
 			FeatureConfig.Game.AntiRestrict = v
 		end)
@@ -593,8 +675,8 @@ return function(Context)
 			Game.BecomeCriminalOutside()
 		end)
 
-		-- Section 6: Map Teleports
 		local tpSec = tab:AddSection("Map Teleports")
+		table.insert(normalSections, tpSec)
 		for _, loc in ipairs(PL_LOCATIONS) do
 			local name, cf = loc[1], loc[2]
 			tpSec:AddButton(name, function()
@@ -605,6 +687,37 @@ return function(Context)
 				end
 			end)
 		end
+
+		------------------------------------------------------------
+		-- 2. BANNABLE SUB-TAB SECTIONS
+		------------------------------------------------------------
+		local warnSec = tab:AddSection("⚠️ DETECTION WARNING")
+		table.insert(bannableSections, warnSec)
+		warnSec:AddButton("WARNING: High Ban Risk Functions", function()
+			if Context and Context.UI then
+				Context.UI:Notify("DANGER", "These melee functions are heavily flagged by server logs!", 5, Theme.Danger)
+			end
+		end)
+
+		local meleeSec = tab:AddSection("Bannable Melee Exploits")
+		table.insert(bannableSections, meleeSec)
+
+		UIRegistry.Game_PunchAura = meleeSec:AddToggle("Punch Aura", FeatureConfig.Game.PunchAura, function(v)
+			FeatureConfig.Game.PunchAura = v
+		end)
+		UIRegistry.Game_PunchAuraRange = meleeSec:AddSlider("Punch Aura Range", FeatureConfig.Game.PunchAuraRange or 15, 5, 40, function(v)
+			FeatureConfig.Game.PunchAuraRange = v
+		end, " studs")
+
+		UIRegistry.Game_SuperPunch = meleeSec:AddToggle("Super Multi-Punch (Click)", FeatureConfig.Game.SuperPunch, function(v)
+			FeatureConfig.Game.SuperPunch = v
+		end)
+		UIRegistry.Game_SuperPunchHits = meleeSec:AddSlider("Multi-Hit Multiplier", FeatureConfig.Game.SuperPunchHits or 10, 2, 30, function(v)
+			FeatureConfig.Game.SuperPunchHits = v
+		end, " hits")
+
+		-- Start with Normal visible by default
+		updateSubTabs("Normal")
 	end
 
 	function Game.Update(dt)
