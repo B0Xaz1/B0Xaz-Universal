@@ -10,7 +10,7 @@ return function(Context)
 	-- PLATOBOOST CONFIGURATION (Free Plan - 1 Service)
 	-- Replace with your single Service ID and Gateway Link from Platoboost
 	-- ================================================================
-	KeySystem.SERVICE_ID = "YOUR_PLATOBOOST_SERVICE_ID"
+	KeySystem.SERVICE_ID = "30171"
 	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/YOUR_LINK_ID"
 
 	-- Optional: Manual exact key overrides if you don't want to use prefixes
