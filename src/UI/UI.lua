@@ -122,7 +122,7 @@ return function(Context, Theme)
 		btn.MouseEnter:Connect(function() btn.BackgroundColor3 = CurrentTheme.AccentDark end)
 		btn.MouseLeave:Connect(function() btn.BackgroundColor3 = CurrentTheme.AccentDim end)
 		btnGet.MouseButton1Click:Connect(function()
-			pcall(function() setclipboard("https://discord.gg/yourinvite") end)
+			pcall(function() setclipboard("https://discord.gg/") end)
 			errLbl.Text = "Discord link copied to clipboard!"
 			errLbl.TextColor3 = CurrentTheme.Accent
 		end)
