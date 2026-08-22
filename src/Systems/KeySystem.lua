@@ -9,11 +9,8 @@ return function(Context)
 	----------------------------------------------------------------
 	-- OFFLINE KEY CONFIGURATION
 	----------------------------------------------------------------
-	-- Change this word whenever you want to change the key for everyone.
-	local MASTER_KEY = "Main Access" 
-
-	-- Since there is no website, this message shows when they click "Get Key"
-	local KEY_INFO_MESSAGE = "This is a private script. Please ask the owner for the key."
+	local MASTER_KEY = "Main Access"
+	local KEY_INFO_MESSAGE = "This script uses a direct key. Contact the administrator to obtain access."
 
 	KeySystem.CurrentTier = 0
 	KeySystem.CurrentKey = ""
@@ -23,7 +20,6 @@ return function(Context)
 		return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 	end
 
-	-- Local HWID for saving the key to this specific computer
 	local function getHWID()
 		local hwid = ""
 		pcall(function()
@@ -35,19 +31,40 @@ return function(Context)
 		return hwid
 	end
 
+	function KeySystem.GetTierName()
+		if KeySystem.CurrentTier == 3 then
+			return "Tier 3 (Full Access)"
+		elseif KeySystem.CurrentTier == 2 then
+			return "Tier 2 (Enhanced)"
+		elseif KeySystem.CurrentTier == 1 then
+			return "Tier 1 (Standard)"
+		else
+			return "None"
+		end
+	end
+
+	function KeySystem.GetMaskedKey()
+		if not KeySystem.CurrentKey or KeySystem.CurrentKey == "" then
+			return "None"
+		end
+		if #KeySystem.CurrentKey <= 4 then
+			return string.rep("*", #KeySystem.CurrentKey)
+		end
+		return KeySystem.CurrentKey:sub(1, 2) .. string.rep("*", #KeySystem.CurrentKey - 4) .. KeySystem.CurrentKey:sub(-2)
+	end
+
 	function KeySystem.Validate(userInput)
 		userInput = trim(userInput)
-		
+
 		if userInput == "" then 
 			return false, 0, "Key cannot be empty." 
 		end
 
-		-- Check the input against your hardcoded Master Key
 		if userInput == MASTER_KEY then
-			KeySystem.CurrentTier = 3 -- Full Access
+			KeySystem.CurrentTier = 3
 			return true, 3, "Access Granted!", userInput
 		else
-			return false, 0, "Incorrect Key. Access Denied."
+			return false, 0, "Incorrect key. Access denied."
 		end
 	end
 
@@ -79,7 +96,6 @@ return function(Context)
 		local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
 		if not ok or not data.Key then return false, 0, "" end
 
-		-- Check if the saved key was for this computer
 		if data.HWID and data.HWID ~= getHWID() then
 			return false, 0, "Key saved on a different device."
 		end
@@ -98,9 +114,10 @@ return function(Context)
 	end
 
 	function KeySystem.CopyGetKeyLink()
-		-- Since there is no link, we just notify them
-		setclipboard(KEY_INFO_MESSAGE)
-		return true, "Information copied to clipboard."
+		pcall(function()
+			setclipboard(KEY_INFO_MESSAGE)
+		end)
+		return true, "Key instructions copied to clipboard."
 	end
 
 	return KeySystem
