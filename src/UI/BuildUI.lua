@@ -30,7 +30,7 @@ return function(Context)
 	local PlayersSystem = Context.PlayersSystem
 	local KeySystem = Context.KeySystem
 
-	local UI = UIEngine.new("B0Xaz Universal")
+	local UI = Context.UIEngine.new("B0Xaz Universal")
 	Context.UI = UI
 	getgenv().B0XazLibrary = UI
 
