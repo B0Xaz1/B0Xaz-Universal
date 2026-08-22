@@ -2,6 +2,10 @@
 return function()
     local g = getgenv()
 
+    -- Invalidate any previous session loops IMMEDIATELY
+    g.B0XazSessionId = (tonumber(g.B0XazSessionId) or 0) + 1
+    local thisCleanupSession = g.B0XazSessionId
+
     if g.B0XazLibrary then
         pcall(function() g.B0XazLibrary:Destroy() end)
         g.B0XazLibrary = nil
@@ -10,7 +14,10 @@ return function()
     if type(g.B0XazConnections) == "table" then
         for _, conn in ipairs(g.B0XazConnections) do
             pcall(function()
-                if conn and conn.Connected then conn:Disconnect() end
+                if conn then
+                    if conn.Disconnect then conn:Disconnect() end
+                    if conn.Connected == true then conn:Disconnect() end
+                end
             end)
         end
     end
@@ -23,44 +30,53 @@ return function()
     end
     g.B0XazThreads = {}
 
+    local function nukeDrawing(d)
+        if not d then return end
+        pcall(function() d.Visible = false end)
+        pcall(function()
+            if type(d) == "table" then
+                for _, sub in pairs(d) do
+                    nukeDrawing(sub)
+                end
+            elseif d.Remove then
+                d:Remove()
+            end
+        end)
+    end
+
+    -- Master list (DrawingManager)
+    if type(g.B0XazAllDrawings) == "table" then
+        for i = #g.B0XazAllDrawings, 1, -1 do
+            nukeDrawing(g.B0XazAllDrawings[i])
+            g.B0XazAllDrawings[i] = nil
+        end
+    end
+    g.B0XazAllDrawings = {}
+
     if type(g.B0XazDrawings) == "table" then
         for _, d in pairs(g.B0XazDrawings) do
-            pcall(function() d:Remove() end)
+            nukeDrawing(d)
         end
     end
     g.B0XazDrawings = {}
 
     if type(g.B0XazDrawingESP) == "table" then
         for _, espData in pairs(g.B0XazDrawingESP) do
-            if type(espData) == "table" then
-                for _, drawing in pairs(espData) do
-                    if type(drawing) == "table" then
-                        for _, line in ipairs(drawing) do
-                            pcall(function() line:Remove() end)
-                        end
-                    else
-                        pcall(function() drawing:Remove() end)
-                    end
-                end
-            end
+            nukeDrawing(espData)
         end
     end
     g.B0XazDrawingESP = {}
 
     if type(g.B0XazTracerLines) == "table" then
         for _, line in ipairs(g.B0XazTracerLines) do
-            pcall(function() line:Remove() end)
+            nukeDrawing(line)
         end
     end
     g.B0XazTracerLines = {}
 
     if type(g.B0XazSkeletonLines) == "table" then
         for _, lines in pairs(g.B0XazSkeletonLines) do
-            if type(lines) == "table" then
-                for _, line in ipairs(lines) do
-                    pcall(function() line:Remove() end)
-                end
-            end
+            nukeDrawing(lines)
         end
     end
     g.B0XazSkeletonLines = {}
@@ -74,8 +90,13 @@ return function()
 
     for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
         if player.Character then
+            for _, obj in ipairs(player.Character:GetDescendants()) do
+                if obj:IsA("Highlight") and (obj.Name == "B0XazChams" or obj.Name:find("B0Xaz")) then
+                    pcall(function() obj:Destroy() end)
+                end
+            end
             for _, obj in ipairs(player.Character:GetChildren()) do
-                if obj:IsA("Highlight") and obj.Name:find("B0Xaz") then
+                if obj:IsA("Highlight") and (obj.Name == "B0XazChams" or obj.Name:find("B0Xaz")) then
                     pcall(function() obj:Destroy() end)
                 end
             end
@@ -134,4 +155,8 @@ return function()
     end
 
     g.B0XazState = nil
+    g.B0XazContext = nil
+
+    -- Tiny yield so executor finishes destroying drawings before new ones spawn
+    task.wait()
 end
