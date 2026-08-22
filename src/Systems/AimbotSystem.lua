@@ -250,4 +250,63 @@ return function(Context)
             for _, part in ipairs(assets.Character:GetChildren()) do
                 if not part:IsA("BasePart") then continue end
                 local sp, onScreen, depth = Utils.WorldToScreen(part.Position)
-                if not 
+                if not onScreen or depth <= 0 then continue end
+                if (mousePos - sp).Magnitude < 14 then
+                    task.delay(cfg.Triggerbot.Delay or 0.05, function()
+                        if not FeatureConfig.Aimbot.Triggerbot.Enabled then return end
+                        if mouse1click then
+                            pcall(mouse1click)
+                        else
+                            local vim = game:GetService("VirtualInputManager")
+                            pcall(function()
+                                vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                                task.wait(0.02)
+                                vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                            end)
+                        end
+                    end)
+                    return
+                end
+            end
+        end
+    end
+
+    Connections.Add(UIS.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if not FeatureConfig.Aimbot.Enabled then return end
+
+        local matched = getMatchingBind(input)
+        if not matched then return end
+
+        ActiveHeldInputs[tostring(matched)] = true
+
+        if FeatureConfig.Aimbot.LockMode == "Toggle" then
+            if TargetPlayer then
+                AimbotSystem.LockOff()
+            else
+                AimbotSystem.LockOn()
+            end
+        else
+            AimbotSystem.LockOn()
+        end
+    end))
+
+    Connections.Add(UIS.InputEnded:Connect(function(input)
+        local matched = getMatchingBind(input)
+        if not matched then return end
+
+        ActiveHeldInputs[tostring(matched)] = nil
+
+        if FeatureConfig.Aimbot.LockMode == "Hold" and not isAnyKeyHeld() then
+            AimbotSystem.LockOff()
+        end
+    end))
+
+    Connections.Add(Players.PlayerRemoving:Connect(function(player)
+        if player == TargetPlayer then
+            AimbotSystem.LockOff()
+        end
+    end))
+
+    return AimbotSystem
+end
