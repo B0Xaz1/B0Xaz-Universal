@@ -8,11 +8,39 @@ return function(Context)
 
     local ConfigSystem = {}
 
+    local function serializeKeybind(k)
+        if k == nil then return nil end
+        if typeof(k) == "string" then
+            return {kind = "string", value = k}
+        elseif typeof(k) == "EnumItem" then
+            if k.EnumType == Enum.KeyCode then
+                return {kind = "KeyCode", value = k.Name}
+            elseif k.EnumType == Enum.UserInputType then
+                return {kind = "UserInputType", value = k.Name}
+            end
+        end
+        return nil
+    end
+
+    local function deserializeKeybind(data)
+        if type(data) ~= "table" then return data end
+        if data.kind == "string" then return data.value end
+        if data.kind == "KeyCode" then
+            local ok, kc = pcall(function() return Enum.KeyCode[data.value] end)
+            return ok and kc or nil
+        end
+        if data.kind == "UserInputType" then
+            local ok, uit = pcall(function() return Enum.UserInputType[data.value] end)
+            return ok and uit or nil
+        end
+        return nil
+    end
+
     function ConfigSystem.Serialize()
         return {
             Aimbot = {
                 Enabled = FeatureConfig.Aimbot.Enabled,
-                Keybind = FeatureConfig.Aimbot.Keybind,
+                Keybind = serializeKeybind(FeatureConfig.Aimbot.Keybind),
                 Hitpart = FeatureConfig.Aimbot.Hitpart,
                 AirHitpart = FeatureConfig.Aimbot.AirHitpart,
                 Smoothness = FeatureConfig.Aimbot.Smoothness,
@@ -23,7 +51,9 @@ return function(Context)
                 MaxDistance = FeatureConfig.Aimbot.MaxDistance,
                 ShakeIntensity = FeatureConfig.Aimbot.ShakeIntensity,
                 LockNPC = FeatureConfig.Aimbot.LockNPC,
-                Performance = table.clone(FeatureConfig.Performance),
+                UnlockOnDeath = FeatureConfig.Aimbot.UnlockOnDeath,
+                BreakOnPull = FeatureConfig.Aimbot.BreakOnPull,
+                MaxLockRadius = FeatureConfig.Aimbot.MaxLockRadius,
                 Triggerbot = table.clone(FeatureConfig.Aimbot.Triggerbot),
                 FOV = table.clone(FeatureConfig.Aimbot.FOV)
             },
@@ -62,6 +92,7 @@ return function(Context)
                 SpeedLines = FeatureConfig.Extras.SpeedLines,
                 Wallbang = FeatureConfig.Extras.Wallbang
             },
+            Performance = table.clone(FeatureConfig.Performance),
             Game = {
                 DoorPhase = FeatureConfig.Game.DoorPhase,
                 DoorGlow = FeatureConfig.Game.DoorGlow,
@@ -81,7 +112,9 @@ return function(Context)
         if type(data) ~= "table" then return end
         if type(data.Aimbot) == "table" then
             for k, v in pairs(data.Aimbot) do
-                if (k == "Prediction" or k == "FOV" or k == "Triggerbot") and type(v) == "table" then
+                if k == "Keybind" then
+                    FeatureConfig.Aimbot.Keybind = deserializeKeybind(v) or FeatureConfig.Aimbot.Keybind
+                elseif (k == "Prediction" or k == "FOV" or k == "Triggerbot") and type(v) == "table" then
                     for k2, v2 in pairs(v) do FeatureConfig.Aimbot[k][k2] = v2 end
                 else
                     FeatureConfig.Aimbot[k] = v
@@ -104,9 +137,6 @@ return function(Context)
                     FeatureConfig.Chams[k] = v
                 end
             end
-        end
-        if type(data.Performance) == "table" then
-            for k, v in pairs(data.Performance) do FeatureConfig.Performance[k] = v end
         end
         if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then
             FeatureConfig.Camera.FOV = data.Camera.FOV
@@ -132,6 +162,9 @@ return function(Context)
             end
             if data.Extras.SpeedLines ~= nil then FeatureConfig.Extras.SpeedLines = data.Extras.SpeedLines end
             if data.Extras.Wallbang ~= nil then FeatureConfig.Extras.Wallbang = data.Extras.Wallbang end
+        end
+        if type(data.Performance) == "table" then
+            for k, v in pairs(data.Performance) do FeatureConfig.Performance[k] = v end
         end
         if type(data.Game) == "table" then
             for k, v in pairs(data.Game) do
@@ -174,22 +207,21 @@ return function(Context)
         set("Aimbot_Keybind", FeatureConfig.Aimbot.Keybind)
         set("Aimbot_LockMode", FeatureConfig.Aimbot.LockMode)
         set("Aimbot_Hitpart", FeatureConfig.Aimbot.Hitpart)
-        set("Aimbot_AirHitpart", FeatureConfig.Aimbot.AirHitpart)
-        set("Aimbot_Smoothness", math.floor(FeatureConfig.Aimbot.Smoothness * 10))
+        set("Aimbot_Smoothness", FeatureConfig.Aimbot.Smoothness)
         set("Aimbot_ShakeIntensity", FeatureConfig.Aimbot.ShakeIntensity)
         set("Aimbot_TeamCheck", FeatureConfig.Aimbot.TeamCheck)
         set("Aimbot_VisCheck", FeatureConfig.Aimbot.VisCheck)
-        set("Aimbot_LockNPC", FeatureConfig.Aimbot.LockNPC)
+        set("Aimbot_UnlockOnDeath", FeatureConfig.Aimbot.UnlockOnDeath)
+        set("Aimbot_BreakOnPull", FeatureConfig.Aimbot.BreakOnPull)
+        set("Aimbot_MaxLockRadius", FeatureConfig.Aimbot.MaxLockRadius)
         set("Aimbot_MaxDistance", FeatureConfig.Aimbot.MaxDistance)
         set("Aimbot_FOV_Show", FeatureConfig.Aimbot.FOV.Show)
         set("Aimbot_FOV_Filled", FeatureConfig.Aimbot.FOV.Filled)
         set("Aimbot_FOV_Rainbow", FeatureConfig.Aimbot.FOV.Rainbow)
-        set("Aimbot_FOV_Pulse", FeatureConfig.Aimbot.FOV.Pulse)
         set("Aimbot_FOV_Size", FeatureConfig.Aimbot.FOV.Size)
         set("Aimbot_FOV_Thickness", FeatureConfig.Aimbot.FOV.Thickness)
-        set("Aimbot_FOV_Sides", FeatureConfig.Aimbot.FOV.Sides)
-        set("Aimbot_Prediction_Horizontal", math.floor(FeatureConfig.Aimbot.Prediction.Horizontal * 200))
-        set("Aimbot_Prediction_Vertical", math.floor(FeatureConfig.Aimbot.Prediction.Vertical * 200))
+        set("Aimbot_Prediction_Horizontal", math.floor((FeatureConfig.Aimbot.Prediction.Horizontal or 0) * 200))
+        set("Aimbot_Prediction_Vertical", math.floor((FeatureConfig.Aimbot.Prediction.Vertical or 0) * 200))
         set("Aimbot_Triggerbot_Enabled", FeatureConfig.Aimbot.Triggerbot.Enabled)
         set("Aimbot_Triggerbot_Delay", math.floor(FeatureConfig.Aimbot.Triggerbot.Delay * 100))
 
@@ -234,6 +266,13 @@ return function(Context)
         set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
         set("Visuals_Fullbright", FeatureConfig.Visuals.Fullbright)
 
+        set("Perf_NoTextures", FeatureConfig.Performance.NoTextures)
+        set("Perf_LowMaterials", FeatureConfig.Performance.LowMaterials)
+        set("Perf_OptimizeTerrain", FeatureConfig.Performance.OptimizeTerrain)
+        set("Perf_NoPostProcessing", FeatureConfig.Performance.NoPostProcessing)
+        set("Perf_NoShadows", FeatureConfig.Performance.NoShadows)
+        set("Perf_NoParticles", FeatureConfig.Performance.NoParticles)
+
         set("Game_DoorPhase", FeatureConfig.Game.DoorPhase)
         set("Game_DoorGlow", FeatureConfig.Game.DoorGlow)
         set("Game_PhaseTransparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100))
@@ -242,13 +281,6 @@ return function(Context)
         set("Game_FastFire", FeatureConfig.Game.FastFire)
         set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
         set("Game_ForceRange", FeatureConfig.Game.ForceRange)
-
-        set("Perf_NoTextures", FeatureConfig.Performance.NoTextures)
-        set("Perf_LowMaterials", FeatureConfig.Performance.LowMaterials)
-        set("Perf_OptimizeTerrain", FeatureConfig.Performance.OptimizeTerrain)
-        set("Perf_NoPostProcessing", FeatureConfig.Performance.NoPostProcessing)
-        set("Perf_NoShadows", FeatureConfig.Performance.NoShadows)
-        set("Perf_NoParticles", FeatureConfig.Performance.NoParticles)
     end
 
     function ConfigSystem.Load(name)
