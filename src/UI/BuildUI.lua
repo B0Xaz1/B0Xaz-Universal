@@ -652,7 +652,6 @@ return function(Context)
 		if PlayersSystem then PlayersSystem.StopFling() end
 	end, 3)
 
-	-- FIXED: Changed SetText(...) to .Text = ...
 	local statusMonitorThread = task.spawn(function()
 		while UI and UI.Main and UI.Main.Parent do
 			if PlayersSystem then
@@ -824,7 +823,7 @@ return function(Context)
 			end
 
 			local decodeOk, serverData = pcall(function()
-				return HttpService:JSONDecode(rawResponse)
+				return HttpService:JSONEncode(rawResponse)
 			end)
 			if not decodeOk or not serverData or not serverData.data then
 				safeNotify("Server Hop", "Invalid response from server api", nil, Theme.Danger)
