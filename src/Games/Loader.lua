@@ -1,22 +1,50 @@
--- src/Games/Loader.lua
+local SETTINGS = {
+	PATHS = {
+		REGISTRY = "src/Games/Registry.lua",
+		MODULE_INIT = "src/Games/%s/init.lua",
+		MODULE_SINGLE = "src/Games/%s.lua",
+	},
+	FALLBACK_NAME_FORMAT = "Universal (%s)",
+	ERRORS = {
+		IMPORT_UNAVAILABLE = "Import function unavailable",
+		REGISTRY_UNAVAILABLE = "Game registry unavailable",
+		BUILD_UI_MISSING = "Module missing or no BuildUI function",
+	},
+}
+
 return function(Context, import)
-	local Registry = import("src/Games/Registry.lua")()
 	local placeId = tostring(game.PlaceId)
+	local universeId = tostring(game.GameId)
+
+	local registry = {}
+	if type(import) == "function" then
+		local success, regResult = pcall(import, SETTINGS.PATHS.REGISTRY)
+		if success and type(regResult) == "function" then
+			local callSuccess, callResult = pcall(regResult)
+			if callSuccess and type(callResult) == "table" then
+				registry = callResult
+			end
+		elseif success and type(regResult) == "table" then
+			registry = regResult
+		end
+	end
+
+	local gameInfo = registry[placeId]
 
 	local GameLoader = {
 		PlaceId = placeId,
-		UniverseId = tostring(game.GameId),
-		Info = Registry[placeId],
+		UniverseId = universeId,
+		Info = gameInfo,
 		Module = nil,
 		LoadError = nil,
-		Supported = Registry[placeId] ~= nil,
+		Supported = gameInfo ~= nil,
 	}
 
 	function GameLoader.GetDisplayName()
-		if GameLoader.Info then
+		if GameLoader.Info and GameLoader.Info.Name then
 			return GameLoader.Info.Name
 		end
-		return "Universal (" .. placeId .. ")"
+		return string.format(SETTINGS.FALLBACK_NAME_FORMAT, placeId)
 	end
 
 	function GameLoader.IsSupported()
@@ -25,10 +53,18 @@ return function(Context, import)
 
 	function GameLoader.ListSupported()
 		local list = {}
-		for id, info in pairs(Registry) do
-			table.insert(list, { PlaceId = id, Name = info.Name, Description = info.Description or "" })
+		for id, info in pairs(registry) do
+			if type(info) == "table" then
+				table.insert(list, {
+					PlaceId = tostring(id),
+					Name = info.Name or tostring(id),
+					Description = info.Description or "",
+				})
+			end
 		end
-		table.sort(list, function(a, b) return a.Name < b.Name end)
+		table.sort(list, function(a, b)
+			return a.Name < b.Name
+		end)
 		return list
 	end
 
@@ -36,55 +72,64 @@ return function(Context, import)
 		if not GameLoader.Supported then
 			return nil
 		end
+		if GameLoader.Module then
+			return GameLoader.Module
+		end
+		if type(import) ~= "function" then
+			GameLoader.LoadError = SETTINGS.ERRORS.IMPORT_UNAVAILABLE
+			return nil
+		end
 
 		local targetName = GameLoader.Info.Folder or placeId
 		local pathsToTry = {
-			"src/Games/" .. targetName .. "/init.lua",
-			"src/Games/" .. targetName .. ".lua",
+			string.format(SETTINGS.PATHS.MODULE_INIT, targetName),
+			string.format(SETTINGS.PATHS.MODULE_SINGLE, targetName),
 		}
 
 		local lastErr = ""
 		for _, path in ipairs(pathsToTry) do
-			local ok, res = pcall(function()
-				local factory = import(path)
+			local success, factory = pcall(import, path)
+			if success then
+				local resolvedModule = factory
 				if type(factory) == "function" then
-					return factory(Context)
+					local runSuccess, runResult = pcall(factory, Context)
+					if runSuccess then
+						resolvedModule = runResult
+					else
+						lastErr = tostring(runResult)
+						resolvedModule = nil
+					end
 				end
-				return factory
-			end)
 
-			if ok and type(res) == "table" then
-				GameLoader.Module = res
-				GameLoader.LoadError = nil
-				return res
+				if type(resolvedModule) == "table" then
+					GameLoader.Module = resolvedModule
+					GameLoader.LoadError = nil
+					return resolvedModule
+				end
 			else
-				lastErr = tostring(res)
+				lastErr = tostring(factory)
 			end
 		end
 
-		GameLoader.LoadError = lastErr
-		warn("[B0Xaz GameLoader] Error loading module for " .. placeId .. ": " .. lastErr)
+		GameLoader.LoadError = lastErr ~= "" and lastErr or SETTINGS.ERRORS.REGISTRY_UNAVAILABLE
 		GameLoader.Module = nil
 		return nil
 	end
 
 	function GameLoader.BuildUI(tab)
 		if GameLoader.Module and type(GameLoader.Module.BuildUI) == "function" then
-			local ok, err = pcall(function()
-				GameLoader.Module.BuildUI(tab)
-			end)
-			if not ok then
-				warn("[B0Xaz GameLoader] Error building game UI: " .. tostring(err))
+			local success, err = pcall(GameLoader.Module.BuildUI, tab)
+			if not success then
 				return false, tostring(err)
 			end
 			return true
 		end
-		return false, GameLoader.LoadError or "Module missing or no BuildUI function"
+		return false, GameLoader.LoadError or SETTINGS.ERRORS.BUILD_UI_MISSING
 	end
 
 	function GameLoader.Update(dt)
 		if GameLoader.Module and type(GameLoader.Module.Update) == "function" then
-			pcall(function() GameLoader.Module.Update(dt) end)
+			pcall(GameLoader.Module.Update, dt)
 		end
 	end
 
@@ -93,6 +138,7 @@ return function(Context, import)
 			pcall(GameLoader.Module.Destroy)
 		end
 		GameLoader.Module = nil
+		GameLoader.LoadError = nil
 	end
 
 	return GameLoader
