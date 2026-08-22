@@ -209,6 +209,147 @@ return function(Context)
 		FeatureConfig.Chams.OutlineColor = c
 	end)
 
+		----------------------------------------------------------------
+	-- TAB: Players
+	----------------------------------------------------------------
+	local playersTab = UI:AddTab("Players")
+	local PlayersSystem = Context.PlayersSystem
+
+	local plSelectSec = playersTab:AddSection("Player Selection")
+	local plActionsSec = playersTab:AddSection("Actions")
+	local plStatusSec = playersTab:AddSection("Active States")
+
+	local selectedName = nil
+	local playerDropdown
+
+	local function refreshList()
+		local list = Utils.GetPlayerNameList(true)
+		if #list == 0 then list = {"None"} end
+		if playerDropdown then playerDropdown.Refresh(list, true) end
+	end
+
+	playerDropdown = plSelectSec:AddDropdown("Select Player", Utils.GetPlayerNameList(true), function(v)
+		if v == "None" or v == "" then
+			selectedName = nil
+		else
+			selectedName = v
+		end
+	end)
+
+	plSelectSec:AddButton("Refresh Player List", function()
+		refreshList()
+		UI:Notify("Players", "List refreshed", nil, Theme.Accent)
+	end)
+
+	Connections.Add(Players.PlayerAdded:Connect(function(p)
+		task.wait(0.5)
+		refreshList()
+	end))
+	Connections.Add(Players.PlayerRemoving:Connect(function(p)
+		task.wait(0.2)
+		refreshList()
+	end))
+
+	----------------------------------------------------------------
+	-- Actions
+	----------------------------------------------------------------
+	local spectateStatusLabel
+	local flingStatusLabel
+
+	plActionsSec:AddButton("Teleport to Player", function()
+		if not selectedName then
+			UI:Notify("Players", "Select a player first", nil, Theme.Danger)
+			return
+		end
+		local ok, err = PlayersSystem.TeleportTo(selectedName)
+		if ok then
+			UI:Notify("Players", "Teleported to " .. selectedName, nil, Theme.Success)
+		else
+			UI:Notify("Players", err or "Failed", nil, Theme.Danger)
+		end
+	end)
+
+	plActionsSec:AddButton("Spectate Player", function()
+		if not selectedName then
+			UI:Notify("Players", "Select a player first", nil, Theme.Danger)
+			return
+		end
+		local ok, err = PlayersSystem.StartSpectate(selectedName)
+		if ok then
+			UI:Notify("Players", "Spectating " .. selectedName, nil, Theme.Success)
+		else
+			UI:Notify("Players", err or "Failed", nil, Theme.Danger)
+		end
+	end)
+
+	plActionsSec:AddButton("Stop Spectating", function()
+		PlayersSystem.StopSpectate()
+		UI:Notify("Players", "Stopped spectating", nil, Theme.Accent)
+	end)
+
+	plActionsSec:AddButton("Fling Player", function()
+		if not selectedName then
+			UI:Notify("Players", "Select a player first", nil, Theme.Danger)
+			return
+		end
+		local ok, err = PlayersSystem.StartFling(selectedName)
+		if ok then
+			UI:Notify("Players", "Flinging " .. selectedName, nil, Theme.Warning)
+		else
+			UI:Notify("Players", err or "Failed", nil, Theme.Danger)
+		end
+	end)
+
+	plActionsSec:AddButton("Stop Fling", function()
+		PlayersSystem.StopFling()
+		UI:Notify("Players", "Stopped flinging", nil, Theme.Accent)
+	end)
+
+	plActionsSec:AddButton("Copy Player Name", function()
+		if not selectedName then
+			UI:Notify("Players", "Select a player first", nil, Theme.Danger)
+			return
+		end
+		pcall(function() setclipboard(selectedName) end)
+		UI:Notify("Players", "Copied: " .. selectedName, nil, Theme.Accent)
+	end)
+
+	----------------------------------------------------------------
+	-- Active States display via labels using AddButton (label-style)
+	----------------------------------------------------------------
+	spectateStatusLabel = plStatusSec:AddButton("Spectating: None", function()
+		PlayersSystem.StopSpectate()
+	end)
+
+	flingStatusLabel = plStatusSec:AddButton("Flinging: None", function()
+		PlayersSystem.StopFling()
+	end)
+
+	-- Live status updater
+	task.spawn(function()
+		while UI and UI.Main and UI.Main.Parent do
+			local spec = PlayersSystem.GetSpectating()
+			local fling = PlayersSystem.GetFlingTarget()
+
+			local specText = "Spectating: " .. (spec and spec.Name or "None") .. " (click to stop)"
+			local flingText = "Flinging: " .. (fling and fling.Name or "None") .. " (click to stop)"
+
+			-- Since AddButton doesn't return text handles by default, we walk the section to find our buttons
+			if plStatusSec and plStatusSec.Frame then
+				for _, elem in ipairs(plStatusSec.Frame:GetDescendants()) do
+					if elem:IsA("TextButton") then
+						if elem.Text:find("Spectating:") then
+							elem.Text = specText
+						elseif elem.Text:find("Flinging:") then
+							elem.Text = flingText
+						end
+					end
+				end
+			end
+			task.wait(0.5)
+		end
+	end)
+
 	----------------------------------------------------------------
 	-- TAB: Movement
 	----------------------------------------------------------------
