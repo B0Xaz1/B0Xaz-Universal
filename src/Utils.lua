@@ -3,7 +3,6 @@ local SETTINGS = {
 		DEFAULT_CONFIG_NAME_MAX_LEN = 40,
 		MIN_RAYCAST_MAGNITUDE = 0.1,
 		DEFAULT_WAIT_TIMEOUT = 10,
-		MAX_PLAYER_SEARCH_DEPTH = 200,
 	},
 	PATTERNS = {
 		FILENAME_SANITIZE = "[/\\%.:%*%?<>|%c\"]",
@@ -12,9 +11,6 @@ local SETTINGS = {
 	TEMPLATES = {
 		TELEPORT_URL = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\npcall(function() loadstring(game:HttpGet(\"%s\"))() end)",
 		TELEPORT_FILE = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\nif isfile and isfile(\"B0XazUniversal/AutoRun.lua\") then\n\tpcall(function() loadstring(readfile(\"B0XazUniversal/AutoRun.lua\"))() end)\nend",
-	},
-	DEFAULTS = {
-		COLOR_TABLE = { r = 1, g = 1, b = 1 },
 	},
 }
 
@@ -29,10 +25,6 @@ return function(CONFIG)
 	local function getCamera()
 		return Workspace.CurrentCamera
 	end
-
-	local cachedRaycastParams = RaycastParams.new()
-	cachedRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	cachedRaycastParams.IgnoreWater = true
 
 	local Utils = {}
 
@@ -120,15 +112,17 @@ return function(CONFIG)
 			return true
 		end
 
+		local params = RaycastParams.new()
 		local filterList = { camera }
-		local character = LocalPlayer and LocalPlayer.Character
-		if character then
-			table.insert(filterList, character)
+		if LocalPlayer and LocalPlayer.Character then
+			table.insert(filterList, LocalPlayer.Character)
 		end
-		cachedRaycastParams.FilterDescendantsInstances = filterList
+		params.FilterDescendantsInstances = filterList
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.IgnoreWater = true
 
 		local success, result = pcall(function()
-			return Workspace:Raycast(origin, direction, cachedRaycastParams)
+			return Workspace:Raycast(origin, direction, params)
 		end)
 
 		if not success then return false end
@@ -148,9 +142,8 @@ return function(CONFIG)
 	end
 
 	function Utils.GetPlayerNameList(excludeLocal)
-		local players = Players:GetPlayers()
-		local list = table.create(#players)
-		for _, player in ipairs(players) do
+		local list = {}
+		for _, player in ipairs(Players:GetPlayers()) do
 			if not excludeLocal or player ~= LocalPlayer then
 				table.insert(list, player.Name)
 			end
@@ -203,7 +196,7 @@ return function(CONFIG)
 
 	function Utils.ColorToTable(color)
 		if typeof(color) ~= "Color3" then
-			return SETTINGS.DEFAULTS.COLOR_TABLE
+			return { r = 1, g = 1, b = 1 }
 		end
 		return { r = color.R, g = color.G, b = color.B }
 	end
