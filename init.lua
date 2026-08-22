@@ -32,9 +32,8 @@ local SETTINGS = {
 print("[B0Xaz] Initializing Universal Suite...")
 
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-
 local LocalPlayer = Players.LocalPlayer
+
 if not LocalPlayer then
 	local startTime = os.clock()
 	while not Players.LocalPlayer and (os.clock() - startTime) < SETTINGS.DEFAULTS.LOAD_TIMEOUT do
@@ -50,16 +49,39 @@ if not game:IsLoaded() then
 end
 
 local globalEnv = getgenv and getgenv() or _G
+globalEnv.B0XazModules = globalEnv.B0XazModules or {}
 local moduleCache = {}
 
+local function isValidSource(code)
+	if type(code) ~= "string" or #code == 0 then
+		return false
+	end
+	local trimmed = code:match("^%s*(.-)%s*$")
+	if not trimmed then return false end
+	if trimmed:sub(1, 3) == "404" or trimmed:find("<!DOCTYPE") or trimmed:find("<html") or trimmed == "404: Not Found" then
+		return false
+	end
+	return true
+end
+
 local function fetchSource(path)
+	-- 1. Check in-memory virtual filesystem registry
+	if globalEnv.B0XazModules[path] and isValidSource(globalEnv.B0XazModules[path]) then
+		return globalEnv.B0XazModules[path]
+	end
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	if globalEnv.B0XazModules[cleanPath] and isValidSource(globalEnv.B0XazModules[cleanPath]) then
+		return globalEnv.B0XazModules[cleanPath]
+	end
+
+	-- 2. Check local executor workspace directories
 	local pathVariants = {
 		path,
-		path:gsub("^src/", ""),
-		"./" .. path,
-		"src/" .. path,
-		"B0XazUniversal/" .. path,
-		"B0XazUniversal/src/" .. path:gsub("^src/", ""),
+		cleanPath,
+		"./" .. cleanPath,
+		"src/" .. cleanPath:gsub("^src/", ""),
+		"B0XazUniversal/" .. cleanPath,
+		"B0XazUniversal/src/" .. cleanPath:gsub("^src/", ""),
 	}
 
 	if readfile and isfile then
@@ -67,23 +89,23 @@ local function fetchSource(path)
 			local isExistSuccess, isExist = pcall(isfile, variant)
 			if isExistSuccess and isExist then
 				local readSuccess, content = pcall(readfile, variant)
-				if readSuccess and content and #content > 0 then
+				if readSuccess and isValidSource(content) then
 					return content
 				end
 			end
 		end
 	end
 
+	-- 3. Fallback to remote HTTP download
 	local httpGet = game.HttpGet
 	if httpGet then
 		local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
-		local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
 		local fullUrl = baseUrl .. cleanPath
 		for _ = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
 			local success, response = pcall(function()
 				return game:HttpGet(fullUrl)
 			end)
-			if success and response and #response > 0 then
+			if success and isValidSource(response) then
 				return response
 			end
 			task.wait(0.2)
@@ -100,7 +122,7 @@ local function import(path)
 
 	local sourceCode = fetchSource(path)
 	if not sourceCode then
-		warn("[B0Xaz] Module source not found: " .. tostring(path))
+		warn("[B0Xaz] Module source missing or unreachable: " .. tostring(path))
 		moduleCache[path] = false
 		return nil
 	end
