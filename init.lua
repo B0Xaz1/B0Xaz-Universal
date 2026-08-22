@@ -117,6 +117,80 @@ local FALLBACK_MODULES = {
 			return ConfigSystem
 		end
 	end,
+	["src/Games/Registry.lua"] = function()
+		return function()
+			return {
+				["155615604"] = {
+					Name = "Prison Life",
+					Folder = "155615604",
+					Description = "Prison Life automated door phasing and weapon mods",
+				},
+			}
+		end
+	end,
+	["src/Games/Loader.lua"] = function()
+		return function(Context, import)
+			local placeId = tostring(game.PlaceId)
+			local GameLoader = {
+				PlaceId = placeId,
+				Info = { Name = "Prison Life", Folder = "155615604" },
+				Module = nil,
+				LoadError = nil,
+				Supported = true,
+			}
+
+			function GameLoader.GetDisplayName()
+				return "Prison Life"
+			end
+
+			function GameLoader.IsSupported()
+				return true
+			end
+
+			function GameLoader.Load()
+				if GameLoader.Module then return GameLoader.Module end
+				if type(import) == "function" then
+					local success, factory = pcall(import, "src/Games/155615604.lua", true)
+					if success and factory then
+						local res = factory
+						if type(factory) == "function" then
+							local rOk, rVal = pcall(factory, Context)
+							if rOk then res = rVal end
+						end
+						if type(res) == "table" then
+							GameLoader.Module = res
+							return res
+						end
+					end
+				end
+				return nil
+			end
+
+			function GameLoader.BuildUI(tab)
+				local mod = GameLoader.Load()
+				if mod and type(mod.BuildUI) == "function" then
+					pcall(mod.BuildUI, tab)
+					return true
+				end
+				return false, "Failed to load Prison Life module"
+			end
+
+			function GameLoader.Update(dt)
+				if GameLoader.Module and type(GameLoader.Module.Update) == "function" then
+					pcall(GameLoader.Module.Update, dt)
+				end
+			end
+
+			function GameLoader.Destroy()
+				if GameLoader.Module and type(GameLoader.Module.Destroy) == "function" then
+					pcall(GameLoader.Module.Destroy)
+				end
+				GameLoader.Module = nil
+			end
+
+			return GameLoader
+		end
+	end,
 }
 
 local function isValidSource(code)
@@ -169,11 +243,11 @@ local function import(path, isOptional)
 	
 	local sourceCode = fetchSource(path)
 	
-	-- If remote fetch fails, check embedded fallback
+	-- Fall back to embedded module if network fetch misses
 	if not sourceCode and FALLBACK_MODULES[path] then
 		local fallbackFactory = FALLBACK_MODULES[path]()
 		moduleCache[path] = fallbackFactory
-		print("[B0Xaz] Loaded module: " .. path)
+		print("[B0Xaz] Loaded module (In-Memory Fallback): " .. path)
 		return fallbackFactory
 	end
 
@@ -208,10 +282,11 @@ local function import(path, isOptional)
 	return moduleResult
 end
 
--- Core Setup
+-- Core Cleanup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
+-- Core Configuration
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
@@ -259,7 +334,14 @@ context.MovementSystem = safeInit(import(SETTINGS.PATHS.MOVEMENT_SYSTEM))
 context.PerformanceSystem = safeInit(import(SETTINGS.PATHS.PERFORMANCE_SYSTEM))
 context.PlayersSystem = safeInit(import(SETTINGS.PATHS.PLAYERS_SYSTEM))
 context.OverlayManager = safeInit(import(SETTINGS.PATHS.OVERLAY_MANAGER))
-context.GameLoader = type(import(SETTINGS.PATHS.GAME_LOADER)) == "function" and import(SETTINGS.PATHS.GAME_LOADER)(context, import) or {}
+
+local loaderFactory = import(SETTINGS.PATHS.GAME_LOADER)
+if type(loaderFactory) == "function" then
+	local success, res = pcall(loaderFactory, context, import)
+	if success and type(res) == "table" then
+		context.GameLoader = res
+	end
+end
 
 globalEnv.B0XazContext = context
 
