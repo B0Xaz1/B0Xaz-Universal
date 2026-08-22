@@ -110,6 +110,7 @@ return function(Context)
                 },
                 SpeedLines = FeatureConfig.Extras.SpeedLines,
                 Wallbang = FeatureConfig.Extras.Wallbang
+                StretchRes = FeatureConfig.Extras.StretchRes and table.clone(FeatureConfig.Extras.StretchRes) or { Enabled = false, X = 1.333, Y = 1.0 },
             },
             Performance = table.clone(FeatureConfig.Performance),
             Game = {
@@ -178,6 +179,12 @@ return function(Context)
             end
             if type(data.Extras.SpinBot) == "table" then
                 for k, v in pairs(data.Extras.SpinBot) do FeatureConfig.Extras.SpinBot[k] = v end
+            end
+            if type(data.Extras.StretchRes) == "table" then
+                FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or { Enabled = false, X = 1.333, Y = 1.0 }
+                for k, v in pairs(data.Extras.StretchRes) do
+                    FeatureConfig.Extras.StretchRes[k] = v
+                end
             end
             if type(data.Extras.Crosshair) == "table" then
                 for k, v in pairs(data.Extras.Crosshair) do
@@ -298,6 +305,10 @@ return function(Context)
         set("Extras_Crosshair_Gap", FeatureConfig.Extras.Crosshair.Gap)
         set("Extras_Crosshair_Thickness", FeatureConfig.Extras.Crosshair.Thickness)
         set("Extras_Crosshair_Color", FeatureConfig.Extras.Crosshair.Color)
+        local sr = FeatureConfig.Extras.StretchRes or {}
+        set("Extras_StretchRes_Enabled", sr.Enabled == true)
+        set("Extras_StretchRes_X", math.floor((sr.X or 1.333) * 100))
+        set("Extras_StretchRes_Y", math.floor((sr.Y or 1.0) * 100))
         set("Extras_SpeedLines", FeatureConfig.Extras.SpeedLines)
         set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
         set("Visuals_Fullbright", FeatureConfig.Visuals.Fullbright)
