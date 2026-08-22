@@ -28,6 +28,7 @@ local function import(path)
 	return chunk()
 end
 
+Context.import = import
 print("[B0Xaz] Loading modules...")
 
 import("src/Cleanup.lua")()
@@ -48,8 +49,8 @@ local activeTheme, themeMgr = import("src/UI/Theme.lua")()
 Context.Theme = activeTheme
 Context.ThemeManager = themeMgr
 
--- Key system BEFORE UI
-Context.KeySystem = import("src/Systems/KeySystem.lua")(Context)
+-- Key system BEFORE UI (passed import function)
+Context.KeySystem = import("src/Systems/KeySystem.lua")(Context, import)
 print("[B0Xaz] KeySystem loaded")
 
 Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
@@ -59,9 +60,6 @@ end
 if type(Context.UIEngine.CreateKeyPrompt) ~= "function" then
 	error("[B0Xaz Loader] UI.lua is missing CreateKeyPrompt — push latest UI.lua to GitHub")
 end
-
-Context.KeySystem = import("src/Systems/KeySystem.lua")(Context)
-Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
 
 local function BootScript()
 	print("[B0Xaz] Booting tier:", Context.KeySystem.CurrentTier, Context.KeySystem.GetTierName())
@@ -79,7 +77,6 @@ local function BootScript()
 	Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
 	Context.GameModule = Context.GameLoader.Load()
 
-	-- BuildUI MUST call UIEngine.new internally
 	import("src/UI/BuildUI.lua")(Context)
 
 	if not Context.UI then
