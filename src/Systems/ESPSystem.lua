@@ -1,4 +1,3 @@
--- src/Systems/ESPSystem.lua
 return function(Context)
     local Players = game:GetService("Players")
     local Workspace = game:GetService("Workspace")
@@ -11,83 +10,17 @@ return function(Context)
     local DrawingManager = Context.DrawingManager
     local Connections = Context.Connections
 
-    -- Always start from a clean global table for this session
     local DrawingESP = {}
     getgenv().B0XazDrawingESP = DrawingESP
 
     local Highlights = {}
     getgenv().B0XazHighlights = Highlights
 
-    local CharacterCache = {}
     local ESPSystem = {}
     local SessionId = getgenv().B0XazSessionId or 0
 
     local function isSessionAlive()
         return getgenv().B0XazSessionId == SessionId
-    end
-
-    local function cacheCharacterParts(player, char)
-        if not isSessionAlive() then return end
-        if not char then
-            CharacterCache[player] = nil
-            return
-        end
-
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        local head = char:FindFirstChild("Head")
-
-        if not hum or not root or not head then
-            CharacterCache[player] = nil
-            return
-        end
-
-        local isR15 = hum.RigType == Enum.HumanoidRigType.R15
-        local bones = {}
-
-        if isR15 then
-            local upperTorso = char:FindFirstChild("UpperTorso")
-            local lowerTorso = char:FindFirstChild("LowerTorso")
-            local leftUpperArm = char:FindFirstChild("LeftUpperArm")
-            local rightUpperArm = char:FindFirstChild("RightUpperArm")
-            local leftUpperLeg = char:FindFirstChild("LeftUpperLeg")
-            local rightUpperLeg = char:FindFirstChild("RightUpperLeg")
-
-            if upperTorso and lowerTorso then
-                table.insert(bones, {head, upperTorso})
-                table.insert(bones, {upperTorso, lowerTorso})
-                if leftUpperArm then table.insert(bones, {upperTorso, leftUpperArm}) end
-                if rightUpperArm then table.insert(bones, {upperTorso, rightUpperArm}) end
-                if leftUpperLeg then table.insert(bones, {lowerTorso, leftUpperLeg}) end
-                if rightUpperLeg then table.insert(bones, {lowerTorso, rightUpperLeg}) end
-            end
-        else
-            local torso = char:FindFirstChild("Torso")
-            local leftArm = char:FindFirstChild("Left Arm")
-            local rightArm = char:FindFirstChild("Right Arm")
-            local leftLeg = char:FindFirstChild("Left Leg")
-            local rightLeg = char:FindFirstChild("Right Leg")
-
-            if torso then
-                table.insert(bones, {head, torso})
-                if leftArm then table.insert(bones, {torso, leftArm}) end
-                if rightArm then table.insert(bones, {torso, rightArm}) end
-                if leftLeg then table.insert(bones, {torso, leftLeg}) end
-                if rightLeg then table.insert(bones, {torso, rightLeg}) end
-            end
-        end
-
-        CharacterCache[player] = {
-            Char = char,
-            Hum = hum,
-            Root = root,
-            Head = head,
-            Bones = bones
-        }
-    end
-
-    local function uncacheCharacter(player)
-        CharacterCache[player] = nil
     end
 
     local function destroyESPData(data)
@@ -111,7 +44,6 @@ return function(Context)
         if not isSessionAlive() then return end
         if player == LocalPlayer or not DrawingManager.Available then return end
 
-        -- If leftovers exist for this player, destroy first (re-exec / re-hook safe)
         if DrawingESP[player] then
             destroyESPData(DrawingESP[player])
             DrawingESP[player] = nil
@@ -145,20 +77,27 @@ return function(Context)
             DrawingESP[player] = nil
         end
         ESPSystem.RemoveHighlight(player)
-        uncacheCharacter(player)
     end
 
     function ESPSystem.AddHighlight(player)
         if not isSessionAlive() then return end
-        if Highlights[player] or not player.Character then return end
-        local h = Instance.new("Highlight")
-        h.Name = "B0XazChams"
-        h.Adornee = player.Character
-        h.FillColor = FeatureConfig.Chams.FillColor
-        h.OutlineColor = FeatureConfig.Chams.OutlineColor
-        h.FillTransparency = 0.5
-        h.Parent = player.Character
-        Highlights[player] = h
+        if Highlights[player] then return end
+        local char = player and player.Character
+        if not char or not char.Parent then return end
+
+        local ok, h = pcall(function()
+            local hl = Instance.new("Highlight")
+            hl.Name = "B0XazChams"
+            hl.Adornee = char
+            hl.FillColor = FeatureConfig.Chams.FillColor
+            hl.OutlineColor = FeatureConfig.Chams.OutlineColor
+            hl.FillTransparency = 0.5
+            hl.Parent = char
+            return hl
+        end)
+        if ok and h then
+            Highlights[player] = h
+        end
     end
 
     function ESPSystem.RemoveHighlight(player)
@@ -171,10 +110,10 @@ return function(Context)
     local function hidePlayerDrawings(d)
         if not d then return end
         pcall(function() if d.Box then d.Box.Visible = false end end)
-        pcall(function() if d.Name then d.Name.Visible = false; d.Name.Text = "" end end)
+        pcall(function() if d.Name then d.Name.Visible = false end end)
         pcall(function() if d.Health then d.Health.Visible = false end end)
         pcall(function() if d.HealthBG then d.HealthBG.Visible = false end end)
-        pcall(function() if d.Distance then d.Distance.Visible = false; d.Distance.Text = "" end end)
+        pcall(function() if d.Distance then d.Distance.Visible = false end end)
         pcall(function() if d.HeadDot then d.HeadDot.Visible = false end end)
         pcall(function() if d.LookLine then d.LookLine.Visible = false end end)
         pcall(function() if d.Tracer then d.Tracer.Visible = false end end)
@@ -185,16 +124,52 @@ return function(Context)
         end
     end
 
+    local function getBones(char, hum)
+        local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+        local bones = {}
+        local head = char:FindFirstChild("Head")
+        if not head then return bones end
+
+        if isR15 then
+            local ut = char:FindFirstChild("UpperTorso")
+            local lt = char:FindFirstChild("LowerTorso")
+            if ut and lt then
+                table.insert(bones, {head, ut})
+                table.insert(bones, {ut, lt})
+                local lua = char:FindFirstChild("LeftUpperArm")
+                local rua = char:FindFirstChild("RightUpperArm")
+                local lul = char:FindFirstChild("LeftUpperLeg")
+                local rul = char:FindFirstChild("RightUpperLeg")
+                if lua then table.insert(bones, {ut, lua}) end
+                if rua then table.insert(bones, {ut, rua}) end
+                if lul then table.insert(bones, {lt, lul}) end
+                if rul then table.insert(bones, {lt, rul}) end
+            end
+        else
+            local torso = char:FindFirstChild("Torso")
+            if torso then
+                table.insert(bones, {head, torso})
+                local la = char:FindFirstChild("Left Arm")
+                local ra = char:FindFirstChild("Right Arm")
+                local ll = char:FindFirstChild("Left Leg")
+                local rl = char:FindFirstChild("Right Leg")
+                if la then table.insert(bones, {torso, la}) end
+                if ra then table.insert(bones, {torso, ra}) end
+                if ll then table.insert(bones, {torso, ll}) end
+                if rl then table.insert(bones, {torso, rl}) end
+            end
+        end
+        return bones
+    end
+
     local function hookPlayer(p)
         if not isSessionAlive() then return end
         if p == LocalPlayer then return end
         ESPSystem.CreatePlayerESP(p)
-        if p.Character then cacheCharacterParts(p, p.Character) end
 
         Connections.Add(p.CharacterAdded:Connect(function(c)
             if not isSessionAlive() then return end
-            task.wait(0.1)
-            cacheCharacterParts(p, c)
+            task.wait(0.2)
             if FeatureConfig.Chams.Enabled then
                 ESPSystem.RemoveHighlight(p)
                 ESPSystem.AddHighlight(p)
@@ -203,7 +178,6 @@ return function(Context)
 
         Connections.Add(p.CharacterRemoving:Connect(function()
             if not isSessionAlive() then return end
-            uncacheCharacter(p)
             ESPSystem.RemoveHighlight(p)
             if DrawingESP[p] then hidePlayerDrawings(DrawingESP[p]) end
         end))
@@ -214,17 +188,18 @@ return function(Context)
             ESPSystem.RemovePlayerESP(player)
         end
         table.clear(DrawingESP)
-        table.clear(CharacterCache)
+        for p, _ in pairs(Highlights) do
+            ESPSystem.RemoveHighlight(p)
+        end
         table.clear(Highlights)
     end
 
     function ESPSystem.InitializeAll()
         if not isSessionAlive() then return end
-        -- Wipe anything left before hooking
         ESPSystem.DestroyAll()
 
         for _, p in ipairs(Players:GetPlayers()) do
-            hookPlayer(p)
+            task.spawn(hookPlayer, p)
         end
         Connections.Add(Players.PlayerAdded:Connect(function(p)
             if not isSessionAlive() then return end
@@ -258,8 +233,8 @@ return function(Context)
             return
         end
 
-        local myRoot = Utils.GetRootPart()
-        local myPos = myRoot and myRoot.Position
+        local myAssets = Utils.GetPlayerAssets(LocalPlayer)
+        local myPos = myAssets and myAssets.RootPart.Position
         local espColor = espCfg.Color
         local maxDist = espCfg.MaxDist or 500
         local teamCheck = espCfg.TeamCheck
@@ -270,8 +245,8 @@ return function(Context)
         for player, data in pairs(DrawingESP) do
             if not isSessionAlive() then return end
 
-            local cached = CharacterCache[player]
-            if not cached or not cached.Root or not cached.Head or not cached.Hum or cached.Hum.Health <= 0 then
+            local assets = Utils.GetPlayerAssets(player)
+            if not assets then
                 hidePlayerDrawings(data)
                 continue
             end
@@ -282,7 +257,7 @@ return function(Context)
                 continue
             end
 
-            local rootPos = cached.Root.Position
+            local rootPos = assets.RootPart.Position
             local dist3D = myPos and (myPos - rootPos).Magnitude or 0
             if dist3D > maxDist then
                 hidePlayerDrawings(data)
@@ -291,7 +266,7 @@ return function(Context)
 
             if hasChams then
                 local h = Highlights[player]
-                if not h or h.Adornee ~= cached.Char then
+                if not h or not h.Parent or h.Adornee ~= assets.Character then
                     ESPSystem.RemoveHighlight(player)
                     ESPSystem.AddHighlight(player)
                 else
@@ -313,7 +288,7 @@ return function(Context)
                 continue
             end
 
-            local headPos = cached.Head.Position
+            local headPos = assets.Head.Position
             local headScreen = Camera:WorldToViewportPoint(headPos + Vector3.new(0, 0.5, 0))
             local feetScreen = Camera:WorldToViewportPoint(rootPos - Vector3.new(0, 3, 0))
 
@@ -339,11 +314,10 @@ return function(Context)
                 data.Name.Visible = true
             elseif data.Name then
                 data.Name.Visible = false
-                data.Name.Text = ""
             end
 
             if espCfg.Health and data.Health and data.HealthBG then
-                local hum = cached.Hum
+                local hum = assets.Humanoid
                 local ratio = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
                 local barX = rootScreenPos.X - halfW - 6
                 local barY = rootScreenPos.Y - height * 0.5
@@ -370,7 +344,6 @@ return function(Context)
                 data.Distance.Visible = true
             elseif data.Distance then
                 data.Distance.Visible = false
-                data.Distance.Text = ""
             end
 
             if espCfg.HeadDot and data.HeadDot then
@@ -382,7 +355,7 @@ return function(Context)
             end
 
             if espCfg.LookDir and data.LookLine then
-                local lookWorld = Camera:WorldToViewportPoint(headPos + cached.Head.CFrame.LookVector * 4.5)
+                local lookWorld = Camera:WorldToViewportPoint(headPos + assets.Head.CFrame.LookVector * 4.5)
                 data.LookLine.From = headScreenPos
                 data.LookLine.To = Vector2.new(lookWorld.X, lookWorld.Y)
                 data.LookLine.Color = espColor
@@ -401,12 +374,12 @@ return function(Context)
             end
 
             if espCfg.Skeleton and data.Skeleton then
-                local bones = cached.Bones
+                local bones = getBones(assets.Character, assets.Humanoid)
                 local skLines = data.Skeleton
                 for i = 1, #skLines do
                     local line = skLines[i]
                     local pair = bones[i]
-                    if pair and pair[1] and pair[2] then
+                    if pair and pair[1] and pair[2] and pair[1].Parent and pair[2].Parent then
                         local p1, on1 = Camera:WorldToViewportPoint(pair[1].Position)
                         local p2, on2 = Camera:WorldToViewportPoint(pair[2].Position)
                         if p1.Z > 0 and p2.Z > 0 and (on1 or on2) then
