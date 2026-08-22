@@ -1,3 +1,4 @@
+-- // src/UI/BuildUI.lua
 local SETTINGS = {
 	TITLE = "B0Xaz Universal",
 	DEFAULT_CONFIG_NAME = "Default",
@@ -651,16 +652,21 @@ return function(Context)
 		if PlayersSystem then PlayersSystem.StopFling() end
 	end, 3)
 
+	-- FIXED: Changed SetText(...) to .Text = ...
 	local statusMonitorThread = task.spawn(function()
 		while UI and UI.Main and UI.Main.Parent do
 			if PlayersSystem then
 				local spec = PlayersSystem.GetSpectating()
 				local fling = PlayersSystem.GetFlingTarget()
-				if spectateStatusBtn and spectateStatusBtn.SetText then
-					spectateStatusBtn.SetText("Spectating Target: " .. (spec and spec.Name or "None") .. " (click to stop)")
+				if spectateStatusBtn then
+					pcall(function()
+						spectateStatusBtn.Text = "Spectating Target: " .. (spec and spec.Name or "None") .. " (click to stop)"
+					end)
 				end
-				if flingStatusBtn and flingStatusBtn.SetText then
-					flingStatusBtn.SetText("Fling Target: " .. (fling and fling.Name or "None") .. " (click to stop)")
+				if flingStatusBtn then
+					pcall(function()
+						flingStatusBtn.Text = "Fling Target: " .. (fling and fling.Name or "None") .. " (click to stop)"
+					end)
 				end
 			end
 			task.wait(SETTINGS.LIMITS.STATUS_POLL_INTERVAL)
@@ -678,9 +684,9 @@ return function(Context)
 		safeSetClipboard(tostring(game.PlaceId))
 		safeNotify("Game", "PlaceId copied to clipboard", nil, Theme.Accent)
 	end)
-	infoSec:AddButton("Map Module: " .. (gameLoader and gameLoader.GetDisplayName() or "Universal"), function() end)
+	infoSec:AddButton("Map Module: " .. (gameLoader and gameLoader.GetDisplayName and gameLoader.GetDisplayName() or "Universal"), function() end)
 
-	if gameLoader and gameLoader.IsSupported() then
+	if gameLoader and gameLoader.IsSupported and gameLoader.IsSupported() then
 		local ok, err = gameLoader.BuildUI(gameTab)
 		if not ok then
 			local errSec = gameTab:AddSection("Module Load Exception")
