@@ -7,9 +7,9 @@ return function()
         ElemHover = Color3.fromRGB(42, 42, 50),
         Side = Color3.fromRGB(22, 22, 26),
 
-        Accent = Color3.fromRGB(0, 200, 220),
-        AccentDark = Color3.fromRGB(0, 140, 160),
-        AccentDim = Color3.fromRGB(0, 90, 105),
+        Accent = Color3.fromRGB(47, 105, 180),
+        AccentDark = Color3.fromRGB(47, 105, 220),
+        AccentDim = Color3.fromRGB(7, 105, 122),
 
         Text = Color3.fromRGB(225, 225, 230),
         TextDim = Color3.fromRGB(145, 145, 155),
