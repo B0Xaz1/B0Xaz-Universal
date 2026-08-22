@@ -53,24 +53,24 @@ globalEnv.B0XazModules = globalEnv.B0XazModules or {}
 local moduleCache = {}
 
 local function isValidSource(code)
-	if type(code) ~= "string" or #code == 0 then
+	if type(code) ~= "string" or #code < 10 then
 		return false
 	end
-	local trimmed = code:match("^%s*(.-)%s*$")
-	if not trimmed then return false end
-	if trimmed:sub(1, 3) == "404" or trimmed:find("<!DOCTYPE") or trimmed:find("<html") or trimmed == "404: Not Found" then
+	local lower = code:lower()
+	if lower:find("404") or lower:find("not found") or lower:find("<!doctype") or lower:find("<html") then
 		return false
 	end
 	return true
 end
 
 local function fetchSource(path)
-	-- 1. Check in-memory virtual filesystem registry
-	if globalEnv.B0XazModules[path] and isValidSource(globalEnv.B0XazModules[path]) then
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+
+	-- 1. Check in-memory virtual filesystem
+	if globalEnv.B0XazModules[path] then
 		return globalEnv.B0XazModules[path]
 	end
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	if globalEnv.B0XazModules[cleanPath] and isValidSource(globalEnv.B0XazModules[cleanPath]) then
+	if globalEnv.B0XazModules[cleanPath] then
 		return globalEnv.B0XazModules[cleanPath]
 	end
 
@@ -118,6 +118,21 @@ end
 local function import(path)
 	if moduleCache[path] ~= nil then
 		return moduleCache[path]
+	end
+
+	-- Check for pre-registered function factories in virtual module registry
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	local virtObj = globalEnv.B0XazModules[path] or globalEnv.B0XazModules[cleanPath]
+	if type(virtObj) == "function" then
+		local success, result = pcall(virtObj)
+		if success then
+			moduleCache[path] = result
+			return result
+		else
+			warn("[B0Xaz] Error executing virtual module " .. tostring(path) .. ": " .. tostring(result))
+			moduleCache[path] = false
+			return nil
+		end
 	end
 
 	local sourceCode = fetchSource(path)
