@@ -20,18 +20,15 @@ return function(Context)
     local CharacterCache = {}
     local ESPSystem = {}
 
-    ----------------------------------------------------------------
-    -- Character Rig Caching (Eliminates FindFirstChild per frame)
-    ----------------------------------------------------------------
     local function cacheCharacterParts(player, char)
         if not char then
             CharacterCache[player] = nil
             return
         end
 
-        local hum = char:WaitForChild("Humanoid", 2) or char:FindFirstChildOfClass("Humanoid")
-        local root = char:WaitForChild("HumanoidRootPart", 2) or char:FindFirstChild("HumanoidRootPart")
-        local head = char:WaitForChild("Head", 2) or char:FindFirstChild("Head")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
 
         if not hum or not root or not head then
             CharacterCache[player] = nil
@@ -86,9 +83,6 @@ return function(Context)
         CharacterCache[player] = nil
     end
 
-    ----------------------------------------------------------------
-    -- Persistent Drawing Object Management
-    ----------------------------------------------------------------
     function ESPSystem.CreatePlayerESP(player)
         if player == LocalPlayer or DrawingESP[player] or not DrawingManager.Available then return end
         local col = FeatureConfig.ESP.Color
@@ -172,9 +166,6 @@ return function(Context)
         end
     end
 
-    ----------------------------------------------------------------
-    -- Lifecycle Event Listeners
-    ----------------------------------------------------------------
     local function hookPlayer(p)
         if p == LocalPlayer then return end
         ESPSystem.CreatePlayerESP(p)
@@ -206,9 +197,6 @@ return function(Context)
         end))
     end
 
-    ----------------------------------------------------------------
-    -- Fast Render Loop
-    ----------------------------------------------------------------
     function ESPSystem.Update()
         local espCfg = FeatureConfig.ESP
         local chamsCfg = FeatureConfig.Chams
@@ -251,7 +239,6 @@ return function(Context)
                 continue
             end
 
-            -- Fast distance rejection
             local rootPos = cached.Root.Position
             local dist3D = myPos and (myPos - rootPos).Magnitude or 0
             if dist3D > maxDist then
@@ -259,7 +246,6 @@ return function(Context)
                 continue
             end
 
-            -- Chams Handler
             if hasChams then
                 local h = Highlights[player]
                 if not h or h.Adornee ~= cached.Char then
@@ -278,7 +264,6 @@ return function(Context)
                 continue
             end
 
-            -- Single viewport transform for RootPart
             local rootScreen, rootOnScreen = Camera:WorldToViewportPoint(rootPos)
             if not rootOnScreen or rootScreen.Z <= 0 then
                 hidePlayerDrawings(data)
@@ -295,7 +280,6 @@ return function(Context)
             local rootScreenPos = Vector2.new(rootScreen.X, rootScreen.Y)
             local headScreenPos = Vector2.new(headScreen.X, headScreen.Y)
 
-            -- Box
             if espCfg.Box and data.Box then
                 data.Box.Size = Vector2.new(width, height)
                 data.Box.Position = Vector2.new(rootScreenPos.X - halfW, rootScreenPos.Y - height * 0.5)
@@ -305,7 +289,6 @@ return function(Context)
                 data.Box.Visible = false
             end
 
-            -- Name
             if espCfg.Name and data.Name then
                 data.Name.Text = player.DisplayName or player.Name
                 data.Name.Position = Vector2.new(rootScreenPos.X, headScreenPos.Y - 24)
@@ -315,7 +298,6 @@ return function(Context)
                 data.Name.Visible = false
             end
 
-            -- Health Bar
             if espCfg.Health and data.Health and data.HealthBG then
                 local hum = cached.Hum
                 local ratio = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
@@ -337,7 +319,6 @@ return function(Context)
                 data.HealthBG.Visible = false
             end
 
-            -- Distance
             if espCfg.Distance and data.Distance then
                 data.Distance.Text = math.floor(dist3D) .. "m"
                 data.Distance.Position = Vector2.new(rootScreenPos.X, feetScreen.Y + 3)
@@ -347,7 +328,6 @@ return function(Context)
                 data.Distance.Visible = false
             end
 
-            -- Head Dot
             if espCfg.HeadDot and data.HeadDot then
                 data.HeadDot.Position = headScreenPos
                 data.HeadDot.Color = espColor
@@ -356,7 +336,6 @@ return function(Context)
                 data.HeadDot.Visible = false
             end
 
-            -- Look Direction
             if espCfg.LookDir and data.LookLine then
                 local lookWorld = Camera:WorldToViewportPoint(headPos + cached.Head.CFrame.LookVector * 4.5)
                 data.LookLine.From = headScreenPos
@@ -367,7 +346,6 @@ return function(Context)
                 data.LookLine.Visible = false
             end
 
-            -- Tracer (Persistent Drawing)
             if espCfg.Tracers and data.Tracer then
                 data.Tracer.From = screenBottom
                 data.Tracer.To = rootScreenPos
@@ -377,7 +355,6 @@ return function(Context)
                 data.Tracer.Visible = false
             end
 
-            -- Skeleton (Zero allocations per frame)
             if espCfg.Skeleton and data.Skeleton then
                 local bones = cached.Bones
                 local skLines = data.Skeleton
