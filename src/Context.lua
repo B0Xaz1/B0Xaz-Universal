@@ -91,11 +91,6 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             Crosshair = {Visible = false, Size = 12, Gap = 4, Thickness = 2, Color = Color3.fromRGB(255, 255, 255)},
             SpeedLines = false,
             Wallbang = false,
-            StretchRes = {
-                Enabled = false,
-                X = 1.333, -- Horizontal 3D stretch (1.333 = 4:3 aspect ratio)
-                Y = 1.0,   -- Vertical stretch
-            },
         },
         Performance = {
             NoTextures = false,
