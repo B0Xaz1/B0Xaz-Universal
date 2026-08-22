@@ -19,7 +19,7 @@ return function(Context, import)
 
 	local registry = {}
 	if type(import) == "function" then
-		local success, regResult = pcall(import, SETTINGS.PATHS.REGISTRY)
+		local success, regResult = pcall(import, SETTINGS.PATHS.REGISTRY, true)
 		if success and type(regResult) == "function" then
 			local callSuccess, callResult = pcall(regResult)
 			if callSuccess and type(callResult) == "table" then
@@ -85,16 +85,17 @@ return function(Context, import)
 		local cleanName = targetName:gsub("%s+", "")
 
 		local pathsToTry = {
-			string.format(SETTINGS.PATHS.MODULE_INIT, targetName),
+			string.format("src/Games/%s.lua", placeId),
 			string.format(SETTINGS.PATHS.MODULE_SINGLE, targetName),
 			string.format(SETTINGS.PATHS.MODULE_SINGLE, cleanName),
-			string.format("src/Games/%s.lua", placeId),
+			string.format(SETTINGS.PATHS.MODULE_INIT, targetName),
 			string.format("src/Games/%s/init.lua", placeId),
 		}
 
 		local lastErr = ""
 		for _, path in ipairs(pathsToTry) do
-			local success, factory = pcall(import, path)
+			-- Pass 'true' as 2nd parameter so fallback path misses don't print warnings
+			local success, factory = pcall(import, path, true)
 			if success and factory then
 				local resolvedModule = factory
 				if type(factory) == "function" then
