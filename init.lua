@@ -1,4 +1,4 @@
--- // init.lua (Main Loader - FIXED)
+-- // init.lua (Main Loader)
 local SETTINGS = {
 	PATHS = {
 		CONFIG = "src/Config.lua",
@@ -60,15 +60,16 @@ end
 
 local function fetchSource(path)
 	local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
-	
-	-- Try original path, then try lowercase path (fixes case-sensitivity issues)
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+
 	local variants = {
-		path:gsub("^%./", ""):gsub("^/", ""),
-		path:lower():gsub("^%./", ""):gsub("^/", "")
+		cleanPath,
+		cleanPath:lower(),
+		cleanPath:gsub("^src/Visuals/", "src/visuals/"):gsub("^src/Systems/", "src/systems/"):gsub("^src/Games/", "src/games/"),
 	}
 
-	for _, cleanPath in ipairs(variants) do
-		local fullUrl = baseUrl .. cleanPath
+	for _, variant in ipairs(variants) do
+		local fullUrl = baseUrl .. variant
 		for attempt = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
 			local success, response = pcall(function()
 				return game:HttpGet(fullUrl)
@@ -105,10 +106,11 @@ local function import(path)
 	return moduleResult
 end
 
--- Core Setup
+-- Cleanup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
+-- Core Configuration
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
@@ -144,7 +146,7 @@ local keySysFn = import(SETTINGS.PATHS.KEY_SYSTEM)
 local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or {}
 context.KeySystem = keySystem
 
--- Systems (FIXED CRASH HERE)
+-- Safe System Modules Initializer
 local function safeInit(fn) return type(fn) == "function" and fn(context) or {} end
 
 context.ConfigSystem = safeInit(import(SETTINGS.PATHS.CONFIG_SYSTEM))
@@ -166,7 +168,7 @@ local function startApplication()
 	if context.ESPSystem and context.ESPSystem.InitializeAll then pcall(context.ESPSystem.InitializeAll) end
 	if context.ConfigSystem and context.ConfigSystem.LoadAutoload then pcall(context.ConfigSystem.LoadAutoload) end
 	if context.ConfigSystem and context.ConfigSystem.StartAutosaveLoop then pcall(context.ConfigSystem.StartAutosaveLoop) end
-	
+
 	local buildUiFn = import(SETTINGS.PATHS.BUILD_UI)
 	if type(buildUiFn) == "function" then pcall(buildUiFn, context) end
 
