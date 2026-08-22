@@ -58,17 +58,33 @@ local function isValidSource(code)
 	return true
 end
 
+local function generatePathVariants(path)
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	local variants = { cleanPath }
+	local folder, filename = cleanPath:match("^(.-)/([^/]+)$")
+
+	if folder and filename then
+		local nameNoExt, ext = filename:match("^(.-)%.([^%.]+)$")
+		
+		-- Folder and file casing variations:
+		table.insert(variants, folder:lower() .. "/" .. filename)
+		table.insert(variants, folder .. "/" .. filename:lower())
+		table.insert(variants, folder:lower() .. "/" .. filename:lower())
+		
+		if nameNoExt and ext then
+			local camelName = nameNoExt:sub(1, 1):lower() .. nameNoExt:sub(2) .. "." .. ext
+			table.insert(variants, folder .. "/" .. camelName)
+			table.insert(variants, folder:lower() .. "/" .. camelName)
+		end
+	end
+
+	return variants
+end
+
 local function fetchSource(path)
 	local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	-- Append timestamp parameter to bypass GitHub Raw CDN 404 caching:
 	local cacheBust = "?t=" .. tostring(os.time())
-
-	local variants = {
-		cleanPath,
-		cleanPath:lower(),
-		cleanPath:gsub("^src/Visuals/", "src/visuals/"):gsub("^src/Systems/", "src/systems/"):gsub("^src/Games/", "src/games/"),
-	}
+	local variants = generatePathVariants(path)
 
 	for _, variant in ipairs(variants) do
 		local fullUrl = baseUrl .. variant .. cacheBust
@@ -119,10 +135,11 @@ local function import(path, isOptional)
 	return moduleResult
 end
 
--- Core Setup
+-- Cleanup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
+-- Core Configuration
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
