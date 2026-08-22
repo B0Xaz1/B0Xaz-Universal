@@ -5,8 +5,15 @@ return function(Context)
     local CONFIG = Context.CONFIG
     local Utils = Context.Utils
     local UIRegistry = Context.UIRegistry
+    local Theme = Context.Theme
+    local ThemeManager = Context.ThemeManager
+    local State = Context.State
+    local Connections = Context.Connections
 
-    local ConfigSystem = {}
+    local ConfigSystem = {
+        Dirty = false,
+        AutoloadFile = "_autoload"
+    }
 
     local function serializeKeybind(k)
         if k == nil then return nil end
@@ -36,7 +43,19 @@ return function(Context)
         return nil
     end
 
+    function ConfigSystem.NotifyChange()
+        ConfigSystem.Dirty = true
+    end
+
     function ConfigSystem.Serialize()
+        -- Collect all theme colors
+        local themeData = {}
+        for k, v in pairs(Theme) do
+            if typeof(v) == "Color3" then
+                themeData[k] = Utils.ColorToTable(v)
+            end
+        end
+
         return {
             Aimbot = {
                 Enabled = FeatureConfig.Aimbot.Enabled,
@@ -104,12 +123,21 @@ return function(Context)
                 ForceRange = FeatureConfig.Game.ForceRange,
                 FireRateValue = FeatureConfig.Game.FireRateValue,
                 RangeValue = FeatureConfig.Game.RangeValue
+            },
+            Theme = {
+                PresetName = ThemeManager and ThemeManager.ActivePreset or "Custom",
+                Colors = themeData
+            },
+            Settings = {
+                MenuKeybind = serializeKeybind(State.MenuKeybind),
+                IncludeSelf = State.includeSelf or false
             }
         }
     end
 
     function ConfigSystem.Deserialize(data)
         if type(data) ~= "table" then return end
+        
         if type(data.Aimbot) == "table" then
             for k, v in pairs(data.Aimbot) do
                 if k == "Keybind" then
@@ -175,25 +203,22 @@ return function(Context)
                 end
             end
         end
-    end
-
-    function ConfigSystem.GetSavedNames()
-        local names = {}
-        for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do
-            local name = path:match("[/\\]?([^/\\]+)$") or path
-            if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
-                table.insert(names, name:sub(1, -#CONFIG.EXT - 1))
+        if type(data.Theme) == "table" then
+            if ThemeManager and data.Theme.PresetName then
+                ThemeManager.ActivePreset = data.Theme.PresetName
+            end
+            if type(data.Theme.Colors) == "table" and Context.UI then
+                local tColors = {}
+                for k, v in pairs(data.Theme.Colors) do
+                    tColors[k] = Utils.TableToColor(v)
+                end
+                Context.UI:SetTheme(tColors)
             end
         end
-        table.sort(names)
-        return names
-    end
-
-    function ConfigSystem.Save(name)
-        if not name or #name == 0 then return false, "Empty name" end
-        local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
-        if not ok then return false, tostring(encoded) end
-        return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
+        if type(data.Settings) == "table" then
+            State.MenuKeybind = deserializeKeybind(data.Settings.MenuKeybind) or State.MenuKeybind
+            State.includeSelf = data.Settings.IncludeSelf or false
+        end
     end
 
     function ConfigSystem.UpdateUI()
@@ -281,6 +306,40 @@ return function(Context)
         set("Game_FastFire", FeatureConfig.Game.FastFire)
         set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
         set("Game_ForceRange", FeatureConfig.Game.ForceRange)
+
+        -- Theme Toggles & Color pickers
+        set("Theme_Accent", Theme.Accent)
+        set("Theme_Bg", Theme.Bg)
+        set("Theme_Panel", Theme.Panel)
+        set("Theme_Elem", Theme.Elem)
+        set("Theme_Side", Theme.Side)
+        set("Theme_Text", Theme.Text)
+        set("Theme_Border", Theme.Border)
+        set("Theme_ToggleOn", Theme.ToggleOn)
+
+        set("Players_IncludeSelf", State.includeSelf)
+    end
+
+    function ConfigSystem.GetSavedNames()
+        local names = {}
+        for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do
+            local name = path:match("[/\\]?([^/\\]+)$") or path
+            if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
+                local finalName = name:sub(1, -#CONFIG.EXT - 1)
+                if finalName ~= ConfigSystem.AutoloadFile then
+                    table.insert(names, finalName)
+                end
+            end
+        end
+        table.sort(names)
+        return names
+    end
+
+    function ConfigSystem.Save(name)
+        if not name or #name == 0 then return false, "Empty name" end
+        local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
+        if not ok then return false, tostring(encoded) end
+        return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
     end
 
     function ConfigSystem.Load(name)
@@ -295,6 +354,36 @@ return function(Context)
 
     function ConfigSystem.Delete(name)
         return pcall(function() delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT) end)
+    end
+
+    function ConfigSystem.LoadAutoload()
+        local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT)
+        if content then
+            local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
+            if ok and type(data) == "table" then
+                ConfigSystem.Deserialize(data)
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Autosave Engine loop
+    function ConfigSystem.StartAutosaveLoop()
+        local isSaving = false
+        Connections.Track(task.spawn(function()
+            while true do
+                task.wait(1.5) -- Debounce check
+                if ConfigSystem.Dirty and not isSaving then
+                    ConfigSystem.Dirty = false
+                    isSaving = true
+                    pcall(function()
+                        ConfigSystem.Save(ConfigSystem.AutoloadFile)
+                    end)
+                    isSaving = false
+                end
+            end
+        end))
     end
 
     return ConfigSystem
