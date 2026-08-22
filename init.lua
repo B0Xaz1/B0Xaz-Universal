@@ -23,7 +23,6 @@ local SETTINGS = {
 		RUNTIME = "src/Runtime.lua",
 	},
 	DEFAULTS = {
-		-- YOUR LINK HARDCODED HERE:
 		BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/main/",
 		LOAD_TIMEOUT = 10,
 		RETRY_ATTEMPTS = 2,
@@ -44,18 +43,14 @@ if not LocalPlayer then
 end
 
 if not game:IsLoaded() then
-	pcall(function()
-		game.Loaded:Wait()
-	end)
+	pcall(function() game.Loaded:Wait() end)
 end
 
 local globalEnv = getgenv and getgenv() or _G
 local moduleCache = {}
 
 local function isValidSource(code)
-	if type(code) ~= "string" or #code < 5 then
-		return false
-	end
+	if type(code) ~= "string" or #code < 5 then return false end
 	local lower = code:lower()
 	if lower:sub(1, 3) == "404" or lower:find("not found") or lower:find("<!doctype") or lower:find("<html") then
 		return false
@@ -78,41 +73,33 @@ local function fetchSource(path)
 		task.wait(0.2)
 	end
 
-	warn("[B0Xaz] Failed to fetch module from GitHub (404 / Unreachable): " .. fullUrl)
+	warn("[B0Xaz] Failed to fetch module (404/Case Sensitivity?): " .. path)
 	return nil
 end
 
 local function import(path)
-	if moduleCache[path] ~= nil then
-		return moduleCache[path]
-	end
-
+	if moduleCache[path] ~= nil then return moduleCache[path] end
 	local sourceCode = fetchSource(path)
-	if not sourceCode then
-		moduleCache[path] = false
-		return nil
-	end
+	if not sourceCode then moduleCache[path] = false return nil end
 
 	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
 	if not loaderFn then
-		warn("[B0Xaz] Syntax error compiling module " .. tostring(path) .. ": " .. tostring(compileErr))
-		moduleCache[path] = false
-		return nil
+		warn("[B0Xaz] Syntax error compiling " .. path .. ": " .. tostring(compileErr))
+		moduleCache[path] = false return nil
 	end
 
 	local runSuccess, moduleResult = pcall(loaderFn)
 	if not runSuccess then
-		warn("[B0Xaz] Runtime error executing module " .. tostring(path) .. ": " .. tostring(moduleResult))
-		moduleCache[path] = false
-		return nil
+		warn("[B0Xaz] Runtime error executing " .. path .. ": " .. tostring(moduleResult))
+		moduleCache[path] = false return nil
 	end
 
-	print("[B0Xaz] Successfully imported: " .. tostring(path))
+	print("[B0Xaz] Successfully imported: " .. path)
 	moduleCache[path] = moduleResult
 	return moduleResult
 end
 
--- Start importing everything
+-- Load sequence with fix for typos
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
@@ -120,10 +107,7 @@ local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
 	local success, cfg, lighting = pcall(configFn)
-	if success then
-		configData = cfg or {}
-		defaultLighting = lighting or {}
-	end
+	if success then configData = cfg or {} defaultLighting = lighting or {} end
 end
 
 local utilsFn = import(SETTINGS.PATHS.UTILS)
@@ -131,7 +115,7 @@ local utils = type(utilsFn) == "function" and utilsFn(configData) or {}
 if type(utils.WaitForGameLoad) == "function" then pcall(utils.WaitForGameLoad, SETTINGS.DEFAULTS.LOAD_TIMEOUT) end
 
 local drawingMgrFn = import(SETTINGS.PATHS.DRAWING_MANAGER)
-local drawingManager = type(drawingMgrFn) == "function" and drawingMgrFn() or {}
+local drawingManager = type(drawingMgrFn) == "function" and drawingMgrFn() or {Available = false}
 
 local contextFn = import(SETTINGS.PATHS.CONTEXT)
 local context = type(contextFn) == "function" and contextFn(configData, defaultLighting, utils, drawingManager) or {}
@@ -141,10 +125,7 @@ local themeFn = import(SETTINGS.PATHS.THEME)
 local activeTheme, themeManager = {}, {}
 if type(themeFn) == "function" then
 	local success, th, thMgr = pcall(themeFn)
-	if success then
-		activeTheme = th or {}
-		themeManager = thMgr or {}
-	end
+	if success then activeTheme = th or {} themeManager = thMgr or {} end
 end
 context.Theme = activeTheme
 context.ThemeManager = themeManager
@@ -158,53 +139,43 @@ local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or 
 context.KeySystem = keySystem
 
 local configSysFn = import(SETTINGS.PATHS.CONFIG_SYSTEM)
-local configSystem = type(configSysFn) == "function" and configSysFn(context) or {}
-context.ConfigSystem = configSystem
+context.ConfigSystem = type(configSysFn) == "function" and configSysFn(context) or {}
 
 local aimbotSysFn = import(SETTINGS.PATHS.AIMBOT_SYSTEM)
-local aimbotSystem = type(aimbotSysFn) == "function" and aimbotSysFn(context) or {}
-context.AimbotSystem = aimbotSystem
+context.AimbotSystem = type(aimbotSysFn) == "function" and aimbotSysFn(context) or {}
 
 local espSysFn = import(SETTINGS.PATHS.ESP_SYSTEM)
-local espSystem = type(espSysFn) == "function" and espSysFn(context) or {}
-context.ESPSystem = espSystem
+context.ESPSystem = type(espSysFn) == "function" and espSysFn(context) or {}
 
 local flingSysFn = import(SETTINGS.PATHS.FLING_SYSTEM)
-local flingSystem = type(flingSysFn) == "function" and flingSysFn(context) or {}
-context.FlingSystem = flingSystem
+context.FlingSystem = type(flingSysFn) == "function" and flingSysFn(context) or {}
 
 local flySysFn = import(SETTINGS.PATHS.FLY_SYSTEM)
-local flySystem = type(flySysFn) == "function" and flySystemFn(context) or {}
-context.FlySystem = flySystem
+context.FlySystem = type(flySysFn) == "function" and flySysFn(context) or {}
 
 local moveSysFn = import(SETTINGS.PATHS.MOVEMENT_SYSTEM)
-local movementSystem = type(moveSysFn) == "function" and moveSysFn(context) or {}
-context.MovementSystem = movementSystem
+context.MovementSystem = type(moveSysFn) == "function" and moveSysFn(context) or {}
 
 local perfSysFn = import(SETTINGS.PATHS.PERFORMANCE_SYSTEM)
-local performanceSystem = type(perfSysFn) == "function" and perfSysFn(context) or {}
-context.PerformanceSystem = performanceSystem
+context.PerformanceSystem = type(perfSysFn) == "function" and perfSysFn(context) or {}
 
 local playersSysFn = import(SETTINGS.PATHS.PLAYERS_SYSTEM)
-local playersSystem = type(playersSysFn) == "function" and playersSysFn(context) or {}
-context.PlayersSystem = playersSystem
+context.PlayersSystem = type(playersSysFn) == "function" and playersSysFn(context) or {}
 
 local overlayMgrFn = import(SETTINGS.PATHS.OVERLAY_MANAGER)
-local overlayManager = type(overlayMgrFn) == "function" and overlayMgrFn(context) or {}
-context.OverlayManager = overlayManager
+context.OverlayManager = type(overlayMgrFn) == "function" and overlayMgrFn(context) or {}
 
 local gameLoaderFn = import(SETTINGS.PATHS.GAME_LOADER)
-local gameLoader = type(gameLoaderFn) == "function" and gameLoaderFn(context, import) or {}
-context.GameLoader = gameLoader
+context.GameLoader = type(gameLoaderFn) == "function" and gameLoaderFn(context, import) or {}
 
 globalEnv.B0XazContext = context
 
 local function startApplication()
 	print("[B0Xaz] Launching systems and UI...")
-	if gameLoader and type(gameLoader.Load) == "function" then pcall(gameLoader.Load) end
-	if espSystem and type(espSystem.InitializeAll) == "function" then pcall(espSystem.InitializeAll) end
-	if configSystem and type(configSystem.LoadAutoload) == "function" then pcall(configSystem.LoadAutoload) end
-	if configSystem and type(configSystem.StartAutosaveLoop) == "function" then pcall(configSystem.StartAutosaveLoop) end
+	if context.GameLoader and context.GameLoader.Load then pcall(context.GameLoader.Load) end
+	if context.ESPSystem and context.ESPSystem.InitializeAll then pcall(context.ESPSystem.InitializeAll) end
+	if context.ConfigSystem and context.ConfigSystem.LoadAutoload then pcall(context.ConfigSystem.LoadAutoload) end
+	if context.ConfigSystem and context.ConfigSystem.StartAutosaveLoop then pcall(context.ConfigSystem.StartAutosaveLoop) end
 	
 	local buildUiFn = import(SETTINGS.PATHS.BUILD_UI)
 	if type(buildUiFn) == "function" then pcall(buildUiFn, context) end
@@ -215,7 +186,7 @@ local function startApplication()
 end
 
 local isVerified = false
-if keySystem and type(keySystem.LoadAndVerify) == "function" then
+if keySystem and keySystem.LoadAndVerify then
 	local success, verified = pcall(keySystem.LoadAndVerify)
 	isVerified = success and verified
 end
@@ -223,10 +194,8 @@ end
 if isVerified then
 	startApplication()
 else
-	if uiEngine and type(uiEngine.CreateKeyPrompt) == "function" then
-		pcall(function()
-			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, "")
-		end)
+	if uiEngine and uiEngine.CreateKeyPrompt then
+		uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, "")
 	else
 		startApplication()
 	end
