@@ -1,3 +1,4 @@
+-- // init.lua
 local SETTINGS = {
 	PATHS = {
 		CONFIG = "src/Config.lua",
@@ -23,10 +24,12 @@ local SETTINGS = {
 	},
 	DEFAULTS = {
 		BASE_URL = "https://raw.githubusercontent.com/B0Xaz/Universal/main/",
-		LOAD_TIMEOUT = 5,
+		LOAD_TIMEOUT = 10,
 		RETRY_ATTEMPTS = 2,
 	},
 }
+
+print("[B0Xaz] Initializing Universal Suite...")
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -54,6 +57,9 @@ local function fetchSource(path)
 		path,
 		path:gsub("^src/", ""),
 		"./" .. path,
+		"src/" .. path,
+		"B0XazUniversal/" .. path,
+		"B0XazUniversal/src/" .. path:gsub("^src/", ""),
 	}
 
 	if readfile and isfile then
@@ -68,7 +74,8 @@ local function fetchSource(path)
 		end
 	end
 
-	if game.HttpGet then
+	local httpGet = game.HttpGet
+	if httpGet then
 		local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
 		local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
 		local fullUrl = baseUrl .. cleanPath
@@ -93,18 +100,21 @@ local function import(path)
 
 	local sourceCode = fetchSource(path)
 	if not sourceCode then
+		warn("[B0Xaz] Module source not found: " .. tostring(path))
 		moduleCache[path] = false
 		return nil
 	end
 
-	local loaderFn, compileErr = loadstring(sourceCode, path)
+	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
 	if not loaderFn then
+		warn("[B0Xaz] Syntax error in module " .. tostring(path) .. ": " .. tostring(compileErr))
 		moduleCache[path] = false
 		return nil
 	end
 
 	local runSuccess, moduleResult = pcall(loaderFn)
 	if not runSuccess then
+		warn("[B0Xaz] Runtime error executing module " .. tostring(path) .. ": " .. tostring(moduleResult))
 		moduleCache[path] = false
 		return nil
 	end
@@ -205,6 +215,8 @@ context.GameLoader = gameLoader
 globalEnv.B0XazContext = context
 
 local function startApplication()
+	print("[B0Xaz] Launching systems and UI...")
+
 	if gameLoader and type(gameLoader.Load) == "function" then
 		pcall(gameLoader.Load)
 	end
@@ -223,13 +235,23 @@ local function startApplication()
 
 	local buildUiFn = import(SETTINGS.PATHS.BUILD_UI)
 	if type(buildUiFn) == "function" then
-		pcall(buildUiFn, context)
+		local success, err = pcall(buildUiFn, context)
+		if not success then
+			warn("[B0Xaz] BuildUI execution error: " .. tostring(err))
+		end
+	else
+		warn("[B0Xaz] BuildUI module could not be loaded.")
 	end
 
 	local runtimeFn = import(SETTINGS.PATHS.RUNTIME)
 	if type(runtimeFn) == "function" then
-		pcall(runtimeFn, context)
+		local success, err = pcall(runtimeFn, context)
+		if not success then
+			warn("[B0Xaz] Runtime execution error: " .. tostring(err))
+		end
 	end
+
+	print("[B0Xaz] Successfully loaded and active!")
 end
 
 local isVerified, verifyMsg = false, ""
@@ -242,16 +264,23 @@ if keySystem and type(keySystem.LoadAndVerify) == "function" then
 end
 
 if isVerified then
+	print("[B0Xaz] Saved license key verified (Tier: " .. tostring(keySystem.GetTierName()) .. ")")
 	startApplication()
 else
+	print("[B0Xaz] Prompting for key authentication...")
 	local promptCreated = false
 	if uiEngine and type(uiEngine.CreateKeyPrompt) == "function" then
-		local success = pcall(function()
+		local success, err = pcall(function()
 			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
 		end)
-		promptCreated = success
+		if not success then
+			warn("[B0Xaz] Failed to create Key Prompt: " .. tostring(err))
+		else
+			promptCreated = true
+		end
 	end
 	if not promptCreated then
+		warn("[B0Xaz] Key prompt unavailable, running default startup...")
 		startApplication()
 	end
 end
