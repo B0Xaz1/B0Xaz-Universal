@@ -1,4 +1,4 @@
--- // init.lua
+-- // init.lua (Main Loader)
 local SETTINGS = {
 	PATHS = {
 		CONFIG = "src/Config.lua",
@@ -23,13 +23,14 @@ local SETTINGS = {
 		RUNTIME = "src/Runtime.lua",
 	},
 	DEFAULTS = {
-		BASE_URL = "https://raw.githubusercontent.com/B0Xaz/Universal/main/",
+		-- CHANGE "YOUR_USERNAME" AND "YOUR_REPO" BELOW TO MATCH YOUR GITHUB REPOSITORY:
+		BASE_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/",
 		LOAD_TIMEOUT = 10,
 		RETRY_ATTEMPTS = 2,
 	},
 }
 
-print("[B0Xaz] Initializing Universal Suite...")
+print("[B0Xaz] Initializing Universal Suite from GitHub...")
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -49,69 +50,35 @@ if not game:IsLoaded() then
 end
 
 local globalEnv = getgenv and getgenv() or _G
-globalEnv.B0XazModules = globalEnv.B0XazModules or {}
 local moduleCache = {}
 
 local function isValidSource(code)
-	if type(code) ~= "string" or #code < 10 then
+	if type(code) ~= "string" or #code < 5 then
 		return false
 	end
 	local lower = code:lower()
-	if lower:find("404") or lower:find("not found") or lower:find("<!doctype") or lower:find("<html") then
+	if lower:sub(1, 3) == "404" or lower:find("not found") or lower:find("<!doctype") or lower:find("<html") then
 		return false
 	end
 	return true
 end
 
 local function fetchSource(path)
+	local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	local fullUrl = baseUrl .. cleanPath
 
-	-- 1. Check in-memory virtual filesystem
-	if globalEnv.B0XazModules[path] then
-		return globalEnv.B0XazModules[path]
-	end
-	if globalEnv.B0XazModules[cleanPath] then
-		return globalEnv.B0XazModules[cleanPath]
-	end
-
-	-- 2. Check local executor workspace directories
-	local pathVariants = {
-		path,
-		cleanPath,
-		"./" .. cleanPath,
-		"src/" .. cleanPath:gsub("^src/", ""),
-		"B0XazUniversal/" .. cleanPath,
-		"B0XazUniversal/src/" .. cleanPath:gsub("^src/", ""),
-	}
-
-	if readfile and isfile then
-		for _, variant in ipairs(pathVariants) do
-			local isExistSuccess, isExist = pcall(isfile, variant)
-			if isExistSuccess and isExist then
-				local readSuccess, content = pcall(readfile, variant)
-				if readSuccess and isValidSource(content) then
-					return content
-				end
-			end
+	for attempt = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
+		local success, response = pcall(function()
+			return game:HttpGet(fullUrl)
+		end)
+		if success and isValidSource(response) then
+			return response
 		end
+		task.wait(0.2)
 	end
 
-	-- 3. Fallback to remote HTTP download
-	local httpGet = game.HttpGet
-	if httpGet then
-		local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
-		local fullUrl = baseUrl .. cleanPath
-		for _ = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
-			local success, response = pcall(function()
-				return game:HttpGet(fullUrl)
-			end)
-			if success and isValidSource(response) then
-				return response
-			end
-			task.wait(0.2)
-		end
-	end
-
+	warn("[B0Xaz] Failed to fetch module from GitHub (404 / Unreachable): " .. fullUrl)
 	return nil
 end
 
@@ -120,31 +87,15 @@ local function import(path)
 		return moduleCache[path]
 	end
 
-	-- Check for pre-registered function factories in virtual module registry
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	local virtObj = globalEnv.B0XazModules[path] or globalEnv.B0XazModules[cleanPath]
-	if type(virtObj) == "function" then
-		local success, result = pcall(virtObj)
-		if success then
-			moduleCache[path] = result
-			return result
-		else
-			warn("[B0Xaz] Error executing virtual module " .. tostring(path) .. ": " .. tostring(result))
-			moduleCache[path] = false
-			return nil
-		end
-	end
-
 	local sourceCode = fetchSource(path)
 	if not sourceCode then
-		warn("[B0Xaz] Module source missing or unreachable: " .. tostring(path))
 		moduleCache[path] = false
 		return nil
 	end
 
 	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
 	if not loaderFn then
-		warn("[B0Xaz] Syntax error in module " .. tostring(path) .. ": " .. tostring(compileErr))
+		warn("[B0Xaz] Syntax error compiling module " .. tostring(path) .. ": " .. tostring(compileErr))
 		moduleCache[path] = false
 		return nil
 	end
@@ -156,15 +107,18 @@ local function import(path)
 		return nil
 	end
 
+	print("[B0Xaz] Successfully imported: " .. tostring(path))
 	moduleCache[path] = moduleResult
 	return moduleResult
 end
 
+-- 1. Execute Cleanup
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
 if type(cleanupFn) == "function" then
 	pcall(cleanupFn)
 end
 
+-- 2. Load Config & Utils
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
@@ -182,6 +136,7 @@ if type(utils.WaitForGameLoad) == "function" then
 	pcall(utils.WaitForGameLoad, SETTINGS.DEFAULTS.LOAD_TIMEOUT)
 end
 
+-- 3. Load Drawing Manager & Core Context
 local drawingMgrFn = import(SETTINGS.PATHS.DRAWING_MANAGER)
 local drawingManager = type(drawingMgrFn) == "function" and drawingMgrFn() or {}
 
@@ -189,6 +144,7 @@ local contextFn = import(SETTINGS.PATHS.CONTEXT)
 local context = type(contextFn) == "function" and contextFn(configData, defaultLighting, utils, drawingManager) or {}
 context.import = import
 
+-- 4. Load UI Engine & Theme
 local themeFn = import(SETTINGS.PATHS.THEME)
 local activeTheme, themeManager = {}, {}
 if type(themeFn) == "function" then
@@ -205,6 +161,7 @@ local uiEngineFn = import(SETTINGS.PATHS.UI_ENGINE)
 local uiEngine = type(uiEngineFn) == "function" and uiEngineFn(context, activeTheme) or {}
 context.UIEngine = uiEngine
 
+-- 5. Load Systems
 local keySysFn = import(SETTINGS.PATHS.KEY_SYSTEM)
 local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or {}
 context.KeySystem = keySystem
@@ -251,6 +208,7 @@ context.GameLoader = gameLoader
 
 globalEnv.B0XazContext = context
 
+-- Main Start Sequence
 local function startApplication()
 	print("[B0Xaz] Launching systems and UI...")
 
@@ -291,6 +249,7 @@ local function startApplication()
 	print("[B0Xaz] Successfully loaded and active!")
 end
 
+-- Key Authentication Verification
 local isVerified, verifyMsg = false, ""
 if keySystem and type(keySystem.LoadAndVerify) == "function" then
 	local success, verified, _, msg = pcall(keySystem.LoadAndVerify)
@@ -317,7 +276,7 @@ else
 		end
 	end
 	if not promptCreated then
-		warn("[B0Xaz] Key prompt unavailable, running default startup...")
+		warn("[B0Xaz] Key prompt window unavailable, starting default UI...")
 		startApplication()
 	end
 end
