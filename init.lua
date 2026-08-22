@@ -14,14 +14,14 @@ local function import(path)
     local ok, source = pcall(function()
         return game:HttpGet(url)
     end)
-    
-    if not ok or not source or #source == 0 or source:sub(1,3) == "404" or source:find("404: Not Found") or source:find("<!DOCTYPE html>") then
+
+    if not ok or not source or #source == 0 or source:sub(1, 3) == "404" or source:find("404: Not Found") or source:find("<!DOCTYPE html>") then
         error("[B0Xaz Loader] 404 File Not Found: " .. path .. "\nCheck URL: " .. url)
     end
-    
+
     local chunk, err = loadstring(source, path)
-    if not chunk then 
-        error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) 
+    if not chunk then
+        error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err))
     end
     return chunk()
 end
