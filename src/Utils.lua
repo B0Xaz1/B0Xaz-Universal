@@ -1,19 +1,4 @@
-local SETTINGS = {
-	LIMITS = {
-		DEFAULT_CONFIG_NAME_MAX_LEN = 40,
-		MIN_RAYCAST_MAGNITUDE = 0.1,
-		DEFAULT_WAIT_TIMEOUT = 10,
-	},
-	PATTERNS = {
-		FILENAME_SANITIZE = "[/\\%.:%*%?<>|%c\"]",
-		TRIM_WHITESPACE = "^%s*(.-)%s*$",
-	},
-	TEMPLATES = {
-		TELEPORT_URL = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\npcall(function() loadstring(game:HttpGet(\"%s\"))() end)",
-		TELEPORT_FILE = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\nif isfile and isfile(\"B0XazUniversal/AutoRun.lua\") then\n\tpcall(function() loadstring(readfile(\"B0XazUniversal/AutoRun.lua\"))() end)\nend",
-	},
-}
-
+-- // src/Utils.lua
 return function(CONFIG)
 	local Players = game:GetService("Players")
 	local Workspace = game:GetService("Workspace")
@@ -22,30 +7,21 @@ return function(CONFIG)
 	local LocalPlayer = Players.LocalPlayer
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-	local function getCamera()
-		return Workspace.CurrentCamera
-	end
-
 	local Utils = {}
 
 	function Utils.WaitForGameLoad(timeout)
 		if not game:IsLoaded() then
-			game.Loaded:Wait()
+			pcall(function() game.Loaded:Wait() end)
 		end
 		if not LocalPlayer then
-			local startTime = os.clock()
-			local maxWait = timeout or SETTINGS.LIMITS.DEFAULT_WAIT_TIMEOUT
-			while not Players.LocalPlayer and (os.clock() - startTime) < maxWait do
+			local t0 = os.clock()
+			local maxWait = timeout or 10
+			while not Players.LocalPlayer and (os.clock() - t0) < maxWait do
 				task.wait()
 			end
 			LocalPlayer = Players.LocalPlayer
 		end
 		return LocalPlayer
-	end
-
-	function Utils.SafeGetService(serviceName)
-		local success, service = pcall(game.GetService, game, serviceName)
-		return success and service or nil
 	end
 
 	function Utils.GetCharacter()
@@ -54,15 +30,17 @@ return function(CONFIG)
 
 	function Utils.GetHumanoid()
 		local char = Utils.GetCharacter()
-		if not (char and char.Parent) then return nil end
-		return char:FindFirstChildOfClass("Humanoid")
+		return char and char:FindFirstChildOfClass("Humanoid")
 	end
 
 	function Utils.GetRootPart()
 		local char = Utils.GetCharacter()
-		if not (char and char.Parent) then return nil end
+		if not char then return nil end
 		local root = char:FindFirstChild("HumanoidRootPart")
-		return (root and root:IsA("BasePart") and root:IsDescendantOf(Workspace)) and root or nil
+		if root and root:IsA("BasePart") and root:IsDescendantOf(Workspace) then
+			return root
+		end
+		return nil
 	end
 
 	function Utils.GetPlayerAssets(player)
@@ -101,40 +79,38 @@ return function(CONFIG)
 		if not (part and part.Parent and part:IsDescendantOf(Workspace)) then
 			return false
 		end
-		local camera = getCamera()
-		if not camera then
-			return false
-		end
+		local camera = Workspace.CurrentCamera
+		if not camera then return false end
 
 		local origin = camera.CFrame.Position
 		local direction = part.Position - origin
-		if direction.Magnitude < SETTINGS.LIMITS.MIN_RAYCAST_MAGNITUDE then
-			return true
-		end
+		if direction.Magnitude < 0.1 then return true end
 
 		local params = RaycastParams.new()
-		local filterList = { camera }
+		local filter = { camera }
 		if LocalPlayer and LocalPlayer.Character then
-			table.insert(filterList, LocalPlayer.Character)
+			table.insert(filter, LocalPlayer.Character)
 		end
-		params.FilterDescendantsInstances = filterList
+		params.FilterDescendantsInstances = filter
 		params.FilterType = Enum.RaycastFilterType.Exclude
 		params.IgnoreWater = true
 
-		local success, result = pcall(function()
+		local ok, result = pcall(function()
 			return Workspace:Raycast(origin, direction, params)
 		end)
-
-		if not success then return false end
+		if not ok then return false end
 		if not result then return true end
 		return result.Instance:IsDescendantOf(part.Parent)
 	end
 
 	function Utils.GetPlayerByName(name)
 		if not name or #name == 0 then return nil end
-		local searchLower = name:lower()
+		local lower = name:lower()
 		for _, player in ipairs(Players:GetPlayers()) do
-			if player.Name == name or player.DisplayName == name or player.Name:lower() == searchLower or player.DisplayName:lower() == searchLower then
+			if player.Name == name
+				or player.DisplayName == name
+				or player.Name:lower() == lower
+				or player.DisplayName:lower() == lower then
 				return player
 			end
 		end
@@ -154,34 +130,27 @@ return function(CONFIG)
 
 	function Utils.GetKeyCode(keyStr)
 		if not keyStr or #keyStr == 0 then return nil end
-		local success, result = pcall(function()
+		local ok, result = pcall(function()
 			return Enum.KeyCode[keyStr:upper()]
 		end)
-		return (success and typeof(result) == "EnumItem") and result or nil
-	end
-
-	function Utils.FindPlayerFromModel(model)
-		if not model then return nil end
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player.Character == model then
-				return player
-			end
+		if ok and typeof(result) == "EnumItem" then
+			return result
 		end
 		return nil
 	end
 
 	function Utils.WorldToScreen(position)
-		local camera = getCamera()
+		local camera = Workspace.CurrentCamera
 		if not camera then return Vector2.zero, false, 0 end
-		local success, screenPos, onScreen = pcall(function()
+		local ok, screenPos, onScreen = pcall(function()
 			return camera:WorldToViewportPoint(position)
 		end)
-		if not success then return Vector2.zero, false, 0 end
+		if not ok then return Vector2.zero, false, 0 end
 		return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
 	end
 
 	function Utils.GetMousePosition()
-		local camera = getCamera()
+		local camera = Workspace.CurrentCamera
 		if isMobile and camera then
 			return Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y * 0.5)
 		end
@@ -189,7 +158,7 @@ return function(CONFIG)
 	end
 
 	function Utils.GetScreenCenter()
-		local camera = getCamera()
+		local camera = Workspace.CurrentCamera
 		if not camera then return Vector2.zero end
 		return Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y * 0.5)
 	end
@@ -214,20 +183,20 @@ return function(CONFIG)
 
 	function Utils.WriteFile(path, content)
 		if not writefile then return false, "writefile unavailable" end
-		local success, err = pcall(writefile, path, content)
-		return success, err
+		local ok, err = pcall(writefile, path, content)
+		return ok, err
 	end
 
 	function Utils.ReadFile(path)
 		if not (readfile and isfile and isfile(path)) then return nil end
-		local success, result = pcall(readfile, path)
-		return success and result or nil
+		local ok, result = pcall(readfile, path)
+		return ok and result or nil
 	end
 
 	function Utils.ListFiles(folder)
 		if not (listfiles and isfolder and isfolder(folder)) then return {} end
-		local success, result = pcall(listfiles, folder)
-		return (success and type(result) == "table") and result or {}
+		local ok, result = pcall(listfiles, folder)
+		return (ok and type(result) == "table") and result or {}
 	end
 
 	function Utils.MakeFolder(folder)
@@ -237,37 +206,45 @@ return function(CONFIG)
 	end
 
 	function Utils.SanitizeFileName(name)
-		local cleaned = tostring(name or ""):gsub(SETTINGS.PATTERNS.FILENAME_SANITIZE, "_")
-		cleaned = cleaned:match(SETTINGS.PATTERNS.TRIM_WHITESPACE) or ""
-		local maxLen = (CONFIG and CONFIG.CONFIG_NAME_MAX_LEN) or SETTINGS.LIMITS.DEFAULT_CONFIG_NAME_MAX_LEN
+		local cleaned = tostring(name or ""):gsub("[/\\%.:%*%?<>|%c\"]", "_")
+		cleaned = cleaned:match("^%s*(.-)%s*$") or ""
+		local maxLen = (CONFIG and CONFIG.CONFIG_NAME_MAX_LEN) or 40
 		if #cleaned > maxLen then
 			cleaned = cleaned:sub(1, maxLen)
 		end
 		return cleaned
 	end
 
-	function Utils.SafeCall(func, ...)
-		if type(func) ~= "function" then return false end
-		return pcall(func, ...)
+	function Utils.SafeCall(fn, ...)
+		if type(fn) ~= "function" then return false end
+		return pcall(fn, ...)
 	end
 
 	local function getQueueOnTeleport()
-		return queue_on_teleport or (syn and syn.queue_on_teleport) or queueonteleport or (Fluxus and Fluxus.queue_on_teleport)
+		return queue_on_teleport
+			or (syn and syn.queue_on_teleport)
+			or queueonteleport
+			or (Fluxus and Fluxus.queue_on_teleport)
 	end
 
 	function Utils.PrepareTeleport()
-		local queueFunction = getQueueOnTeleport()
-		if not queueFunction then return end
-
-		local globalEnv = getgenv and getgenv() or _G
-		local codeToQueue
-		if globalEnv.B0XazScriptURL then
-			codeToQueue = string.format(SETTINGS.TEMPLATES.TELEPORT_URL, tostring(globalEnv.B0XazScriptURL))
+		local queueFn = getQueueOnTeleport()
+		if not queueFn then return end
+		local env = (getgenv and getgenv()) or _G
+		local code
+		if env.B0XazScriptURL then
+			code = string.format(
+				'repeat task.wait() until game:IsLoaded()\ntask.wait(1)\npcall(function() loadstring(game:HttpGet("%s"))() end)',
+				tostring(env.B0XazScriptURL)
+			)
 		else
-			codeToQueue = SETTINGS.TEMPLATES.TELEPORT_FILE
+			code = [[repeat task.wait() until game:IsLoaded()
+task.wait(1)
+if isfile and isfile("B0XazUniversal/AutoRun.lua") then
+	pcall(function() loadstring(readfile("B0XazUniversal/AutoRun.lua"))() end)
+end]]
 		end
-
-		pcall(queueFunction, codeToQueue)
+		pcall(queueFn, code)
 	end
 
 	return Utils
