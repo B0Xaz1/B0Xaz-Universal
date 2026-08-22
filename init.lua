@@ -43,7 +43,9 @@ local ctxData = import("src/Context.lua")(CONFIG, DefaultLighting, Context.Utils
 for k, v in pairs(ctxData) do Context[k] = v end
 
 -- 4. UI Engine & Theme
-Context.Theme = import("src/UI/Theme.lua")()
+local activeTheme, themeMgr = import("src/UI/Theme.lua")()
+Context.Theme = activeTheme
+Context.ThemeManager = themeMgr
 Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
 
 if not Context.UIEngine then
