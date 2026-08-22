@@ -1,101 +1,120 @@
+local SETTINGS = {
+	DEFAULTS = {
+		COLOR = Color3.new(1, 1, 1),
+		TRANSPARENCY = 1,
+		LINE = {
+			Thickness = 1,
+		},
+		CIRCLE = {
+			Radius = 10,
+			Thickness = 1,
+			Filled = false,
+			NumSides = 64,
+		},
+		SQUARE = {
+			Thickness = 2,
+			Filled = false,
+		},
+		TEXT = {
+			Size = 14,
+			Center = true,
+			Outline = true,
+			Font = 2,
+			Text = "",
+		},
+	},
+	GLOBAL_DRAWINGS_KEY = "B0XazAllDrawings",
+}
+
 return function()
+	local globalEnv = getgenv and getgenv() or _G
+	globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] or {}
+
 	local drawingAvailable = false
-	pcall(function()
-		local t = Drawing.new("Line")
-		t.Visible = false
-		t:Remove()
-		drawingAvailable = true
-	end)
+	if typeof(Drawing) == "table" and type(Drawing.new) == "function" then
+		local success, testObject = pcall(Drawing.new, "Line")
+		if success and testObject then
+			drawingAvailable = true
+			pcall(function()
+				testObject.Visible = false
+				testObject:Remove()
+			end)
+		end
+	end
 
-	getgenv().B0XazAllDrawings = getgenv().B0XazAllDrawings or {}
-
-	local DrawingManager = {
-		Available = drawingAvailable
-	}
+	local allDrawings = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY]
 
 	local function track(obj)
 		if obj then
-			table.insert(getgenv().B0XazAllDrawings, obj)
+			table.insert(allDrawings, obj)
 		end
 		return obj
 	end
 
-	function DrawingManager.NewLine(props)
+	local DrawingManager = {
+		Available = drawingAvailable,
+	}
+
+	local function createDrawing(drawingType, defaultProperties, customProperties)
 		if not drawingAvailable then return nil end
-		local ok, obj = pcall(function()
-			local l = Drawing.new("Line")
-			l.Visible = false
-			l.Thickness = props and props.Thickness or 1
-			l.Color = props and props.Color or Color3.new(1, 1, 1)
-			l.Transparency = props and props.Transparency or 1
-			return l
-		end)
-		return ok and track(obj) or nil
+
+		local success, instance = pcall(Drawing.new, drawingType)
+		if not success or not instance then return nil end
+
+		instance.Visible = false
+		instance.Color = (customProperties and customProperties.Color) or SETTINGS.DEFAULTS.COLOR
+		instance.Transparency = (customProperties and customProperties.Transparency) or SETTINGS.DEFAULTS.TRANSPARENCY
+
+		for property, defaultValue in pairs(defaultProperties) do
+			if property ~= "Color" and property ~= "Transparency" then
+				if customProperties and customProperties[property] ~= nil then
+					instance[property] = customProperties[property]
+				else
+					instance[property] = defaultValue
+				end
+			end
+		end
+
+		return track(instance)
+	end
+
+	function DrawingManager.NewLine(props)
+		return createDrawing("Line", SETTINGS.DEFAULTS.LINE, props)
 	end
 
 	function DrawingManager.NewCircle(props)
-		if not drawingAvailable then return nil end
-		local ok, obj = pcall(function()
-			local c = Drawing.new("Circle")
-			c.Visible = false
-			c.Radius = props and props.Radius or 10
-			c.Color = props and props.Color or Color3.new(1, 1, 1)
-			c.Thickness = props and props.Thickness or 1
-			c.Filled = props and props.Filled or false
-			c.Transparency = props and props.Transparency or 1
-			c.NumSides = props and props.NumSides or 64
-			return c
-		end)
-		return ok and track(obj) or nil
+		return createDrawing("Circle", SETTINGS.DEFAULTS.CIRCLE, props)
 	end
 
 	function DrawingManager.NewSquare(props)
-		if not drawingAvailable then return nil end
-		local ok, obj = pcall(function()
-			local s = Drawing.new("Square")
-			s.Visible = false
-			s.Thickness = props and props.Thickness or 2
-			s.Filled = props and props.Filled or false
-			s.Transparency = props and props.Transparency or 1
-			s.Color = props and props.Color or Color3.new(1, 1, 1)
-			return s
-		end)
-		return ok and track(obj) or nil
+		return createDrawing("Square", SETTINGS.DEFAULTS.SQUARE, props)
 	end
 
 	function DrawingManager.NewText(props)
-		if not drawingAvailable then return nil end
-		local ok, obj = pcall(function()
-			local t = Drawing.new("Text")
-			t.Visible = false
-			t.Size = props and props.Size or 14
-			t.Center = (props and props.Center ~= nil) and props.Center or true
-			t.Outline = (props and props.Outline ~= nil) and props.Outline or true
-			t.Font = props and props.Font or 2
-			t.Color = props and props.Color or Color3.new(1, 1, 1)
-			t.Text = ""
-			return t
-		end)
-		return ok and track(obj) or nil
+		return createDrawing("Text", SETTINGS.DEFAULTS.TEXT, props)
 	end
 
 	function DrawingManager.SafeRemove(drawing)
 		if not drawing then return end
-		pcall(function() drawing.Visible = false end)
 		pcall(function()
-			if drawing.Remove then drawing:Remove() end
+			if drawing.Visible ~= nil then
+				drawing.Visible = false
+			end
+		end)
+		pcall(function()
+			if drawing.Remove then
+				drawing:Remove()
+			elseif drawing.Destroy then
+				drawing:Destroy()
+			end
 		end)
 	end
 
 	function DrawingManager.RemoveAll()
-		local list = getgenv().B0XazAllDrawings
-		if type(list) == "table" then
-			for i = #list, 1, -1 do
-				DrawingManager.SafeRemove(list[i])
-				list[i] = nil
-			end
+		for index = #allDrawings, 1, -1 do
+			DrawingManager.SafeRemove(allDrawings[index])
+			allDrawings[index] = nil
 		end
-		getgenv().B0XazAllDrawings = {}
 	end
 
 	return DrawingManager
