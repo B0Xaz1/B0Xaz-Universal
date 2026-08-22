@@ -77,13 +77,14 @@ return function(Context)
 	local Game = { Name = "Prison Life" }
 	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
 
-	-- Macro state
+	-- Runtime states
 	local macroLoopActive = false
 	local macroThread = nil
 	local currentToolIndex = 1
 	local isKeyPressed = false
 	local isGrabbingGun = false
 	local isSwitchingCriminal = false
+	local hasAcceptedBannableWarning = false
 
 	-- Remotes
 	local MeleeEvent = ReplicatedStorage:FindFirstChild("meleeEvent")
@@ -457,6 +458,182 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
+	-- WARNING MODAL OVERLAY (Covers entire menu on first access)
+	----------------------------------------------------------------
+	local function showBannableWarningModal(onAccept, onCancel)
+		local mainFrame = Context and Context.UI and Context.UI.Main
+		if not mainFrame then
+			onAccept()
+			return
+		end
+
+		local overlay = Instance.new("Frame")
+		overlay.Name = "B0XazBannableModal"
+		overlay.Size = UDim2.fromScale(1, 1)
+		overlay.Position = UDim2.fromScale(0, 0)
+		overlay.BackgroundColor3 = Color3.fromRGB(14, 10, 12)
+		overlay.BackgroundTransparency = 0.02
+		overlay.BorderSizePixel = 0
+		overlay.ZIndex = 800
+		overlay.Parent = mainFrame
+
+		local borderStroke = Instance.new("UIStroke")
+		borderStroke.Color = Theme.Danger or Color3.fromRGB(220, 60, 60)
+		borderStroke.Thickness = 2
+		borderStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		borderStroke.Parent = overlay
+
+		local titleLabel = Instance.new("TextLabel")
+		titleLabel.Text = "⚠️ CRITICAL ACCOUNT BAN WARNING ⚠️"
+		titleLabel.Font = Enum.Font.Code
+		titleLabel.TextSize = 14
+		titleLabel.TextColor3 = Theme.Danger or Color3.fromRGB(220, 60, 60)
+		titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+		titleLabel.BackgroundTransparency = 1
+		titleLabel.Size = UDim2.new(1, -20, 0, 30)
+		titleLabel.Position = UDim2.new(0, 10, 0, 24)
+		titleLabel.ZIndex = 801
+		titleLabel.Parent = overlay
+
+		local descLabel = Instance.new("TextLabel")
+		descLabel.Text = "Any functions in this tab will get your account banned from Prison Life.\n\n"
+			.. "These exploits send heavy, detectable melee payloads to the server. You are solely responsible for any penalties applied to your account.\n\n"
+			.. "To prevent accidental activation, please wait 3 seconds and hold the confirmation button for 2 seconds to unlock."
+		descLabel.Font = Enum.Font.Code
+		descLabel.TextSize = 11
+		descLabel.TextColor3 = Theme.Text or Color3.fromRGB(220, 220, 230)
+		descLabel.TextWrapped = true
+		descLabel.TextXAlignment = Enum.TextXAlignment.Center
+		descLabel.BackgroundTransparency = 1
+		descLabel.Size = UDim2.new(1, -40, 0, 140)
+		descLabel.Position = UDim2.new(0, 20, 0, 65)
+		descLabel.ZIndex = 801
+		descLabel.Parent = overlay
+
+		-- Confirm / Hold Button Container
+		local holdButton = Instance.new("TextButton")
+		holdButton.Name = "HoldToUnlock"
+		holdButton.Size = UDim2.new(1, -60, 0, 38)
+		holdButton.Position = UDim2.new(0, 30, 0, 225)
+		holdButton.BackgroundColor3 = Color3.fromRGB(30, 24, 26)
+		holdButton.BorderSizePixel = 0
+		holdButton.AutoButtonColor = false
+		holdButton.Text = "Please wait (3s)..."
+		holdButton.Font = Enum.Font.Code
+		holdButton.TextSize = 12
+		holdButton.TextColor3 = Theme.TextDim or Color3.fromRGB(150, 150, 160)
+		holdButton.ZIndex = 801
+		holdButton.ClipsDescendants = true
+		holdButton.Parent = overlay
+
+		local holdStroke = Instance.new("UIStroke")
+		holdStroke.Color = Theme.Border or Color3.fromRGB(60, 50, 55)
+		holdStroke.Thickness = 1
+		holdStroke.Parent = holdButton
+
+		local fillBar = Instance.new("Frame")
+		fillBar.Name = "FillProgress"
+		fillBar.Size = UDim2.new(0, 0, 1, 0)
+		fillBar.Position = UDim2.fromScale(0, 0)
+		fillBar.BackgroundColor3 = Theme.Danger or Color3.fromRGB(220, 60, 60)
+		fillBar.BackgroundTransparency = 0.35
+		fillBar.BorderSizePixel = 0
+		fillBar.ZIndex = 802
+		fillBar.Parent = holdButton
+
+		-- Cancel Button
+		local cancelButton = Instance.new("TextButton")
+		cancelButton.Name = "CancelBtn"
+		cancelButton.Size = UDim2.new(1, -60, 0, 32)
+		cancelButton.Position = UDim2.new(0, 30, 0, 275)
+		cancelButton.BackgroundColor3 = Theme.Elem or Color3.fromRGB(28, 28, 34)
+		cancelButton.BorderSizePixel = 0
+		cancelButton.AutoButtonColor = false
+		cancelButton.Text = "Cancel & Return to Safe Normal Mode"
+		cancelButton.Font = Enum.Font.Code
+		cancelButton.TextSize = 11
+		cancelButton.TextColor3 = Theme.Text or Color3.fromRGB(220, 220, 230)
+		cancelButton.ZIndex = 801
+		cancelButton.Parent = overlay
+
+		local cancelStroke = Instance.new("UIStroke")
+		cancelStroke.Color = Theme.Border or Color3.fromRGB(60, 60, 70)
+		cancelStroke.Thickness = 1
+		cancelStroke.Parent = cancelButton
+
+		cancelButton.MouseButton1Click:Connect(function()
+			overlay:Destroy()
+			if onCancel then onCancel() end
+		end)
+
+		-- 3-Second Wait Countdown
+		local canInteract = false
+		task.spawn(function()
+			for i = 3, 1, -1 do
+				if not overlay or not overlay.Parent then return end
+				holdButton.Text = "Please wait (" .. i .. "s)..."
+				task.wait(1)
+			end
+			if not overlay or not overlay.Parent then return end
+			canInteract = true
+			holdButton.Text = "HOLD FOR 2 SECONDS TO UNLOCK"
+			holdButton.TextColor3 = Theme.Danger or Color3.fromRGB(240, 80, 80)
+			holdStroke.Color = Theme.Danger or Color3.fromRGB(220, 60, 60)
+		end)
+
+		-- 2-Second Hold Mechanism
+		local isHolding = false
+		local holdTime = 0
+		local holdConn = nil
+
+		local function stopHolding()
+			isHolding = false
+			holdTime = 0
+			fillBar.Size = UDim2.new(0, 0, 1, 0)
+			if canInteract and overlay and overlay.Parent then
+				holdButton.Text = "HOLD FOR 2 SECONDS TO UNLOCK"
+			end
+			if holdConn then
+				holdConn:Disconnect()
+				holdConn = nil
+			end
+		end
+
+		local function startHolding()
+			if not canInteract or isHolding then return end
+			isHolding = true
+			holdTime = 0
+
+			holdConn = RS.RenderStepped:Connect(function(dt)
+				if not isHolding then return end
+				holdTime = holdTime + dt
+				local progress = math.clamp(holdTime / 2.0, 0, 1)
+				fillBar.Size = UDim2.new(progress, 0, 1, 0)
+				holdButton.Text = string.format("HOLDING... (%.1fs / 2.0s)", holdTime)
+
+				if holdTime >= 2.0 then
+					stopHolding()
+					hasAcceptedBannableWarning = true
+					overlay:Destroy()
+					if onAccept then onAccept() end
+				end
+			end)
+		end
+
+		holdButton.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				startHolding()
+			end
+		end)
+
+		holdButton.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				stopHolding()
+			end
+		end)
+	end
+
+	----------------------------------------------------------------
 	-- CONNECTIONS / RUNTIME HOOKS
 	----------------------------------------------------------------
 	if Connections and Connections.Add then
@@ -577,14 +754,33 @@ return function(Context)
 		end)
 
 		navSec:AddButton("Switch to: [ ⚠️ Bannable Exploits ]", function()
-			updateSubTabs("Bannable")
-			if Context and Context.UI then
-				Context.UI:Notify(
-					"CRITICAL WARNING",
-					"Any functions in this tab will get your account banned from Prison Life",
-					6,
-					Theme.Danger
+			if not hasAcceptedBannableWarning then
+				showBannableWarningModal(
+					function()
+						updateSubTabs("Bannable")
+						if Context and Context.UI then
+							Context.UI:Notify(
+								"CRITICAL WARNING",
+								"Any functions in this tab will get your account banned from Prison Life",
+								6,
+								Theme.Danger
+							)
+						end
+					end,
+					function()
+						updateSubTabs("Normal")
+					end
 				)
+			else
+				updateSubTabs("Bannable")
+				if Context and Context.UI then
+					Context.UI:Notify(
+						"CRITICAL WARNING",
+						"Any functions in this tab will get your account banned from Prison Life",
+						5,
+						Theme.Danger
+					)
+				end
 			end
 		end)
 
