@@ -1,32 +1,101 @@
--- src/Systems/ConfigSystem.lua
+local SETTINGS = {
+	AUTOLOAD_FILE = "_autoload",
+	DEFAULT_CONFIG_NAME = "Default",
+	AUTOSAVE_INTERVAL = 1.5,
+	DEFAULTS = {
+		EXTRAS = {
+			HITBOX = { Enabled = false, Size = 10 },
+			SPINBOT = { Enabled = false, Speed = 20 },
+			CROSSHAIR = {
+				Visible = false,
+				Size = 12,
+				Gap = 4,
+				Thickness = 2,
+				Color = Color3.fromRGB(255, 255, 255),
+			},
+			STRETCH_RES = {
+				Enabled = false,
+				X = 1.333,
+				Y = 1.0,
+			},
+		},
+		THEME_PRESET = "Default Cyan",
+		CFRAME_SPEED = 50,
+		PHASE_TRANSPARENCY = 0.65,
+	},
+	SCALE_FACTORS = {
+		PREDICTION = 200,
+		TRIGGERBOT_DELAY = 100,
+		STRETCH_RES = 100,
+		PHASE_TRANSPARENCY = 100,
+	},
+	ERRORS = {
+		EMPTY_NAME = "Empty name",
+		OVERWRITE_DEFAULT = "Cannot overwrite Default configuration",
+		DELETE_DEFAULT = "Default configuration cannot be deleted",
+		DELETE_AUTOLOAD = "Cannot delete system autoload file",
+		NOT_FOUND = "Not found",
+		DEFAULT_UNAVAILABLE = "Default snapshot unavailable",
+	},
+}
+
 return function(Context)
 	local HttpService = game:GetService("HttpService")
-	local FeatureConfig = Context.FeatureConfig
-	local CONFIG = Context.CONFIG
-	local Utils = Context.Utils
-	local UIRegistry = Context.UIRegistry
-	local Theme = Context.Theme
-	local ThemeManager = Context.ThemeManager
-	local State = Context.State
-	local Connections = Context.Connections
+
+	local FeatureConfig = (Context and Context.FeatureConfig) or {}
+	local CONFIG = (Context and Context.CONFIG) or { FOLDER = "Configs", EXT = ".json" }
+	local Utils = (Context and Context.Utils) or {}
+	local UIRegistry = (Context and Context.UIRegistry) or {}
+	local Theme = (Context and Context.Theme) or {}
+	local ThemeManager = Context and Context.ThemeManager
+	local State = (Context and Context.State) or {}
+	local Connections = Context and Context.Connections
 
 	local ConfigSystem = {
 		Dirty = false,
-		AutoloadFile = "_autoload",
+		AutoloadFile = SETTINGS.AUTOLOAD_FILE,
 		DefaultSnapshot = nil,
 	}
 
-	local function serializeKeybind(k)
-		if k == nil then
+	local function copyTable(source)
+		if type(source) ~= "table" then
+			return source
+		end
+		local clone = {}
+		for key, val in pairs(source) do
+			clone[key] = type(val) == "table" and copyTable(val) or val
+		end
+		return clone
+	end
+
+	local function getConfigPath(name)
+		return string.format("%s/%s%s", CONFIG.FOLDER or "", name, CONFIG.EXT or "")
+	end
+
+	local function safeColorToTable(color)
+		if typeof(color) == "Color3" and Utils.ColorToTable then
+			return Utils.ColorToTable(color)
+		end
+		return color
+	end
+
+	local function safeTableToColor(data)
+		if type(data) == "table" and Utils.TableToColor then
+			return Utils.TableToColor(data)
+		end
+		return data
+	end
+
+	local function serializeKeybind(bind)
+		if bind == nil then
 			return nil
 		end
-		if typeof(k) == "string" then
-			return { kind = "string", value = k }
-		elseif typeof(k) == "EnumItem" then
-			if k.EnumType == Enum.KeyCode then
-				return { kind = "KeyCode", value = k.Name }
-			elseif k.EnumType == Enum.UserInputType then
-				return { kind = "UserInputType", value = k.Name }
+		local bindType = typeof(bind)
+		if bindType == "string" then
+			return { kind = "string", value = bind }
+		elseif bindType == "EnumItem" then
+			if bind.EnumType == Enum.KeyCode or bind.EnumType == Enum.UserInputType then
+				return { kind = bind.EnumType.Name, value = bind.Name }
 			end
 		end
 		return nil
@@ -38,35 +107,29 @@ return function(Context)
 		end
 		if data.kind == "string" then
 			return data.value
-		end
-		if data.kind == "KeyCode" then
-			local ok, kc = pcall(function()
+		elseif data.kind == "KeyCode" then
+			local success, result = pcall(function()
 				return Enum.KeyCode[data.value]
 			end)
-			return ok and kc or nil
-		end
-		if data.kind == "UserInputType" then
-			local ok, uit = pcall(function()
+			return success and result or nil
+		elseif data.kind == "UserInputType" then
+			local success, result = pcall(function()
 				return Enum.UserInputType[data.value]
 			end)
-			return ok and uit or nil
+			return success and result or nil
 		end
 		return nil
 	end
 
-	local function getStretchRes()
-		local sr = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
-		if type(sr) ~= "table" then
-			return {
-				Enabled = false,
-				X = 1.333,
-				Y = 1.0,
-			}
+	local function getStretchResData()
+		local stretch = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
+		if type(stretch) ~= "table" then
+			return copyTable(SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES)
 		end
 		return {
-			Enabled = sr.Enabled == true,
-			X = tonumber(sr.X) or 1.333,
-			Y = tonumber(sr.Y) or 1.0,
+			Enabled = stretch.Enabled == true,
+			X = tonumber(stretch.X) or SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES.X,
+			Y = tonumber(stretch.Y) or SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES.Y,
 		}
 	end
 
@@ -76,104 +139,106 @@ return function(Context)
 
 	function ConfigSystem.Serialize()
 		local themeData = {}
-		for k, v in pairs(Theme) do
-			if typeof(v) == "Color3" then
-				themeData[k] = Utils.ColorToTable(v)
+		for key, val in pairs(Theme) do
+			if typeof(val) == "Color3" then
+				themeData[key] = safeColorToTable(val)
 			end
 		end
 
 		local extras = FeatureConfig.Extras or {}
-		local hitbox = extras.Hitbox or { Enabled = false, Size = 10 }
-		local spinBot = extras.SpinBot or { Enabled = false, Speed = 20 }
-		local crosshair = extras.Crosshair or {
-			Visible = false,
-			Size = 12,
-			Gap = 4,
-			Thickness = 2,
-			Color = Color3.fromRGB(255, 255, 255),
-		}
+		local hitbox = extras.Hitbox or SETTINGS.DEFAULTS.EXTRAS.HITBOX
+		local spinBot = extras.SpinBot or SETTINGS.DEFAULTS.EXTRAS.SPINBOT
+		local crosshair = extras.Crosshair or SETTINGS.DEFAULTS.EXTRAS.CROSSHAIR
+		local aimbot = FeatureConfig.Aimbot or {}
+		local movement = FeatureConfig.Movement or {}
+		local esp = FeatureConfig.ESP or {}
+		local chams = FeatureConfig.Chams or {}
+		local camera = FeatureConfig.Camera or {}
+		local visuals = FeatureConfig.Visuals or {}
+		local perf = FeatureConfig.Performance or {}
+		local gameMod = FeatureConfig.Game or {}
 
 		return {
 			Aimbot = {
-				Enabled = FeatureConfig.Aimbot.Enabled,
-				Keybind = serializeKeybind(FeatureConfig.Aimbot.Keybind),
-				Hitpart = FeatureConfig.Aimbot.Hitpart,
-				AirHitpart = FeatureConfig.Aimbot.AirHitpart,
-				Smoothness = FeatureConfig.Aimbot.Smoothness,
-				LockMode = FeatureConfig.Aimbot.LockMode,
-				Prediction = table.clone(FeatureConfig.Aimbot.Prediction),
-				TeamCheck = FeatureConfig.Aimbot.TeamCheck,
-				VisCheck = FeatureConfig.Aimbot.VisCheck,
-				MaxDistance = FeatureConfig.Aimbot.MaxDistance,
-				ShakeIntensity = FeatureConfig.Aimbot.ShakeIntensity,
-				LockNPC = FeatureConfig.Aimbot.LockNPC,
-				UnlockOnDeath = FeatureConfig.Aimbot.UnlockOnDeath,
-				BreakOnPull = FeatureConfig.Aimbot.BreakOnPull,
-				MaxLockRadius = FeatureConfig.Aimbot.MaxLockRadius,
-				Triggerbot = table.clone(FeatureConfig.Aimbot.Triggerbot),
-				FOV = table.clone(FeatureConfig.Aimbot.FOV),
+				Enabled = aimbot.Enabled,
+				Keybind = serializeKeybind(aimbot.Keybind),
+				Hitpart = aimbot.Hitpart,
+				AirHitpart = aimbot.AirHitpart,
+				Smoothness = aimbot.Smoothness,
+				LockMode = aimbot.LockMode,
+				Prediction = copyTable(aimbot.Prediction or {}),
+				TeamCheck = aimbot.TeamCheck,
+				VisCheck = aimbot.VisCheck,
+				MaxDistance = aimbot.MaxDistance,
+				ShakeIntensity = aimbot.ShakeIntensity,
+				LockNPC = aimbot.LockNPC,
+				UnlockOnDeath = aimbot.UnlockOnDeath,
+				BreakOnPull = aimbot.BreakOnPull,
+				MaxLockRadius = aimbot.MaxLockRadius,
+				Triggerbot = copyTable(aimbot.Triggerbot or {}),
+				FOV = copyTable(aimbot.FOV or {}),
 			},
-			Movement = table.clone(FeatureConfig.Movement),
+			Movement = copyTable(movement),
 			ESP = {
-				Enabled = FeatureConfig.ESP.Enabled,
-				Box = FeatureConfig.ESP.Box,
-				Name = FeatureConfig.ESP.Name,
-				Health = FeatureConfig.ESP.Health,
-				Distance = FeatureConfig.ESP.Distance,
-				Tracers = FeatureConfig.ESP.Tracers,
-				Skeleton = FeatureConfig.ESP.Skeleton,
-				HeadDot = FeatureConfig.ESP.HeadDot,
-				LookDir = FeatureConfig.ESP.LookDir,
-				TeamCheck = FeatureConfig.ESP.TeamCheck,
-				MaxDist = FeatureConfig.ESP.MaxDist,
-				Color = Utils.ColorToTable(FeatureConfig.ESP.Color),
+				Enabled = esp.Enabled,
+				Box = esp.Box,
+				Name = esp.Name,
+				Health = esp.Health,
+				Distance = esp.Distance,
+				Tracers = esp.Tracers,
+				Skeleton = esp.Skeleton,
+				HeadDot = esp.HeadDot,
+				LookDir = esp.LookDir,
+				TeamCheck = esp.TeamCheck,
+				MaxDist = esp.MaxDist,
+				Color = safeColorToTable(esp.Color),
 			},
 			Chams = {
-				Enabled = FeatureConfig.Chams.Enabled,
-				FillColor = Utils.ColorToTable(FeatureConfig.Chams.FillColor),
-				OutlineColor = Utils.ColorToTable(FeatureConfig.Chams.OutlineColor),
+				Enabled = chams.Enabled,
+				FillColor = safeColorToTable(chams.FillColor),
+				OutlineColor = safeColorToTable(chams.OutlineColor),
 			},
 			Camera = {
-				FOV = FeatureConfig.Camera.FOV,
+				FOV = camera.FOV,
 			},
 			Visuals = {
-				Fullbright = FeatureConfig.Visuals.Fullbright,
+				Fullbright = visuals.Fullbright,
 			},
 			Extras = {
 				Hitbox = {
 					Enabled = hitbox.Enabled == true,
-					Size = tonumber(hitbox.Size) or 10,
+					Size = tonumber(hitbox.Size) or SETTINGS.DEFAULTS.EXTRAS.HITBOX.Size,
 				},
 				SpinBot = {
 					Enabled = spinBot.Enabled == true,
-					Speed = tonumber(spinBot.Speed) or 20,
+					Speed = tonumber(spinBot.Speed) or SETTINGS.DEFAULTS.EXTRAS.SPINBOT.Speed,
 				},
 				Crosshair = {
 					Visible = crosshair.Visible == true,
-					Size = tonumber(crosshair.Size) or 12,
-					Gap = tonumber(crosshair.Gap) or 4,
-					Thickness = tonumber(crosshair.Thickness) or 2,
-					Color = Utils.ColorToTable(crosshair.Color or Color3.fromRGB(255, 255, 255)),
+					Size = tonumber(crosshair.Size) or SETTINGS.DEFAULTS.EXTRAS.CROSSHAIR.Size,
+					Gap = tonumber(crosshair.Gap) or SETTINGS.DEFAULTS.EXTRAS.CROSSHAIR.Gap,
+					Thickness = tonumber(crosshair.Thickness) or SETTINGS.DEFAULTS.EXTRAS.CROSSHAIR.Thickness,
+					Color = safeColorToTable(crosshair.Color or SETTINGS.DEFAULTS.EXTRAS.CROSSHAIR.Color),
 				},
 				SpeedLines = extras.SpeedLines == true,
 				Wallbang = extras.Wallbang == true,
-				StretchRes = getStretchRes(),
+				StretchRes = getStretchResData(),
 			},
-			Performance = table.clone(FeatureConfig.Performance),
+			Performance = copyTable(perf),
 			Game = {
-				DoorPhase = FeatureConfig.Game.DoorPhase,
-				DoorGlow = FeatureConfig.Game.DoorGlow,
-				GlowColor = Utils.ColorToTable(FeatureConfig.Game.GlowColor),
-				PhaseTransparency = FeatureConfig.Game.PhaseTransparency,
-				NoSpread = FeatureConfig.Game.NoSpread,
-				FastFire = FeatureConfig.Game.FastFire,
-				ForceAuto = FeatureConfig.Game.ForceAuto,
-				ForceRange = FeatureConfig.Game.ForceRange,
-				FireRateValue = FeatureConfig.Game.FireRateValue,
-				RangeValue = FeatureConfig.Game.RangeValue,
+				DoorPhase = gameMod.DoorPhase,
+				DoorGlow = gameMod.DoorGlow,
+				GlowColor = safeColorToTable(gameMod.GlowColor),
+				PhaseTransparency = gameMod.PhaseTransparency,
+				NoSpread = gameMod.NoSpread,
+				FastFire = gameMod.FastFire,
+				ForceAuto = gameMod.ForceAuto,
+				ForceRange = gameMod.ForceRange,
+				FireRateValue = gameMod.FireRateValue,
+				RangeValue = gameMod.RangeValue,
 			},
 			Theme = {
-				PresetName = (ThemeManager and ThemeManager.ActivePreset) or "Default Cyan",
+				PresetName = (ThemeManager and ThemeManager.ActivePreset) or SETTINGS.DEFAULTS.THEME_PRESET,
 				Colors = themeData,
 			},
 			Settings = {
@@ -188,73 +253,74 @@ return function(Context)
 			return
 		end
 
-		if type(data.Aimbot) == "table" then
-			for k, v in pairs(data.Aimbot) do
-				if k == "Keybind" then
-					FeatureConfig.Aimbot.Keybind = deserializeKeybind(v) or FeatureConfig.Aimbot.Keybind
-				elseif (k == "Prediction" or k == "FOV" or k == "Triggerbot") and type(v) == "table" then
-					for k2, v2 in pairs(v) do
-						FeatureConfig.Aimbot[k][k2] = v2
+		if type(data.Aimbot) == "table" and FeatureConfig.Aimbot then
+			for key, val in pairs(data.Aimbot) do
+				if key == "Keybind" then
+					FeatureConfig.Aimbot.Keybind = deserializeKeybind(val) or FeatureConfig.Aimbot.Keybind
+				elseif (key == "Prediction" or key == "FOV" or key == "Triggerbot") and type(val) == "table" then
+					FeatureConfig.Aimbot[key] = FeatureConfig.Aimbot[key] or {}
+					for subKey, subVal in pairs(val) do
+						FeatureConfig.Aimbot[key][subKey] = subVal
 					end
 				else
-					FeatureConfig.Aimbot[k] = v
+					FeatureConfig.Aimbot[key] = val
 				end
 			end
 		end
 
-		if type(data.Movement) == "table" then
-			for k, v in pairs(data.Movement) do
-				FeatureConfig.Movement[k] = v
+		if type(data.Movement) == "table" and FeatureConfig.Movement then
+			for key, val in pairs(data.Movement) do
+				FeatureConfig.Movement[key] = val
 			end
 		end
 
-		if type(data.ESP) == "table" then
-			for k, v in pairs(data.ESP) do
-				if k == "Color" then
-					FeatureConfig.ESP.Color = Utils.TableToColor(v)
+		if type(data.ESP) == "table" and FeatureConfig.ESP then
+			for key, val in pairs(data.ESP) do
+				if key == "Color" then
+					FeatureConfig.ESP.Color = safeTableToColor(val)
 				else
-					FeatureConfig.ESP[k] = v
+					FeatureConfig.ESP[key] = val
 				end
 			end
 		end
 
-		if type(data.Chams) == "table" then
-			for k, v in pairs(data.Chams) do
-				if k == "FillColor" or k == "OutlineColor" then
-					FeatureConfig.Chams[k] = Utils.TableToColor(v)
+		if type(data.Chams) == "table" and FeatureConfig.Chams then
+			for key, val in pairs(data.Chams) do
+				if key == "FillColor" or key == "OutlineColor" then
+					FeatureConfig.Chams[key] = safeTableToColor(val)
 				else
-					FeatureConfig.Chams[k] = v
+					FeatureConfig.Chams[key] = val
 				end
 			end
 		end
 
-		if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" then
+		if type(data.Camera) == "table" and type(data.Camera.FOV) == "number" and FeatureConfig.Camera then
 			FeatureConfig.Camera.FOV = data.Camera.FOV
 		end
 
-		if type(data.Visuals) == "table" and data.Visuals.Fullbright ~= nil then
+		if type(data.Visuals) == "table" and data.Visuals.Fullbright ~= nil and FeatureConfig.Visuals then
 			FeatureConfig.Visuals.Fullbright = data.Visuals.Fullbright
 		end
 
-		if type(data.Extras) == "table" then
-			if type(data.Extras.Hitbox) == "table" then
-				for k, v in pairs(data.Extras.Hitbox) do
-					FeatureConfig.Extras.Hitbox[k] = v
+		if type(data.Extras) == "table" and FeatureConfig.Extras then
+			if type(data.Extras.Hitbox) == "table" and FeatureConfig.Extras.Hitbox then
+				for key, val in pairs(data.Extras.Hitbox) do
+					FeatureConfig.Extras.Hitbox[key] = val
 				end
 			end
 
-			if type(data.Extras.SpinBot) == "table" then
-				for k, v in pairs(data.Extras.SpinBot) do
-					FeatureConfig.Extras.SpinBot[k] = v
+			if type(data.Extras.SpinBot) == "table" and FeatureConfig.Extras.SpinBot then
+				for key, val in pairs(data.Extras.SpinBot) do
+					FeatureConfig.Extras.SpinBot[key] = val
 				end
 			end
 
-			if type(data.Extras.Crosshair) == "table" then
-				for k, v in pairs(data.Extras.Crosshair) do
-					if k == "Color" then
-						FeatureConfig.Extras.Crosshair.Color = Utils.TableToColor(v)
+			if type(data.Extras.Crosshair) == "table" and FeatureConfig.Extras.Crosshair then
+				for key, val in pairs(data.Extras.Crosshair) do
+					if key == "Color" then
+						FeatureConfig.Extras.Crosshair.Color = safeTableToColor(val)
 					else
-						FeatureConfig.Extras.Crosshair[k] = v
+						FeatureConfig.Extras.Crosshair[key] = val
 					end
 				end
 			end
@@ -268,31 +334,25 @@ return function(Context)
 			end
 
 			if type(data.Extras.StretchRes) == "table" then
-				if type(FeatureConfig.Extras.StretchRes) ~= "table" then
-					FeatureConfig.Extras.StretchRes = {
-						Enabled = false,
-						X = 1.333,
-						Y = 1.0,
-					}
-				end
-				for k, v in pairs(data.Extras.StretchRes) do
-					FeatureConfig.Extras.StretchRes[k] = v
+				FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or copyTable(SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES)
+				for key, val in pairs(data.Extras.StretchRes) do
+					FeatureConfig.Extras.StretchRes[key] = val
 				end
 			end
 		end
 
-		if type(data.Performance) == "table" then
-			for k, v in pairs(data.Performance) do
-				FeatureConfig.Performance[k] = v
+		if type(data.Performance) == "table" and FeatureConfig.Performance then
+			for key, val in pairs(data.Performance) do
+				FeatureConfig.Performance[key] = val
 			end
 		end
 
-		if type(data.Game) == "table" then
-			for k, v in pairs(data.Game) do
-				if k == "GlowColor" then
-					FeatureConfig.Game.GlowColor = Utils.TableToColor(v)
+		if type(data.Game) == "table" and FeatureConfig.Game then
+			for key, val in pairs(data.Game) do
+				if key == "GlowColor" then
+					FeatureConfig.Game.GlowColor = safeTableToColor(val)
 				else
-					FeatureConfig.Game[k] = v
+					FeatureConfig.Game[key] = val
 				end
 			end
 		end
@@ -301,12 +361,12 @@ return function(Context)
 			if ThemeManager and data.Theme.PresetName then
 				ThemeManager.ActivePreset = data.Theme.PresetName
 			end
-			if type(data.Theme.Colors) == "table" and Context.UI then
-				local tColors = {}
-				for k, v in pairs(data.Theme.Colors) do
-					tColors[k] = Utils.TableToColor(v)
+			if type(data.Theme.Colors) == "table" and Context.UI and Context.UI.SetTheme then
+				local themeColors = {}
+				for key, val in pairs(data.Theme.Colors) do
+					themeColors[key] = safeTableToColor(val)
 				end
-				Context.UI:SetTheme(tColors)
+				Context.UI:SetTheme(themeColors)
 			end
 		end
 
@@ -315,108 +375,126 @@ return function(Context)
 			State.includeSelf = data.Settings.IncludeSelf or false
 		end
 
-		if not FeatureConfig.Aimbot.Enabled and Context.AimbotSystem then
+		if FeatureConfig.Aimbot and not FeatureConfig.Aimbot.Enabled and Context.AimbotSystem then
 			Context.AimbotSystem.LockOff()
 		end
-		if not FeatureConfig.Movement.FlyEnabled and Context.FlySystem then
+		if FeatureConfig.Movement and not FeatureConfig.Movement.FlyEnabled and Context.FlySystem then
 			Context.FlySystem.Stop()
 		end
-		if FeatureConfig.Extras.Hitbox and not FeatureConfig.Extras.Hitbox.Enabled and Context.ResetHitboxes then
+		if FeatureConfig.Extras and FeatureConfig.Extras.Hitbox and not FeatureConfig.Extras.Hitbox.Enabled and Context.ResetHitboxes then
 			Context.ResetHitboxes()
 		end
 	end
 
 	function ConfigSystem.UpdateUI()
 		local function set(key, value)
-			if UIRegistry[key] and UIRegistry[key].Set then
-				UIRegistry[key].Set(value, true)
+			local entry = UIRegistry[key]
+			if entry and type(entry.Set) == "function" then
+				entry.Set(value, true)
 			end
 		end
 
-		set("Aimbot_Enabled", FeatureConfig.Aimbot.Enabled)
-		set("Aimbot_Keybind", FeatureConfig.Aimbot.Keybind)
-		set("Aimbot_LockMode", FeatureConfig.Aimbot.LockMode)
-		set("Aimbot_Hitpart", FeatureConfig.Aimbot.Hitpart)
-		set("Aimbot_Smoothness", FeatureConfig.Aimbot.Smoothness)
-		set("Aimbot_ShakeIntensity", FeatureConfig.Aimbot.ShakeIntensity)
-		set("Aimbot_TeamCheck", FeatureConfig.Aimbot.TeamCheck)
-		set("Aimbot_VisCheck", FeatureConfig.Aimbot.VisCheck)
-		set("Aimbot_UnlockOnDeath", FeatureConfig.Aimbot.UnlockOnDeath)
-		set("Aimbot_BreakOnPull", FeatureConfig.Aimbot.BreakOnPull)
-		set("Aimbot_MaxLockRadius", FeatureConfig.Aimbot.MaxLockRadius)
-		set("Aimbot_MaxDistance", FeatureConfig.Aimbot.MaxDistance)
-		set("Aimbot_FOV_Show", FeatureConfig.Aimbot.FOV.Show)
-		set("Aimbot_FOV_Filled", FeatureConfig.Aimbot.FOV.Filled)
-		set("Aimbot_FOV_Rainbow", FeatureConfig.Aimbot.FOV.Rainbow)
-		set("Aimbot_FOV_Size", FeatureConfig.Aimbot.FOV.Size)
-		set("Aimbot_FOV_Thickness", FeatureConfig.Aimbot.FOV.Thickness)
-		set("Aimbot_Prediction_Horizontal", math.floor((FeatureConfig.Aimbot.Prediction.Horizontal or 0) * 200))
-		set("Aimbot_Prediction_Vertical", math.floor((FeatureConfig.Aimbot.Prediction.Vertical or 0) * 200))
-		set("Aimbot_Triggerbot_Enabled", FeatureConfig.Aimbot.Triggerbot.Enabled)
-		set("Aimbot_Triggerbot_Delay", math.floor(FeatureConfig.Aimbot.Triggerbot.Delay * 100))
+		local aimbot = FeatureConfig.Aimbot or {}
+		local aimFov = aimbot.FOV or {}
+		local aimPred = aimbot.Prediction or {}
+		local aimTrigger = aimbot.Triggerbot or {}
 
-		set("ESP_Enabled", FeatureConfig.ESP.Enabled)
-		set("ESP_Box", FeatureConfig.ESP.Box)
-		set("ESP_Name", FeatureConfig.ESP.Name)
-		set("ESP_Health", FeatureConfig.ESP.Health)
-		set("ESP_Distance", FeatureConfig.ESP.Distance)
-		set("ESP_Tracers", FeatureConfig.ESP.Tracers)
-		set("ESP_Skeleton", FeatureConfig.ESP.Skeleton)
-		set("ESP_HeadDot", FeatureConfig.ESP.HeadDot)
-		set("ESP_LookDir", FeatureConfig.ESP.LookDir)
-		set("ESP_TeamCheck", FeatureConfig.ESP.TeamCheck)
-		set("ESP_MaxDist", FeatureConfig.ESP.MaxDist)
-		set("ESP_Color", FeatureConfig.ESP.Color)
-		set("ESP_Chams_Enabled", FeatureConfig.Chams.Enabled)
-		set("ESP_Chams_FillColor", FeatureConfig.Chams.FillColor)
-		set("ESP_Chams_OutlineColor", FeatureConfig.Chams.OutlineColor)
+		set("Aimbot_Enabled", aimbot.Enabled)
+		set("Aimbot_Keybind", aimbot.Keybind)
+		set("Aimbot_LockMode", aimbot.LockMode)
+		set("Aimbot_Hitpart", aimbot.Hitpart)
+		set("Aimbot_Smoothness", aimbot.Smoothness)
+		set("Aimbot_ShakeIntensity", aimbot.ShakeIntensity)
+		set("Aimbot_TeamCheck", aimbot.TeamCheck)
+		set("Aimbot_VisCheck", aimbot.VisCheck)
+		set("Aimbot_UnlockOnDeath", aimbot.UnlockOnDeath)
+		set("Aimbot_BreakOnPull", aimbot.BreakOnPull)
+		set("Aimbot_MaxLockRadius", aimbot.MaxLockRadius)
+		set("Aimbot_MaxDistance", aimbot.MaxDistance)
+		set("Aimbot_FOV_Show", aimFov.Show)
+		set("Aimbot_FOV_Filled", aimFov.Filled)
+		set("Aimbot_FOV_Rainbow", aimFov.Rainbow)
+		set("Aimbot_FOV_Size", aimFov.Size)
+		set("Aimbot_FOV_Thickness", aimFov.Thickness)
+		set("Aimbot_Prediction_Horizontal", math.floor((aimPred.Horizontal or 0) * SETTINGS.SCALE_FACTORS.PREDICTION))
+		set("Aimbot_Prediction_Vertical", math.floor((aimPred.Vertical or 0) * SETTINGS.SCALE_FACTORS.PREDICTION))
+		set("Aimbot_Triggerbot_Enabled", aimTrigger.Enabled)
+		set("Aimbot_Triggerbot_Delay", math.floor((aimTrigger.Delay or 0) * SETTINGS.SCALE_FACTORS.TRIGGERBOT_DELAY))
 
-		set("Movement_Speed", FeatureConfig.Movement.Speed)
-		set("Movement_JumpPower", FeatureConfig.Movement.JumpPower)
-		set("Movement_SprintEnabled", FeatureConfig.Movement.SprintEnabled)
-		set("Movement_SprintSpeed", FeatureConfig.Movement.SprintSpeed)
-		set("Movement_InfJump", FeatureConfig.Movement.InfJump)
-		set("Movement_FlySpeed", FeatureConfig.Movement.FlySpeed)
-		set("Movement_FlyEnabled", FeatureConfig.Movement.FlyEnabled)
-		set("Movement_CFrameSpeed", FeatureConfig.Movement.CFrameSpeed)
-		set("Movement_CFrameSpeedValue", FeatureConfig.Movement.CFrameSpeedValue or 50)
-		set("Movement_Bhop", FeatureConfig.Movement.Bhop)
-		set("Camera_FOV", FeatureConfig.Camera.FOV)
+		local esp = FeatureConfig.ESP or {}
+		local chams = FeatureConfig.Chams or {}
+		set("ESP_Enabled", esp.Enabled)
+		set("ESP_Box", esp.Box)
+		set("ESP_Name", esp.Name)
+		set("ESP_Health", esp.Health)
+		set("ESP_Distance", esp.Distance)
+		set("ESP_Tracers", esp.Tracers)
+		set("ESP_Skeleton", esp.Skeleton)
+		set("ESP_HeadDot", esp.HeadDot)
+		set("ESP_LookDir", esp.LookDir)
+		set("ESP_TeamCheck", esp.TeamCheck)
+		set("ESP_MaxDist", esp.MaxDist)
+		set("ESP_Color", esp.Color)
+		set("ESP_Chams_Enabled", chams.Enabled)
+		set("ESP_Chams_FillColor", chams.FillColor)
+		set("ESP_Chams_OutlineColor", chams.OutlineColor)
 
-		set("Extras_Hitbox_Enabled", FeatureConfig.Extras.Hitbox.Enabled)
-		set("Extras_Hitbox_Size", FeatureConfig.Extras.Hitbox.Size)
-		set("Extras_SpinBot_Enabled", FeatureConfig.Extras.SpinBot.Enabled)
-		set("Extras_SpinBot_Speed", FeatureConfig.Extras.SpinBot.Speed)
-		set("Extras_Crosshair_Visible", FeatureConfig.Extras.Crosshair.Visible)
-		set("Extras_Crosshair_Size", FeatureConfig.Extras.Crosshair.Size)
-		set("Extras_Crosshair_Gap", FeatureConfig.Extras.Crosshair.Gap)
-		set("Extras_Crosshair_Thickness", FeatureConfig.Extras.Crosshair.Thickness)
-		set("Extras_Crosshair_Color", FeatureConfig.Extras.Crosshair.Color)
-		set("Extras_SpeedLines", FeatureConfig.Extras.SpeedLines)
-		set("Extras_Wallbang", FeatureConfig.Extras.Wallbang)
+		local mov = FeatureConfig.Movement or {}
+		set("Movement_Speed", mov.Speed)
+		set("Movement_JumpPower", mov.JumpPower)
+		set("Movement_SprintEnabled", mov.SprintEnabled)
+		set("Movement_SprintSpeed", mov.SprintSpeed)
+		set("Movement_InfJump", mov.InfJump)
+		set("Movement_FlySpeed", mov.FlySpeed)
+		set("Movement_FlyEnabled", mov.FlyEnabled)
+		set("Movement_CFrameSpeed", mov.CFrameSpeed)
+		set("Movement_CFrameSpeedValue", mov.CFrameSpeedValue or SETTINGS.DEFAULTS.CFRAME_SPEED)
+		set("Movement_Bhop", mov.Bhop)
 
-		local sr = FeatureConfig.Extras.StretchRes or {}
-		set("Extras_StretchRes_Enabled", sr.Enabled == true)
-		set("Extras_StretchRes_X", math.floor((sr.X or 1.333) * 100))
-		set("Extras_StretchRes_Y", math.floor((sr.Y or 1.0) * 100))
+		local cam = FeatureConfig.Camera or {}
+		set("Camera_FOV", cam.FOV)
 
-		set("Visuals_Fullbright", FeatureConfig.Visuals.Fullbright)
+		local ext = FeatureConfig.Extras or {}
+		local extHitbox = ext.Hitbox or {}
+		local extSpin = ext.SpinBot or {}
+		local extCross = ext.Crosshair or {}
+		local extStretch = ext.StretchRes or {}
 
-		set("Perf_NoTextures", FeatureConfig.Performance.NoTextures)
-		set("Perf_LowMaterials", FeatureConfig.Performance.LowMaterials)
-		set("Perf_OptimizeTerrain", FeatureConfig.Performance.OptimizeTerrain)
-		set("Perf_NoPostProcessing", FeatureConfig.Performance.NoPostProcessing)
-		set("Perf_NoShadows", FeatureConfig.Performance.NoShadows)
-		set("Perf_NoParticles", FeatureConfig.Performance.NoParticles)
+		set("Extras_Hitbox_Enabled", extHitbox.Enabled)
+		set("Extras_Hitbox_Size", extHitbox.Size)
+		set("Extras_SpinBot_Enabled", extSpin.Enabled)
+		set("Extras_SpinBot_Speed", extSpin.Speed)
+		set("Extras_Crosshair_Visible", extCross.Visible)
+		set("Extras_Crosshair_Size", extCross.Size)
+		set("Extras_Crosshair_Gap", extCross.Gap)
+		set("Extras_Crosshair_Thickness", extCross.Thickness)
+		set("Extras_Crosshair_Color", extCross.Color)
+		set("Extras_SpeedLines", ext.SpeedLines)
+		set("Extras_Wallbang", ext.Wallbang)
+		set("Extras_StretchRes_Enabled", extStretch.Enabled == true)
+		set("Extras_StretchRes_X", math.floor((extStretch.X or SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES.X) * SETTINGS.SCALE_FACTORS.STRETCH_RES))
+		set("Extras_StretchRes_Y", math.floor((extStretch.Y or SETTINGS.DEFAULTS.EXTRAS.STRETCH_RES.Y) * SETTINGS.SCALE_FACTORS.STRETCH_RES))
 
-		set("Game_DoorPhase", FeatureConfig.Game.DoorPhase)
-		set("Game_DoorGlow", FeatureConfig.Game.DoorGlow)
-		set("Game_PhaseTransparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100))
-		set("Game_GlowColor", FeatureConfig.Game.GlowColor)
-		set("Game_NoSpread", FeatureConfig.Game.NoSpread)
-		set("Game_FastFire", FeatureConfig.Game.FastFire)
-		set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
-		set("Game_ForceRange", FeatureConfig.Game.ForceRange)
+		local vis = FeatureConfig.Visuals or {}
+		set("Visuals_Fullbright", vis.Fullbright)
+
+		local perf = FeatureConfig.Performance or {}
+		set("Perf_NoTextures", perf.NoTextures)
+		set("Perf_LowMaterials", perf.LowMaterials)
+		set("Perf_OptimizeTerrain", perf.OptimizeTerrain)
+		set("Perf_NoPostProcessing", perf.NoPostProcessing)
+		set("Perf_NoShadows", perf.NoShadows)
+		set("Perf_NoParticles", perf.NoParticles)
+
+		local gm = FeatureConfig.Game or {}
+		set("Game_DoorPhase", gm.DoorPhase)
+		set("Game_DoorGlow", gm.DoorGlow)
+		set("Game_PhaseTransparency", math.floor((gm.PhaseTransparency or SETTINGS.DEFAULTS.PHASE_TRANSPARENCY) * SETTINGS.SCALE_FACTORS.PHASE_TRANSPARENCY))
+		set("Game_GlowColor", gm.GlowColor)
+		set("Game_NoSpread", gm.NoSpread)
+		set("Game_FastFire", gm.FastFire)
+		set("Game_ForceAuto", gm.ForceAuto)
+		set("Game_ForceRange", gm.ForceRange)
 
 		set("Theme_Accent", Theme.Accent)
 		set("Theme_Bg", Theme.Bg)
@@ -432,91 +510,104 @@ return function(Context)
 
 	function ConfigSystem.GetSavedNames()
 		local customNames = {}
-		for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do
-			local name = path:match("[/\\]?([^/\\]+)$") or path
-			if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
-				local finalName = name:sub(1, -#CONFIG.EXT - 1)
-				if finalName ~= ConfigSystem.AutoloadFile and finalName:lower() ~= "default" then
-					table.insert(customNames, finalName)
+		local fileList = (Utils.ListFiles and Utils.ListFiles(CONFIG.FOLDER)) or {}
+		local extLen = #(CONFIG.EXT or "")
+
+		for _, path in ipairs(fileList) do
+			local fileName = path:match("[/\\]?([^/\\]+)$") or path
+			if fileName:sub(-extLen) == CONFIG.EXT then
+				local baseName = fileName:sub(1, -extLen - 1)
+				if baseName ~= ConfigSystem.AutoloadFile and baseName:lower() ~= SETTINGS.DEFAULT_CONFIG_NAME:lower() then
+					table.insert(customNames, baseName)
 				end
 			end
 		end
 		table.sort(customNames)
 
-		local names = { "Default" }
-		for _, n in ipairs(customNames) do
-			table.insert(names, n)
+		local results = { SETTINGS.DEFAULT_CONFIG_NAME }
+		for _, name in ipairs(customNames) do
+			table.insert(results, name)
 		end
-		return names
+		return results
 	end
 
 	function ConfigSystem.Save(name)
 		if not name or #name == 0 then
-			return false, "Empty name"
+			return false, SETTINGS.ERRORS.EMPTY_NAME
 		end
-		if name:lower() == "default" then
-			return false, "Cannot overwrite Default configuration"
+		if name:lower() == SETTINGS.DEFAULT_CONFIG_NAME:lower() then
+			return false, SETTINGS.ERRORS.OVERWRITE_DEFAULT
 		end
 
-		local ok, encoded = pcall(function()
+		local encodeSuccess, encoded = pcall(function()
 			return HttpService:JSONEncode(ConfigSystem.Serialize())
 		end)
-		if not ok then
+		if not encodeSuccess then
 			return false, tostring(encoded)
 		end
-		return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
+
+		if not Utils.WriteFile then
+			return false, "WriteFile unavailable"
+		end
+		return Utils.WriteFile(getConfigPath(name), encoded)
 	end
 
 	function ConfigSystem.Load(name)
-		if name == "Default" then
+		if name == SETTINGS.DEFAULT_CONFIG_NAME then
 			if ConfigSystem.DefaultSnapshot then
 				ConfigSystem.Deserialize(ConfigSystem.DefaultSnapshot)
 				ConfigSystem.UpdateUI()
 				return true
 			end
-			return false, "Default snapshot unavailable"
+			return false, SETTINGS.ERRORS.DEFAULT_UNAVAILABLE
 		end
 
-		local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT)
+		if not Utils.ReadFile then
+			return false, "ReadFile unavailable"
+		end
+		local content = Utils.ReadFile(getConfigPath(name))
 		if not content then
-			return false, "Not found"
+			return false, SETTINGS.ERRORS.NOT_FOUND
 		end
 
-		local ok, data = pcall(function()
+		local decodeSuccess, decoded = pcall(function()
 			return HttpService:JSONDecode(content)
 		end)
-		if not ok then
-			return false, tostring(data)
+		if not decodeSuccess then
+			return false, tostring(decoded)
 		end
 
-		ConfigSystem.Deserialize(data)
+		ConfigSystem.Deserialize(decoded)
 		ConfigSystem.UpdateUI()
 		return true
 	end
 
 	function ConfigSystem.Delete(name)
-		if not name or name:lower() == "default" then
-			return false, "Default configuration cannot be deleted"
+		if not name or name:lower() == SETTINGS.DEFAULT_CONFIG_NAME:lower() then
+			return false, SETTINGS.ERRORS.DELETE_DEFAULT
 		end
 		if name:lower() == ConfigSystem.AutoloadFile:lower() then
-			return false, "Cannot delete system autoload file"
+			return false, SETTINGS.ERRORS.DELETE_AUTOLOAD
 		end
 		return pcall(function()
-			delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT)
+			delfile(getConfigPath(name))
 		end)
 	end
 
 	function ConfigSystem.LoadAutoload()
-		local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT)
+		if not Utils.ReadFile then
+			return false
+		end
+		local content = Utils.ReadFile(getConfigPath(ConfigSystem.AutoloadFile))
 		if not content then
 			return false
 		end
 
-		local ok, data = pcall(function()
+		local decodeSuccess, decoded = pcall(function()
 			return HttpService:JSONDecode(content)
 		end)
-		if ok and type(data) == "table" then
-			ConfigSystem.Deserialize(data)
+		if decodeSuccess and type(decoded) == "table" then
+			ConfigSystem.Deserialize(decoded)
 			return true
 		end
 		return false
@@ -524,24 +615,28 @@ return function(Context)
 
 	function ConfigSystem.StartAutosaveLoop()
 		local isSaving = false
-		Connections.Track(task.spawn(function()
+		local autoSaveThread = task.spawn(function()
 			while true do
-				task.wait(1.5)
+				task.wait(SETTINGS.AUTOSAVE_INTERVAL)
 				if ConfigSystem.Dirty and not isSaving then
 					ConfigSystem.Dirty = false
 					isSaving = true
 					pcall(function()
-						local ok, encoded = pcall(function()
+						local encodeSuccess, encoded = pcall(function()
 							return HttpService:JSONEncode(ConfigSystem.Serialize())
 						end)
-						if ok then
-							Utils.WriteFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT, encoded)
+						if encodeSuccess and Utils.WriteFile then
+							Utils.WriteFile(getConfigPath(ConfigSystem.AutoloadFile), encoded)
 						end
 					end)
 					isSaving = false
 				end
 			end
-		end))
+		end)
+
+		if Connections and type(Connections.Track) == "function" then
+			Connections.Track(autoSaveThread)
+		end
 	end
 
 	ConfigSystem.DefaultSnapshot = ConfigSystem.Serialize()
