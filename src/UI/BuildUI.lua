@@ -976,27 +976,35 @@ return function(Context)
 	----------------------------------------------------------------
 	local cfgTab = UI:AddTab("Config")
 	local cfgSec = cfgTab:AddSection("Manage")
-	local cfgState = {Selected = nil, Name = "MyConfig"}
+	local cfgState = { Selected = "Default", Name = "MyConfig" }
+
 	local function getCfgList()
-		local n = ConfigSystem.GetSavedNames()
-		return #n > 0 and n or {"None"}
+		return ConfigSystem.GetSavedNames()
 	end
+
 	local cfgDropdown = cfgSec:AddDropdown("Saved Configs", getCfgList(), function(v)
-		cfgState.Selected = v ~= "None" and v or nil
-	end)
-	cfgSec:AddButton("Refresh", function()
+		cfgState.Selected = (v ~= "None" and v ~= "") and v or "Default"
+	end, "Default")
+
+	cfgSec:AddButton("Refresh Config List", function()
 		cfgDropdown.Refresh(getCfgList(), true)
-		UI:Notify("Configs", "Refreshed list")
+		UI:Notify("Configs", "Refreshed list (" .. tostring(#getCfgList()) .. " available)", nil, Theme.Accent)
 	end)
+
 	cfgSec:AddTextbox("Config Name", cfgState.Name, function(t)
 		if type(t) == "string" and #t > 0 then
 			cfgState.Name = Utils.SanitizeFileName(t)
 		end
 	end, "Name")
+
 	cfgSec:AddButton("Save Config", function()
 		local name = Utils.SanitizeFileName(cfgState.Name or "")
 		if #name == 0 then
 			UI:Notify("Config", "Enter config name", nil, Theme.Danger)
+			return
+		end
+		if name:lower() == "default" then
+			UI:Notify("Config", "Cannot overwrite Default config", nil, Theme.Warning)
 			return
 		end
 		local ok, err = ConfigSystem.Save(name)
@@ -1007,6 +1015,7 @@ return function(Context)
 			UI:Notify("Failed", tostring(err), nil, Theme.Danger)
 		end
 	end)
+
 	cfgSec:AddButton("Load Selected", function()
 		if not cfgState.Selected then
 			UI:Notify("Config", "Select a config first", nil, Theme.Danger)
@@ -1014,20 +1023,30 @@ return function(Context)
 		end
 		local ok, err = ConfigSystem.Load(cfgState.Selected)
 		if ok then
-			UI:Notify("Loaded", cfgState.Selected, nil, Theme.Success)
+			UI:Notify("Loaded", cfgState.Selected .. (cfgState.Selected == "Default" and " (Reset)" or ""), nil, Theme.Success)
 		else
 			UI:Notify("Failed", tostring(err), nil, Theme.Danger)
 		end
 	end)
+
 	cfgSec:AddButton("Delete Selected", function()
 		if not cfgState.Selected then
 			UI:Notify("Config", "Select a config first", nil, Theme.Danger)
 			return
 		end
-		ConfigSystem.Delete(cfgState.Selected)
-		cfgState.Selected = nil
-		cfgDropdown.Refresh(getCfgList())
-		UI:Notify("Deleted", "Config removed", nil, Theme.Success)
+		if cfgState.Selected == "Default" then
+			UI:Notify("Config", "Default config cannot be deleted", nil, Theme.Warning)
+			return
+		end
+		local ok, err = ConfigSystem.Delete(cfgState.Selected)
+		if ok then
+			cfgState.Selected = "Default"
+			cfgDropdown.Refresh(getCfgList())
+			cfgDropdown.Set("Default", true)
+			UI:Notify("Deleted", "Config removed", nil, Theme.Success)
+		else
+			UI:Notify("Failed", tostring(err), nil, Theme.Danger)
+		end
 	end)
 
 	local cfgIO = cfgTab:AddSection("Import / Export")
@@ -1066,13 +1085,15 @@ return function(Context)
 			ConfigSystem.UpdateUI()
 
 			local saveName = Utils.SanitizeFileName(cfgState.Name or "ImportedConfig")
-			if #saveName == 0 then saveName = "ImportedConfig" end
+			if #saveName == 0 or saveName:lower() == "default" then
+				saveName = "ImportedConfig"
+			end
 			local saved, saveErr = ConfigSystem.Save(saveName)
 			if saved then
 				cfgDropdown.Refresh(getCfgList(), true)
 				UI:Notify("Import", "Applied & saved as: " .. saveName, nil, Theme.Success)
 			else
-				UI:Notify("Import", "Applied, save error: " .. tostring(saveErr), nil, Theme.Danger)
+				UI:Notify("Import", "Applied to session!", nil, Theme.Success)
 			end
 		else
 			UI:Notify("Import", "Invalid config format", nil, Theme.Danger)
