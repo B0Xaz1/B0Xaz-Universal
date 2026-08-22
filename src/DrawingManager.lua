@@ -8,9 +8,18 @@ return function()
         drawingAvailable = true
     end)
 
+    getgenv().B0XazAllDrawings = getgenv().B0XazAllDrawings or {}
+
     local DrawingManager = {
         Available = drawingAvailable
     }
+
+    local function track(obj)
+        if obj then
+            table.insert(getgenv().B0XazAllDrawings, obj)
+        end
+        return obj
+    end
 
     function DrawingManager.NewLine(props)
         if not drawingAvailable then return nil end
@@ -22,7 +31,7 @@ return function()
             l.Transparency = props and props.Transparency or 1
             return l
         end)
-        return ok and obj or nil
+        return ok and track(obj) or nil
     end
 
     function DrawingManager.NewCircle(props)
@@ -38,7 +47,7 @@ return function()
             c.NumSides = props and props.NumSides or 64
             return c
         end)
-        return ok and obj or nil
+        return ok and track(obj) or nil
     end
 
     function DrawingManager.NewSquare(props)
@@ -52,7 +61,7 @@ return function()
             s.Color = props and props.Color or Color3.new(1, 1, 1)
             return s
         end)
-        return ok and obj or nil
+        return ok and track(obj) or nil
     end
 
     function DrawingManager.NewText(props)
@@ -65,15 +74,29 @@ return function()
             t.Outline = (props and props.Outline ~= nil) and props.Outline or true
             t.Font = props and props.Font or 2
             t.Color = props and props.Color or Color3.new(1, 1, 1)
+            t.Text = ""
             return t
         end)
-        return ok and obj or nil
+        return ok and track(obj) or nil
     end
 
     function DrawingManager.SafeRemove(drawing)
-        if drawing then
-            pcall(function() drawing:Remove() end)
+        if not drawing then return end
+        pcall(function() drawing.Visible = false end)
+        pcall(function()
+            if drawing.Remove then drawing:Remove() end
+        end)
+    end
+
+    function DrawingManager.RemoveAll()
+        local list = getgenv().B0XazAllDrawings
+        if type(list) == "table" then
+            for i = #list, 1, -1 do
+                DrawingManager.SafeRemove(list[i])
+                list[i] = nil
+            end
         end
+        getgenv().B0XazAllDrawings = {}
     end
 
     return DrawingManager
