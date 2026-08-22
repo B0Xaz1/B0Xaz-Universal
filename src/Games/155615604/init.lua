@@ -38,7 +38,7 @@ return function(Context)
 	local DOOR_FOLDERS = {"Doors", "glass", "CellDoors", "Prison_Fences", "Prison_Gate"}
 	local PRISON_PL_GUNS = {"Remington 870", "M9", "AK-47", "Taser", "M4A1", "MP5"}
 
-	-- Full Teleport Coordinates from Shank UI
+	-- Teleport Coordinates
 	local PL_LOCATIONS = {
 		{"Prison Cells", CFrame.new(920, 98, 2436)},
 		{"Cafeteria", CFrame.new(920, 98, 2290)},
@@ -54,10 +54,10 @@ return function(Context)
 		{"Break Room", CFrame.new(800.09, 99.99, 2266.72)},
 	}
 
-	-- Dispenser positions for Touch-Teleport acquiring
+	-- Dispenser positions with +1.76 Y increase on MP5 and Remington 870
 	local GUN_SPAWNS = {
-		["MP5"] = Vector3.new(813.72, 100.74, 2229.37),
-		["Remington 870"] = Vector3.new(820.27, 100.74, 2229.31),
+		["MP5"] = Vector3.new(813.72, 102.50, 2229.37),
+		["Remington 870"] = Vector3.new(820.27, 102.50, 2229.31),
 		["AK-47"] = Vector3.new(-932, 100.74, 2039.5),
 	}
 
@@ -77,9 +77,6 @@ return function(Context)
 	local currentToolIndex = 1
 	local isKeyPressed = false
 	local isGrabbingGun = false
-
-	-- Remotes
-	local TeamEvent = Workspace:FindFirstChild("Remote") and Workspace.Remote:FindFirstChild("TeamEvent")
 
 	----------------------------------------------------------------
 	-- GUN TELEPORT ENGINE (Touch-Teleport Return)
@@ -110,29 +107,6 @@ return function(Context)
 			end
 		end
 		isGrabbingGun = false
-	end
-
-	----------------------------------------------------------------
-	-- TEAM SWITCHER & AUTO-CRIMINAL
-	----------------------------------------------------------------
-	function Game.SetTeam(teamColor)
-		pcall(function()
-			if TeamEvent then
-				TeamEvent:FireServer(teamColor)
-			end
-		end)
-	end
-
-	function Game.BecomeCriminal()
-		local myRoot = Utils.GetRootPart()
-		if not myRoot then return end
-		local oldPos = myRoot.CFrame
-		myRoot.CFrame = CFrame.new(-943, 95, 2058)
-		task.wait(0.3)
-		local currentRoot = Utils.GetRootPart()
-		if currentRoot then
-			currentRoot.CFrame = oldPos
-		end
 	end
 
 	----------------------------------------------------------------
@@ -552,7 +526,7 @@ return function(Context)
 			FeatureConfig.Game.FakeMacroDelay = v / 1000
 		end, " ms")
 
-		-- Section 4: Doors & Vending Machines
+		-- Section 4: Doors & Obstacles
 		local doors = tab:AddSection("Doors & Obstacles")
 		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Doors, Fences & Vending", FeatureConfig.Game.DoorPhase, function(v)
 			FeatureConfig.Game.DoorPhase = v
@@ -566,21 +540,14 @@ return function(Context)
 			FeatureConfig.Game.PhaseTransparency = v / 100
 		end, "%")
 		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
-			FeatureConfig.Game.GlowColor = c
+			Game.SetGlowColor(c)
 		end)
 
-		-- Section 5: Defenses & Team Control
-		local defSec = tab:AddSection("Defenses & Team")
+		-- Section 5: Defenses
+		local defSec = tab:AddSection("Defenses")
 		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser, Flashbang & Cuffs", FeatureConfig.Game.AntiRestrict, function(v)
 			FeatureConfig.Game.AntiRestrict = v
 		end)
-		defSec:AddButton("Instant Become Criminal", function()
-			Game.BecomeCriminal()
-			if Context and Context.UI then Context.UI:Notify("Prison Life", "Switched to Criminal", nil, Theme.Success) end
-		end)
-		defSec:AddButton("Join Inmates Team", function() Game.SetTeam("Bright orange") end)
-		defSec:AddButton("Join Guards Team", function() Game.SetTeam("Bright blue") end)
-		defSec:AddButton("Join Neutral Team", function() Game.SetTeam("Medium stone grey") end)
 
 		-- Section 6: Map Teleports
 		local tpSec = tab:AddSection("Map Teleports")
