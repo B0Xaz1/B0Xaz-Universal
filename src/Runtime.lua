@@ -1,33 +1,4 @@
-local SETTINGS = {
-	INTERVALS = {
-		STATS_UPDATE = 1.0,
-		HITBOX_SCAN = 0.25,
-	},
-	OFFSETS = {
-		CLICK_TP_VERTICAL = Vector3.new(0, 3, 0),
-		LOOP_TP = Vector3.new(3, 0, 0),
-		LOOP_JUMP = Vector3.new(0, 4, 0),
-		FPS_LABEL_POS = Vector2.new(8, 8),
-		PING_LABEL_POS = Vector2.new(8, 26),
-	},
-	RAYCAST = {
-		MAX_DISTANCE = 500,
-	},
-	DEFAULTS = {
-		HITBOX_SIZE = 10,
-		HITBOX_TRANSPARENCY = 0.9,
-		SPINBOT_SPEED = 20,
-		SPINBOT_SCALE = 10,
-		SPRINT_SPEED = 30,
-		WALK_SPEED = 16,
-		FULLBRIGHT_BRIGHTNESS = 2,
-		ORBIT_RADIUS = 8,
-		ORBIT_SPEED = 2,
-		SPIN_TARGET_SPEED = 10,
-		SPIN_TARGET_RADIUS = 2,
-	},
-}
-
+-- // src/Runtime.lua
 return function(Context)
 	local RunService = game:GetService("RunService")
 	local UserInputService = game:GetService("UserInputService")
@@ -39,24 +10,24 @@ return function(Context)
 	local LocalPlayer = Players.LocalPlayer
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-	local FeatureConfig = (Context and Context.FeatureConfig) or {}
-	local State = (Context and Context.State) or {}
-	local StatsConfig = (Context and Context.StatsConfig) or {}
-	local Utils = (Context and Context.Utils) or {}
-	local Connections = (Context and Context.Connections) or {}
+	local FeatureConfig = Context.FeatureConfig or {}
+	local State = Context.State or {}
+	local StatsConfig = Context.StatsConfig or {}
+	local Utils = Context.Utils or {}
+	local Connections = Context.Connections or {}
 
-	local AimbotSystem = Context and Context.AimbotSystem
-	local ESPSystem = Context and Context.ESPSystem
-	local FlySystem = Context and Context.FlySystem
-	local MovementSystem = Context and Context.MovementSystem
-	local OverlayManager = Context and Context.OverlayManager
-	local GameLoader = Context and Context.GameLoader
+	local AimbotSystem = Context.AimbotSystem
+	local ESPSystem = Context.ESPSystem
+	local FlySystem = Context.FlySystem
+	local MovementSystem = Context.MovementSystem
+	local OverlayManager = Context.OverlayManager
+	local GameLoader = Context.GameLoader
 
-	local globalEnv = getgenv and getgenv() or _G
-	local SessionId = globalEnv.B0XazSessionId or 0
+	local env = (getgenv and getgenv()) or _G
+	local sessionId = env.B0XazSessionId or 0
 
 	local function isSessionAlive()
-		return globalEnv.B0XazSessionId == SessionId
+		return env.B0XazSessionId == sessionId
 	end
 
 	local function getCamera()
@@ -70,11 +41,12 @@ return function(Context)
 	local pingCache = 0
 	local pingTimer = 0
 
+	-- Hitbox Expander logic
 	local function applyHitboxes()
 		local extras = FeatureConfig.Extras
 		if not (extras and extras.Hitbox and extras.Hitbox.Enabled) then return end
-		local size = extras.Hitbox.Size or SETTINGS.DEFAULTS.HITBOX_SIZE
-		local targetVector = Vector3.new(size, size, size)
+		local size = extras.Hitbox.Size or 10
+		local targetSize = Vector3.new(size, size, size)
 
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer then
@@ -84,10 +56,10 @@ return function(Context)
 					if State.OriginalHitboxSizes and not State.OriginalHitboxSizes[player] then
 						State.OriginalHitboxSizes[player] = root.Size
 					end
-					if root.Size ~= targetVector then
+					if root.Size ~= targetSize then
 						pcall(function()
-							root.Size = targetVector
-							root.Transparency = SETTINGS.DEFAULTS.HITBOX_TRANSPARENCY
+							root.Size = targetSize
+							root.Transparency = 0.9
 							root.CanCollide = false
 						end)
 					end
@@ -96,24 +68,23 @@ return function(Context)
 		end
 	end
 
-	if Context then
-		Context.ResetHitboxes = function()
-			if not State.OriginalHitboxSizes then return end
-			for player, originalSize in pairs(State.OriginalHitboxSizes) do
-				local assets = player and Utils.GetPlayerAssets and Utils.GetPlayerAssets(player)
-				if assets and assets.RootPart then
-					pcall(function()
-						assets.RootPart.Size = originalSize
-						assets.RootPart.Transparency = 1
-					end)
-				end
+	Context.ResetHitboxes = function()
+		if not State.OriginalHitboxSizes then return end
+		for player, originalSize in pairs(State.OriginalHitboxSizes) do
+			local assets = player and Utils.GetPlayerAssets and Utils.GetPlayerAssets(player)
+			if assets and assets.RootPart then
+				pcall(function()
+					assets.RootPart.Size = originalSize
+					assets.RootPart.Transparency = 1
+				end)
 			end
-			table.clear(State.OriginalHitboxSizes)
 		end
+		table.clear(State.OriginalHitboxSizes)
 	end
 
 	if not (Connections and Connections.Add) then return end
 
+	-- Teleport Queue Handler
 	if LocalPlayer then
 		pcall(function()
 			Connections.Add(LocalPlayer.OnTeleport:Connect(function(teleportState)
@@ -125,19 +96,19 @@ return function(Context)
 		end)
 	end
 
+	-- Infinite Jump
 	Connections.Add(UserInputService.JumpRequest:Connect(function()
 		if not isSessionAlive() then return end
 		local movement = FeatureConfig.Movement
 		if movement and movement.InfJump then
 			local humanoid = Utils.GetHumanoid and Utils.GetHumanoid()
 			if humanoid then
-				pcall(function()
-					humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-				end)
+				pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end)
 			end
 		end
 	end))
 
+	-- Click / Tap Teleport
 	if isMobile then
 		Connections.Add(UserInputService.TouchTap:Connect(function(touchPositions)
 			if not isSessionAlive() or not State.TpToMouse or not touchPositions or not touchPositions[1] then return end
@@ -150,34 +121,31 @@ return function(Context)
 			params.FilterDescendantsInstances = { Utils.GetCharacter and Utils.GetCharacter() }
 			params.FilterType = Enum.RaycastFilterType.Exclude
 
-			local result = Workspace:Raycast(ray.Origin, ray.Direction * SETTINGS.RAYCAST.MAX_DISTANCE, params)
+			local result = Workspace:Raycast(ray.Origin, ray.Direction * 500, params)
 			if result then
-				root.CFrame = CFrame.new(result.Position + SETTINGS.OFFSETS.CLICK_TP_VERTICAL)
+				root.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
 			end
 		end))
-	else
-		if LocalPlayer then
-			local mouse = LocalPlayer:GetMouse()
-			Connections.Add(mouse.Button1Down:Connect(function()
-				if not isSessionAlive() or not State.TpToMouse or not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then return end
-				local root = Utils.GetRootPart and Utils.GetRootPart()
-				if root and mouse.Hit then
-					pcall(function()
-						root.CFrame = CFrame.new(mouse.Hit.Position + SETTINGS.OFFSETS.CLICK_TP_VERTICAL)
-					end)
-				end
-			end))
-		end
+	elseif LocalPlayer then
+		local mouse = LocalPlayer:GetMouse()
+		Connections.Add(mouse.Button1Down:Connect(function()
+			if not isSessionAlive() or not State.TpToMouse or not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then return end
+			local root = Utils.GetRootPart and Utils.GetRootPart()
+			if root and mouse.Hit then
+				pcall(function()
+					root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
+				end)
+			end
+		end))
 	end
 
+	-- RenderStepped Main Loop
 	Connections.Add(RunService.RenderStepped:Connect(function(dt)
 		if not isSessionAlive() then return end
 
 		local camera = getCamera()
 		if camera and FeatureConfig.Camera and FeatureConfig.Camera.FOV then
-			pcall(function()
-				camera.FieldOfView = FeatureConfig.Camera.FOV
-			end)
+			pcall(function() camera.FieldOfView = FeatureConfig.Camera.FOV end)
 		end
 
 		if AimbotSystem then
@@ -195,9 +163,10 @@ return function(Context)
 			pcall(FlySystem.Update)
 		end
 
+		-- FPS Counter
 		fpsCounter = fpsCounter + 1
 		fpsTimer = fpsTimer + dt
-		if fpsTimer >= SETTINGS.INTERVALS.STATS_UPDATE then
+		if fpsTimer >= 1.0 then
 			fpsDisplay = fpsCounter
 			fpsCounter = 0
 			fpsTimer = 0
@@ -206,15 +175,16 @@ return function(Context)
 		if OverlayManager and OverlayManager.FPSLabel then
 			if StatsConfig.ShowFPS then
 				OverlayManager.FPSLabel.Text = string.format("FPS: %d", fpsDisplay)
-				OverlayManager.FPSLabel.Position = SETTINGS.OFFSETS.FPS_LABEL_POS
+				OverlayManager.FPSLabel.Position = Vector2.new(8, 8)
 				OverlayManager.FPSLabel.Visible = true
 			else
 				OverlayManager.FPSLabel.Visible = false
 			end
 		end
 
+		-- Ping Counter
 		pingTimer = pingTimer + dt
-		if pingTimer >= SETTINGS.INTERVALS.STATS_UPDATE then
+		if pingTimer >= 1.0 then
 			pingTimer = 0
 			pcall(function()
 				local item = StatsService.Network.ServerStatsItem["Data Ping"]
@@ -225,20 +195,21 @@ return function(Context)
 		if OverlayManager and OverlayManager.PingLabel then
 			if StatsConfig.ShowPing then
 				OverlayManager.PingLabel.Text = string.format("Ping: %dms", pingCache)
-				OverlayManager.PingLabel.Position = SETTINGS.OFFSETS.PING_LABEL_POS
+				OverlayManager.PingLabel.Position = Vector2.new(8, 26)
 				OverlayManager.PingLabel.Visible = true
 			else
 				OverlayManager.PingLabel.Visible = false
 			end
 		end
 
+		-- SpinBot
 		local extras = FeatureConfig.Extras
 		if extras and extras.SpinBot and extras.SpinBot.Enabled then
 			local root = Utils.GetRootPart and Utils.GetRootPart()
 			if root then
 				pcall(function()
-					local speed = extras.SpinBot.Speed or SETTINGS.DEFAULTS.SPINBOT_SPEED
-					State.SpinBotAngle = ((State.SpinBotAngle or 0) + speed * dt * SETTINGS.DEFAULTS.SPINBOT_SCALE) % 360
+					local speed = extras.SpinBot.Speed or 20
+					State.SpinBotAngle = ((State.SpinBotAngle or 0) + speed * dt * 10) % 360
 					root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(State.SpinBotAngle), 0)
 				end)
 			end
@@ -249,6 +220,7 @@ return function(Context)
 		end
 	end))
 
+	-- Heartbeat Main Loop
 	Connections.Add(RunService.Heartbeat:Connect(function(dt)
 		if not isSessionAlive() then return end
 
@@ -256,13 +228,9 @@ return function(Context)
 		local movement = FeatureConfig.Movement
 		if humanoid and movement then
 			if movement.SprintEnabled and UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-				pcall(function()
-					humanoid.WalkSpeed = movement.SprintSpeed or SETTINGS.DEFAULTS.SPRINT_SPEED
-				end)
+				pcall(function() humanoid.WalkSpeed = movement.SprintSpeed or 30 end)
 			elseif movement.SprintEnabled then
-				pcall(function()
-					humanoid.WalkSpeed = movement.Speed or SETTINGS.DEFAULTS.WALK_SPEED
-				end)
+				pcall(function() humanoid.WalkSpeed = movement.Speed or 16 end)
 			end
 		end
 
@@ -274,22 +242,25 @@ return function(Context)
 			pcall(GameLoader.Update, dt)
 		end
 
+		-- Fullbright
 		local visuals = FeatureConfig.Visuals
 		if visuals and visuals.Fullbright then
 			pcall(function()
 				Lighting.Ambient = Color3.new(1, 1, 1)
 				Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-				Lighting.Brightness = SETTINGS.DEFAULTS.FULLBRIGHT_BRIGHTNESS
+				Lighting.Brightness = 2
 				Lighting.GlobalShadows = false
 			end)
 		end
 
+		-- Hitbox scan interval
 		hitboxTimer = hitboxTimer + dt
-		if hitboxTimer >= SETTINGS.INTERVALS.HITBOX_SCAN then
+		if hitboxTimer >= 0.25 then
 			hitboxTimer = 0
 			applyHitboxes()
 		end
 
+		-- Target Orbit / Loop TP / Spin Target
 		if State.SelectedPlayer then
 			local target = Utils.GetPlayerByName and Utils.GetPlayerByName(State.SelectedPlayer)
 			local myAssets = Utils.GetPlayerAssets and Utils.GetPlayerAssets(LocalPlayer)
@@ -300,15 +271,13 @@ return function(Context)
 				local targetRoot = targetAssets.RootPart
 
 				if State.LoopTeleport then
-					pcall(function()
-						myRoot.CFrame = targetRoot.CFrame + SETTINGS.OFFSETS.LOOP_TP
-					end)
+					pcall(function() myRoot.CFrame = targetRoot.CFrame + Vector3.new(3, 0, 0) end)
 				end
 
 				if State.OrbitEnabled then
 					pcall(function()
-						local radius = State.OrbitRadius or SETTINGS.DEFAULTS.ORBIT_RADIUS
-						local speed = State.OrbitSpeed or SETTINGS.DEFAULTS.ORBIT_SPEED
+						local radius = State.OrbitRadius or 8
+						local speed = State.OrbitSpeed or 2
 						State.OrbitAngle = (State.OrbitAngle or 0) + speed * dt
 						myRoot.CFrame = CFrame.new(
 							targetRoot.Position.X + math.cos(State.OrbitAngle) * radius,
@@ -319,18 +288,16 @@ return function(Context)
 				end
 
 				if State.LoopJump then
-					pcall(function()
-						myRoot.CFrame = targetRoot.CFrame + SETTINGS.OFFSETS.LOOP_JUMP
-					end)
+					pcall(function() myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 4, 0) end)
 				end
 
 				if State.SpinTarget then
 					pcall(function()
-						State.SpinTargetAngle = (State.SpinTargetAngle or 0) + SETTINGS.DEFAULTS.SPIN_TARGET_SPEED * dt
+						State.SpinTargetAngle = (State.SpinTargetAngle or 0) + 10 * dt
 						myRoot.CFrame = CFrame.new(
-							targetRoot.Position.X + math.cos(State.SpinTargetAngle) * SETTINGS.DEFAULTS.SPIN_TARGET_RADIUS,
+							targetRoot.Position.X + math.cos(State.SpinTargetAngle) * 2,
 							targetRoot.Position.Y,
-							targetRoot.Position.Z + math.sin(State.SpinTargetAngle) * SETTINGS.DEFAULTS.SPIN_TARGET_RADIUS
+							targetRoot.Position.Z + math.sin(State.SpinTargetAngle) * 2
 						)
 					end)
 				end
