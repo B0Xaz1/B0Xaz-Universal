@@ -23,6 +23,7 @@ local SETTINGS = {
 		RUNTIME = "src/Runtime.lua",
 	},
 	DEFAULTS = {
+		-- YOUR LINK HARDCODED HERE:
 		BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/main/",
 		LOAD_TIMEOUT = 10,
 		RETRY_ATTEMPTS = 2,
@@ -111,13 +112,10 @@ local function import(path)
 	return moduleResult
 end
 
--- 1. Execute Cleanup
+-- Start importing everything
 local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
-if type(cleanupFn) == "function" then
-	pcall(cleanupFn)
-end
+if type(cleanupFn) == "function" then pcall(cleanupFn) end
 
--- 2. Load Config & Utils
 local configFn = import(SETTINGS.PATHS.CONFIG)
 local configData, defaultLighting = {}, {}
 if type(configFn) == "function" then
@@ -130,12 +128,8 @@ end
 
 local utilsFn = import(SETTINGS.PATHS.UTILS)
 local utils = type(utilsFn) == "function" and utilsFn(configData) or {}
+if type(utils.WaitForGameLoad) == "function" then pcall(utils.WaitForGameLoad, SETTINGS.DEFAULTS.LOAD_TIMEOUT) end
 
-if type(utils.WaitForGameLoad) == "function" then
-	pcall(utils.WaitForGameLoad, SETTINGS.DEFAULTS.LOAD_TIMEOUT)
-end
-
--- 3. Load Drawing Manager & Core Context
 local drawingMgrFn = import(SETTINGS.PATHS.DRAWING_MANAGER)
 local drawingManager = type(drawingMgrFn) == "function" and drawingMgrFn() or {}
 
@@ -143,7 +137,6 @@ local contextFn = import(SETTINGS.PATHS.CONTEXT)
 local context = type(contextFn) == "function" and contextFn(configData, defaultLighting, utils, drawingManager) or {}
 context.import = import
 
--- 4. Load UI Engine & Theme
 local themeFn = import(SETTINGS.PATHS.THEME)
 local activeTheme, themeManager = {}, {}
 if type(themeFn) == "function" then
@@ -160,7 +153,6 @@ local uiEngineFn = import(SETTINGS.PATHS.UI_ENGINE)
 local uiEngine = type(uiEngineFn) == "function" and uiEngineFn(context, activeTheme) or {}
 context.UIEngine = uiEngine
 
--- 5. Load Systems
 local keySysFn = import(SETTINGS.PATHS.KEY_SYSTEM)
 local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or {}
 context.KeySystem = keySystem
@@ -182,7 +174,7 @@ local flingSystem = type(flingSysFn) == "function" and flingSysFn(context) or {}
 context.FlingSystem = flingSystem
 
 local flySysFn = import(SETTINGS.PATHS.FLY_SYSTEM)
-local flySystem = type(flySysFn) == "function" and flySysFn(context) or {}
+local flySystem = type(flySysFn) == "function" and flySystemFn(context) or {}
 context.FlySystem = flySystem
 
 local moveSysFn = import(SETTINGS.PATHS.MOVEMENT_SYSTEM)
@@ -207,75 +199,35 @@ context.GameLoader = gameLoader
 
 globalEnv.B0XazContext = context
 
--- Main Start Sequence
 local function startApplication()
 	print("[B0Xaz] Launching systems and UI...")
-
-	if gameLoader and type(gameLoader.Load) == "function" then
-		pcall(gameLoader.Load)
-	end
-
-	if espSystem and type(espSystem.InitializeAll) == "function" then
-		pcall(espSystem.InitializeAll)
-	end
-
-	if configSystem and type(configSystem.LoadAutoload) == "function" then
-		pcall(configSystem.LoadAutoload)
-	end
-
-	if configSystem and type(configSystem.StartAutosaveLoop) == "function" then
-		pcall(configSystem.StartAutosaveLoop)
-	end
-
+	if gameLoader and type(gameLoader.Load) == "function" then pcall(gameLoader.Load) end
+	if espSystem and type(espSystem.InitializeAll) == "function" then pcall(espSystem.InitializeAll) end
+	if configSystem and type(configSystem.LoadAutoload) == "function" then pcall(configSystem.LoadAutoload) end
+	if configSystem and type(configSystem.StartAutosaveLoop) == "function" then pcall(configSystem.StartAutosaveLoop) end
+	
 	local buildUiFn = import(SETTINGS.PATHS.BUILD_UI)
-	if type(buildUiFn) == "function" then
-		local success, err = pcall(buildUiFn, context)
-		if not success then
-			warn("[B0Xaz] BuildUI execution error: " .. tostring(err))
-		end
-	else
-		warn("[B0Xaz] BuildUI module could not be loaded.")
-	end
+	if type(buildUiFn) == "function" then pcall(buildUiFn, context) end
 
 	local runtimeFn = import(SETTINGS.PATHS.RUNTIME)
-	if type(runtimeFn) == "function" then
-		local success, err = pcall(runtimeFn, context)
-		if not success then
-			warn("[B0Xaz] Runtime execution error: " .. tostring(err))
-		end
-	end
-
+	if type(runtimeFn) == "function" then pcall(runtimeFn, context) end
 	print("[B0Xaz] Successfully loaded and active!")
 end
 
--- Key Authentication Verification
-local isVerified, verifyMsg = false, ""
+local isVerified = false
 if keySystem and type(keySystem.LoadAndVerify) == "function" then
-	local success, verified, _, msg = pcall(keySystem.LoadAndVerify)
-	if success then
-		isVerified = verified
-		verifyMsg = msg or ""
-	end
+	local success, verified = pcall(keySystem.LoadAndVerify)
+	isVerified = success and verified
 end
 
 if isVerified then
-	print("[B0Xaz] Saved license key verified (Tier: " .. tostring(keySystem.GetTierName()) .. ")")
 	startApplication()
 else
-	print("[B0Xaz] Prompting for key authentication...")
-	local promptCreated = false
 	if uiEngine and type(uiEngine.CreateKeyPrompt) == "function" then
-		local success, err = pcall(function()
-			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
+		pcall(function()
+			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, "")
 		end)
-		if not success then
-			warn("[B0Xaz] Failed to create Key Prompt: " .. tostring(err))
-		else
-			promptCreated = true
-		end
-	end
-	if not promptCreated then
-		warn("[B0Xaz] Key prompt window unavailable, starting default UI...")
+	else
 		startApplication()
 	end
 end
