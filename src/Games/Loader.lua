@@ -1,3 +1,4 @@
+-- // src/Games/Loader.lua
 local SETTINGS = {
 	PATHS = {
 		REGISTRY = "src/Games/Registry.lua",
@@ -80,16 +81,21 @@ return function(Context, import)
 			return nil
 		end
 
-		local targetName = GameLoader.Info.Folder or placeId
+		local targetName = GameLoader.Info and (GameLoader.Info.Folder or GameLoader.Info.Name) or placeId
+		local cleanName = targetName:gsub("%s+", "")
+
 		local pathsToTry = {
 			string.format(SETTINGS.PATHS.MODULE_INIT, targetName),
 			string.format(SETTINGS.PATHS.MODULE_SINGLE, targetName),
+			string.format(SETTINGS.PATHS.MODULE_SINGLE, cleanName),
+			string.format("src/Games/%s.lua", placeId),
+			string.format("src/Games/%s/init.lua", placeId),
 		}
 
 		local lastErr = ""
 		for _, path in ipairs(pathsToTry) do
 			local success, factory = pcall(import, path)
-			if success then
+			if success and factory then
 				local resolvedModule = factory
 				if type(factory) == "function" then
 					local runSuccess, runResult = pcall(factory, Context)
@@ -107,7 +113,7 @@ return function(Context, import)
 					return resolvedModule
 				end
 			else
-				lastErr = tostring(factory)
+				if factory then lastErr = tostring(factory) end
 			end
 		end
 
