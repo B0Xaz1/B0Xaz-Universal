@@ -1,6 +1,5 @@
 -- src/Systems/AimbotSystem.lua
 return function(Context)
-    local RunService = game:GetService("RunService")
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
     local UIS = game:GetService("UserInputService")
@@ -14,17 +13,12 @@ return function(Context)
     local Connections = Context.Connections
 
     local AimbotSystem = {}
-
     local TargetPlayer = nil
     local ActiveHeldInputs = {}
 
-    -- Map UI hitpart names -> actual R6 / R15 part names
     local R6Parts = {
         Head = "Head",
         Torso = "Torso",
-        UpperTorso = "Torso",
-        LowerTorso = "Torso",
-        HumanoidRootPart = "HumanoidRootPart",
         Root = "HumanoidRootPart",
         LeftArm = "Left Arm",
         RightArm = "Right Arm",
@@ -35,9 +29,7 @@ return function(Context)
     local R15Parts = {
         Head = "Head",
         Torso = "UpperTorso",
-        UpperTorso = "UpperTorso",
         LowerTorso = "LowerTorso",
-        HumanoidRootPart = "HumanoidRootPart",
         Root = "HumanoidRootPart",
         LeftArm = "LeftUpperArm",
         RightArm = "RightUpperArm",
@@ -69,7 +61,7 @@ return function(Context)
         local hum = character:FindFirstChildOfClass("Humanoid")
         local root = character:FindFirstChild("HumanoidRootPart")
         if not hum or not root then return false end
-        if hum.Health <= 0 then return false end
+        if FeatureConfig.Aimbot.UnlockOnDeath and hum.Health <= 0 then return false end
         return true
     end
 
@@ -79,13 +71,11 @@ return function(Context)
         return Utils.IsVisible(part)
     end
 
-    -- Supports: "C", Enum.KeyCode.C, Enum.UserInputType.MouseButton2, or a list of those
     local function matchesBind(input, bindItem)
         if bindItem == nil then return false end
 
         if typeof(bindItem) == "string" then
             local upper = bindItem:upper()
-            -- Mouse buttons as strings
             if upper == "MB1" or upper == "MOUSEBUTTON1" then
                 return input.UserInputType == Enum.UserInputType.MouseButton1
             elseif upper == "MB2" or upper == "MOUSEBUTTON2" then
@@ -130,7 +120,6 @@ return function(Context)
         local closest = nil
         local mouse = UIS:GetMouseLocation()
         local fovSize = (cfg.FOV and cfg.FOV.Size) or 150
-        local useFov = true -- always use FOV radius for acquisition
         local myRoot = Utils.GetRootPart()
 
         for _, player in ipairs(Players:GetPlayers()) do
@@ -148,7 +137,7 @@ return function(Context)
             local screenPos = Vector2.new(screen.X, screen.Y)
             local dist2d = (mouse - screenPos).Magnitude
 
-            if useFov and dist2d > fovSize then continue end
+            if dist2d > fovSize then continue end
 
             if myRoot and cfg.MaxDistance then
                 local worldDist = (myRoot.Position - hit.Position).Magnitude
@@ -171,9 +160,6 @@ return function(Context)
         State.AimHoldActive = player ~= nil and FeatureConfig.Aimbot.LockMode == "Hold"
     end
 
-    ----------------------------------------------------------------
-    -- Public API
-    ----------------------------------------------------------------
     function AimbotSystem.LockOn()
         local t = getClosestPlayer()
         setTarget(t)
@@ -189,16 +175,12 @@ return function(Context)
         return getClosestPlayer()
     end
 
-    ----------------------------------------------------------------
-    -- Core aim math (your logic, adapted)
-    ----------------------------------------------------------------
     function AimbotSystem.UpdateAim(dt)
         local cfg = FeatureConfig.Aimbot
         if not cfg or not cfg.Enabled then return end
 
         dt = dt or 0.016
 
-        -- Hold mode: keep trying to acquire while key is down
         if cfg.LockMode == "Hold" then
             if isAnyKeyHeld() then
                 if not TargetPlayer or not isCharacterValid(TargetPlayer.Character) then
@@ -225,21 +207,31 @@ return function(Context)
         end
 
         if not isVisible(hit) then
-            -- soft unlock on wall (re-acquire next frame if hold)
-            if cfg.LockMode == "Hold" then
-                setTarget(nil)
-            end
+            setTarget(nil)
             return
         end
 
-        -- Prediction (UI uses Horizontal / Vertical)
+        local mouse = UIS:GetMouseLocation()
+        local screenPos, onScreen = Camera:WorldToViewportPoint(hit.Position)
+        if not onScreen or screenPos.Z <= 0 then
+            setTarget(nil)
+            return
+        end
+
+        if cfg.BreakOnPull then
+            local distFromCrosshair = (mouse - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+            if distFromCrosshair > (cfg.MaxLockRadius or 200) then
+                setTarget(nil)
+                return
+            end
+        end
+
         local pred = cfg.Prediction or {}
         local predX = pred.Horizontal or pred.X or 0
         local predY = pred.Vertical or pred.Y or 0
         local vel = hit.AssemblyLinearVelocity or hit.Velocity or Vector3.zero
         local predicted = hit.Position + Vector3.new(vel.X * predX, vel.Y * predY, vel.Z * predX)
 
-        -- Optional shake
         if (cfg.ShakeIntensity or 0) > 0 then
             local s = cfg.ShakeIntensity / 10
             predicted = predicted + Vector3.new((math.random() * 2 - 1) * s, (math.random() * 2 - 1) * s, 0)
@@ -248,25 +240,19 @@ return function(Context)
         local smoothness = math.max(tonumber(cfg.Smoothness) or 1, 1)
         local alpha = math.clamp(dt * (60 / smoothness), 0, 1)
 
-        -- Prefer mouse move (works with shiftlock / many cameras), fallback to Camera lerp
-        local screen, onScreen = Camera:WorldToViewportPoint(predicted)
-        if onScreen and screen.Z > 0 then
-            local mouse = UIS:GetMouseLocation()
-            local delta = Vector2.new(screen.X - mouse.X, screen.Y - mouse.Y)
-            if delta.Magnitude > 0.5 then
-                local step = delta * alpha
-                local moved = false
-                if mousemoverel then
-                    moved = pcall(function()
-                        mousemoverel(step.X, step.Y)
-                    end)
-                end
-                if not moved then
-                    local targetCF = CFrame.new(Camera.CFrame.Position, predicted)
-                    Camera.CFrame = Camera.CFrame:Lerp(targetCF, alpha)
-                end
-                return
+        local screen = Vector2.new(screenPos.X, screenPos.Y)
+        local delta = screen - mouse
+        if delta.Magnitude > 0.5 then
+            local step = delta * alpha
+            local moved = false
+            if mousemoverel then
+                moved = pcall(function() mousemoverel(step.X, step.Y) end)
             end
+            if not moved then
+                local targetCF = CFrame.new(Camera.CFrame.Position, predicted)
+                Camera.CFrame = Camera.CFrame:Lerp(targetCF, alpha)
+            end
+            return
         end
 
         local targetCF = CFrame.new(Camera.CFrame.Position, predicted)
@@ -310,9 +296,6 @@ return function(Context)
         end
     end
 
-    ----------------------------------------------------------------
-    -- Input (owned ONLY by this module — Runtime must not also bind aim keys)
-    ----------------------------------------------------------------
     Connections.Add(UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
         if not FeatureConfig.Aimbot.Enabled then return end
@@ -329,7 +312,6 @@ return function(Context)
                 AimbotSystem.LockOn()
             end
         else
-            -- Hold
             AimbotSystem.LockOn()
         end
     end))
