@@ -1,4 +1,3 @@
--- src/Systems/MovementSystem.lua
 return function(Context)
     local UIS = game:GetService("UserInputService")
     local FeatureConfig = Context.FeatureConfig
@@ -9,7 +8,6 @@ return function(Context)
 
     function MovementSystem.UpdateBhop()
         if not FeatureConfig.Movement or not FeatureConfig.Movement.Bhop then return end
-
         if not UIS:IsKeyDown(Enum.KeyCode.Space) and not UIS.TouchEnabled then return end
 
         local hum = Utils.GetHumanoid()
@@ -24,8 +22,10 @@ return function(Context)
 
         if isGrounded then
             lastJumpTime = tick()
-            hum.Jump = true
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            pcall(function()
+                hum.Jump = true
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end)
         end
     end
 
@@ -41,7 +41,9 @@ return function(Context)
         if moveDir.Magnitude < 0.05 then return end
 
         local speed = FeatureConfig.Movement.CFrameSpeedValue or 50
-        root.CFrame = root.CFrame + (moveDir * speed * (dt or 0.016))
+        pcall(function()
+            root.CFrame = root.CFrame + (moveDir * speed * (dt or 0.016))
+        end)
     end
 
     function MovementSystem.Update(dt)
