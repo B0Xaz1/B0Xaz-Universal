@@ -12,6 +12,7 @@ return function(Context)
 	local CONFIG = Context.CONFIG
 	local UIEngine = Context.UIEngine
 	local Theme = Context.Theme
+	local ThemeManager = Context.ThemeManager
 	local FeatureConfig = Context.FeatureConfig
 	local State = Context.State
 	local StatsConfig = Context.StatsConfig
@@ -712,6 +713,7 @@ return function(Context)
 			lbl.Position = UDim2.new(0, 8, 0, 0)
 			lbl.Size = UDim2.new(1, -70, 1, 0)
 			lbl.Parent = row
+			UI:BindTheme(lbl, "TextColor3", "Text")
 
 			menuKeyBtn = Instance.new("TextButton")
 			menuKeyBtn.Text = State.MenuKeybind.Name
@@ -724,6 +726,8 @@ return function(Context)
 			menuKeyBtn.Position = UDim2.new(1, -64, 0.5, -9)
 			menuKeyBtn.AutoButtonColor = false
 			menuKeyBtn.Parent = row
+			UI:BindTheme(menuKeyBtn, "BackgroundColor3", "Elem")
+			UI:BindTheme(menuKeyBtn, "TextColor3", "Text")
 
 			table.insert(secRef.Elements, {Container = row, Name = "Menu Toggle Key"})
 		end)()
@@ -746,6 +750,217 @@ return function(Context)
 			end
 		end))
 	end
+
+	----------------------------------------------------------------
+	-- TAB: Themes (Live Theming & Player Theme Creation)
+	----------------------------------------------------------------
+	local themeTab = UI:AddTab("Themes")
+
+	local themePresetsSec = themeTab:AddSection("Theme Presets")
+	local themeCustomSec = themeTab:AddSection("Customize Colors")
+	local themeManageSec = themeTab:AddSection("Save & Load Themes")
+	local themeIOSec = themeTab:AddSection("Import & Export")
+
+	local presetNames = {}
+	if ThemeManager and ThemeManager.Presets then
+		for pName, _ in pairs(ThemeManager.Presets) do
+			table.insert(presetNames, pName)
+		end
+		table.sort(presetNames)
+	else
+		presetNames = { "Default Cyan" }
+	end
+
+	local customColorPickers = {}
+
+	local function updateCustomPickers(newColors)
+		for key, cp in pairs(customColorPickers) do
+			if newColors[key] then
+				cp.Set(newColors[key])
+			end
+		end
+	end
+
+	themePresetsSec:AddDropdown("Choose Preset", presetNames, function(v)
+		if ThemeManager and ThemeManager.Presets and ThemeManager.Presets[v] then
+			local targetTheme = ThemeManager.Presets[v]
+			ThemeManager.ActivePreset = v
+			UI:SetTheme(targetTheme)
+			updateCustomPickers(targetTheme)
+			UI:Notify("Themes", "Applied " .. v .. " preset", nil, Theme.Success)
+		end
+	end, ThemeManager and ThemeManager.ActivePreset or "Default Cyan")
+
+	customColorPickers.Accent = themeCustomSec:AddColorPicker("Accent Color", Theme.Accent, function(c)
+		UI:UpdateThemeKey("Accent", c)
+	end)
+
+	customColorPickers.Bg = themeCustomSec:AddColorPicker("Main Background", Theme.Bg, function(c)
+		UI:UpdateThemeKey("Bg", c)
+	end)
+
+	customColorPickers.Panel = themeCustomSec:AddColorPicker("Panel Background", Theme.Panel, function(c)
+		UI:UpdateThemeKey("Panel", c)
+	end)
+
+	customColorPickers.Elem = themeCustomSec:AddColorPicker("Element / Button", Theme.Elem, function(c)
+		UI:UpdateThemeKey("Elem", c)
+	end)
+
+	customColorPickers.Side = themeCustomSec:AddColorPicker("Header / Sidebar", Theme.Side, function(c)
+		UI:UpdateThemeKey("Side", c)
+	end)
+
+	customColorPickers.Text = themeCustomSec:AddColorPicker("Text Primary", Theme.Text, function(c)
+		UI:UpdateThemeKey("Text", c)
+	end)
+
+	customColorPickers.Border = themeCustomSec:AddColorPicker("Border Outline", Theme.Border, function(c)
+		UI:UpdateThemeKey("Border", c)
+	end)
+
+	customColorPickers.ToggleOn = themeCustomSec:AddColorPicker("Toggle Active", Theme.ToggleOn, function(c)
+		UI:UpdateThemeKey("ToggleOn", c)
+	end)
+
+	local themeState = { Selected = nil, Name = "MyTheme" }
+
+	local function getSavedThemeNames()
+		local themesFolder = CONFIG.FOLDER .. "/Themes"
+		Utils.MakeFolder(themesFolder)
+		local names = {}
+		for _, path in ipairs(Utils.ListFiles(themesFolder)) do
+			local name = path:match("[/\\]?([^/\\]+)$") or path
+			if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
+				table.insert(names, name:sub(1, -#CONFIG.EXT - 1))
+			end
+		end
+		table.sort(names)
+		return #names > 0 and names or { "None" }
+	end
+
+	local customThemeDropdown
+	customThemeDropdown = themeManageSec:AddDropdown("Saved Custom Themes", getSavedThemeNames(), function(v)
+		themeState.Selected = v ~= "None" and v or nil
+	end)
+
+	themeManageSec:AddButton("Refresh Saved Themes", function()
+		customThemeDropdown.Refresh(getSavedThemeNames(), true)
+		UI:Notify("Themes", "Refreshed custom theme list", nil, Theme.Accent)
+	end)
+
+	themeManageSec:AddTextbox("Theme Name", themeState.Name, function(t)
+		if type(t) == "string" and #t > 0 then
+			themeState.Name = Utils.SanitizeFileName(t)
+		end
+	end, "Name")
+
+	local function serializeCurrentTheme()
+		local data = {}
+		for k, v in pairs(Theme) do
+			if typeof(v) == "Color3" then
+				data[k] = Utils.ColorToTable(v)
+			end
+		end
+		return data
+	end
+
+	local function deserializeThemeData(data)
+		local out = {}
+		for k, v in pairs(data) do
+			if type(v) == "table" and v.r ~= nil then
+				out[k] = Utils.TableToColor(v)
+			end
+		end
+		return out
+	end
+
+	themeManageSec:AddButton("Save Custom Theme", function()
+		local name = Utils.SanitizeFileName(themeState.Name or "")
+		if #name == 0 then
+			UI:Notify("Themes", "Enter a theme name", nil, Theme.Danger)
+			return
+		end
+		local data = serializeCurrentTheme()
+		local encoded = HttpService:JSONEncode(data)
+		local path = CONFIG.FOLDER .. "/Themes/" .. name .. CONFIG.EXT
+		local ok, err = Utils.WriteFile(path, encoded)
+		if ok then
+			customThemeDropdown.Refresh(getSavedThemeNames(), true)
+			UI:Notify("Themes", "Saved theme: " .. name, nil, Theme.Success)
+		else
+			UI:Notify("Themes", "Failed: " .. tostring(err), nil, Theme.Danger)
+		end
+	end)
+
+	themeManageSec:AddButton("Load Selected Theme", function()
+		if not themeState.Selected then
+			UI:Notify("Themes", "Select a theme first", nil, Theme.Danger)
+			return
+		end
+		local path = CONFIG.FOLDER .. "/Themes/" .. themeState.Selected .. CONFIG.EXT
+		local content = Utils.ReadFile(path)
+		if not content then
+			UI:Notify("Themes", "Theme file not found", nil, Theme.Danger)
+			return
+		end
+		local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
+		if ok and type(data) == "table" then
+			local loadedColors = deserializeThemeData(data)
+			UI:SetTheme(loadedColors)
+			updateCustomPickers(loadedColors)
+			UI:Notify("Themes", "Loaded: " .. themeState.Selected, nil, Theme.Success)
+		else
+			UI:Notify("Themes", "Invalid theme format", nil, Theme.Danger)
+		end
+	end)
+
+	themeManageSec:AddButton("Delete Selected Theme", function()
+		if not themeState.Selected then
+			UI:Notify("Themes", "Select a theme first", nil, Theme.Danger)
+			return
+		end
+		local path = CONFIG.FOLDER .. "/Themes/" .. themeState.Selected .. CONFIG.EXT
+		pcall(function() delfile(path) end)
+		themeState.Selected = nil
+		customThemeDropdown.Refresh(getSavedThemeNames())
+		UI:Notify("Themes", "Theme deleted", nil, Theme.Success)
+	end)
+
+	local rawThemeImportString = ""
+
+	themeIOSec:AddButton("Copy Theme Data to Clipboard", function()
+		local data = serializeCurrentTheme()
+		local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+		if ok then
+			local ok2 = pcall(function() setclipboard(encoded) end)
+			if ok2 then
+				UI:Notify("Themes", "Theme copied to clipboard", nil, Theme.Success)
+			else
+				UI:Notify("Themes", "Clipboard not supported", nil, Theme.Danger)
+			end
+		end
+	end)
+
+	themeIOSec:AddTextbox("Paste Theme Data", "", function(v)
+		rawThemeImportString = v
+	end, "JSON Theme String")
+
+	themeIOSec:AddButton("Import & Apply Theme", function()
+		if not rawThemeImportString or #rawThemeImportString == 0 then
+			UI:Notify("Themes", "Paste theme data first", nil, Theme.Danger)
+			return
+		end
+		local ok, data = pcall(function() return HttpService:JSONDecode(rawThemeImportString) end)
+		if ok and type(data) == "table" then
+			local loadedColors = deserializeThemeData(data)
+			UI:SetTheme(loadedColors)
+			updateCustomPickers(loadedColors)
+			UI:Notify("Themes", "Custom theme imported and applied!", nil, Theme.Success)
+		else
+			UI:Notify("Themes", "Invalid theme format", nil, Theme.Danger)
+		end
+	end)
 
 	----------------------------------------------------------------
 	-- TAB: Config
