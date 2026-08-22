@@ -58,6 +58,12 @@ return function(Context, Theme)
 		})
 	end
 
+	local function triggerAutosave()
+		if Context.ConfigSystem and Context.ConfigSystem.NotifyChange then
+			pcall(Context.ConfigSystem.NotifyChange)
+		end
+	end
+
 	local _activeDrag = nil
 	Connections.Add(UIS.InputChanged:Connect(function(input)
 		if _activeDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -618,6 +624,7 @@ return function(Context, Theme)
 					state = v and true or false
 					box.BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff
 					if not silent and callback then Utils.SafeCall(callback, state) end
+					if not silent then triggerAutosave() end
 				end
 
 				btn.MouseButton1Click:Connect(function()
@@ -691,6 +698,7 @@ return function(Context, Theme)
 					fill.Size = UDim2.new(rel, 0, 1, 0)
 					valLabel.Text = tostring(value) .. "/" .. tostring(max) .. suffix
 					if not silent and callback then Utils.SafeCall(callback, value) end
+					if not silent then triggerAutosave() end
 				end
 
 				local function updateFromX(x)
@@ -866,6 +874,7 @@ return function(Context, Theme)
 								displayBtn.Text = tostring(opt) .. "  v"
 								setOpen(false)
 								if callback then Utils.SafeCall(callback, opt) end
+								triggerAutosave()
 							end
 						end)
 					end
@@ -882,6 +891,7 @@ return function(Context, Theme)
 						selected = v
 						displayBtn.Text = tostring(v) .. "  v"
 						if not silent and callback then Utils.SafeCall(callback, v) end
+						if not silent then triggerAutosave() end
 					end,
 					Get = function() return selected end,
 					Refresh = function(newOpts, preserve)
@@ -941,6 +951,7 @@ return function(Context, Theme)
 
 				box.FocusLost:Connect(function(enter)
 					if callback then Utils.SafeCall(callback, box.Text, enter) end
+					triggerAutosave()
 				end)
 				return {
 					Set = function(v) box.Text = tostring(v or "") end,
@@ -1024,6 +1035,7 @@ return function(Context, Theme)
 						currentColor = c
 						swatch.BackgroundColor3 = c
 						if callback then Utils.SafeCall(callback, c) end
+						triggerAutosave()
 					end)
 				end
 
@@ -1038,9 +1050,11 @@ return function(Context, Theme)
 				end)
 
 				return {
-					Set = function(c)
+					Set = function(c, silent)
 						currentColor = c
 						swatch.BackgroundColor3 = c
+						if not silent and callback then Utils.SafeCall(callback, c) end
+						if not silent then triggerAutosave() end
 					end,
 					Get = function() return currentColor end,
 				}
@@ -1133,13 +1147,16 @@ return function(Context, Theme)
 						keyBtn.TextColor3 = Theme.Text
 						listening = false
 						if callback then Utils.SafeCall(callback, bound) end
+						triggerAutosave()
 					end
 				end))
 
 				return {
-					Set = function(k)
+					Set = function(k, silent)
 						currentKey = k
 						keyBtn.Text = getKeyDisplay(k)
+						if not silent and callback then Utils.SafeCall(callback, k) end
+						if not silent then triggerAutosave() end
 					end,
 					Get = function() return currentKey end,
 				}
