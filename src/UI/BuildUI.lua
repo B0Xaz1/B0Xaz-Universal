@@ -610,55 +610,6 @@ return function(Context)
 	UIRegistry.Extras_Crosshair_Color = crossSec:AddColorPicker("Color", FeatureConfig.Extras.Crosshair.Color, function(c)
 		FeatureConfig.Extras.Crosshair.Color = c
 	end)
-
-	local stretchSec = extrasTab:AddSection("Stretch Res")
-
-	UIRegistry.Extras_StretchRes_Enabled = stretchSec:AddToggle("Enable Stretch Res", FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.Enabled or false, function(v)
-		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or { Enabled = false, X = 1.333, Y = 1.0 }
-		FeatureConfig.Extras.StretchRes.Enabled = v
-		if not v then
-			UI:Notify("Stretch Res", "Disabled", nil, Theme.Accent)
-		else
-			UI:Notify("Stretch Res", "3D Matrix Stretch Active", nil, Theme.Success)
-		end
-	end)
-
-	local presetMap = {
-		["4:3 Stretched"] = { X = 1.333, Y = 1.0 },
-		["5:4 Stretched"] = { X = 1.250, Y = 1.0 },
-		["16:10 Stretched"] = { X = 1.111, Y = 1.0 },
-		["Ultra Wide Stretch"] = { X = 1.600, Y = 1.0 },
-		["Vertical Stretch"] = { X = 1.000, Y = 1.333 },
-	}
-
-	stretchSec:AddDropdown("Aspect Ratio Preset", { "4:3 Stretched", "5:4 Stretched", "16:10 Stretched", "Ultra Wide Stretch", "Vertical Stretch" }, function(v)
-		local p = presetMap[v]
-		if p then
-			FeatureConfig.Extras.StretchRes.X = p.X
-			FeatureConfig.Extras.StretchRes.Y = p.Y
-			if UIRegistry.Extras_StretchRes_X then UIRegistry.Extras_StretchRes_X.Set(math.floor(p.X * 100), true) end
-			if UIRegistry.Extras_StretchRes_Y then UIRegistry.Extras_StretchRes_Y.Set(math.floor(p.Y * 100), true) end
-			UI:Notify("Stretch Res", "Applied preset: " .. v, nil, Theme.Success)
-		end
-	end, "4:3 Stretched")
-
-	UIRegistry.Extras_StretchRes_X = stretchSec:AddSlider("Horizontal Scale (X)", math.floor(((FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.X) or 1.333) * 100), 50, 250, function(v)
-		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
-		FeatureConfig.Extras.StretchRes.X = v / 100
-	end, "%")
-
-	UIRegistry.Extras_StretchRes_Y = stretchSec:AddSlider("Vertical Scale (Y)", math.floor(((FeatureConfig.Extras.StretchRes and FeatureConfig.Extras.StretchRes.Y) or 1.0) * 100), 50, 250, function(v)
-		FeatureConfig.Extras.StretchRes = FeatureConfig.Extras.StretchRes or {}
-		FeatureConfig.Extras.StretchRes.Y = v / 100
-	end, "%")
-
-	stretchSec:AddButton("Reset Stretch Res", function()
-		FeatureConfig.Extras.StretchRes = { Enabled = false, X = 1.333, Y = 1.0 }
-		if UIRegistry.Extras_StretchRes_Enabled then UIRegistry.Extras_StretchRes_Enabled.Set(false, true) end
-		if UIRegistry.Extras_StretchRes_X then UIRegistry.Extras_StretchRes_X.Set(133, true) end
-		if UIRegistry.Extras_StretchRes_Y then UIRegistry.Extras_StretchRes_Y.Set(100, true) end
-		UI:Notify("Stretch Res", "Reset to default matrix", nil, Theme.Success)
-	end)
 	
 	local visSec = extrasTab:AddSection("Visuals")
 	UIRegistry.Extras_SpeedLines = visSec:AddToggle("Speed Lines", false, function(v)
