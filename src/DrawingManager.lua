@@ -1,3 +1,4 @@
+-- // src/Visuals/DrawingManager.lua
 local SETTINGS = {
 	DEFAULTS = {
 		COLOR = Color3.new(1, 1, 1),
@@ -31,16 +32,20 @@ return function()
 	globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY] or {}
 
 	local drawingAvailable = false
-	if typeof(Drawing) == "table" and type(Drawing.new) == "function" then
-		local success, testObject = pcall(Drawing.new, "Line")
-		if success and testObject then
-			drawingAvailable = true
-			pcall(function()
+	pcall(function()
+		if Drawing and type(Drawing.new) == "function" then
+			local testObject = Drawing.new("Line")
+			if testObject then
+				drawingAvailable = true
 				testObject.Visible = false
-				testObject:Remove()
-			end)
+				if testObject.Remove then
+					testObject:Remove()
+				elseif testObject.Destroy then
+					testObject:Destroy()
+				end
+			end
 		end
-	end
+	end)
 
 	local allDrawings = globalEnv[SETTINGS.GLOBAL_DRAWINGS_KEY]
 
