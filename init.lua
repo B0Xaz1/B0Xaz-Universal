@@ -1,281 +1,209 @@
 local SETTINGS = {
-	LIMITS = {
-		DEFAULT_CONFIG_NAME_MAX_LEN = 40,
-		MIN_RAYCAST_MAGNITUDE = 0.1,
-		DEFAULT_WAIT_TIMEOUT = 10,
-		MAX_PLAYER_SEARCH_DEPTH = 200,
-	},
-	PATTERNS = {
-		FILENAME_SANITIZE = "[/\\%.:%*%?<>|%c\"]",
-		TRIM_WHITESPACE = "^%s*(.-)%s*$",
-	},
-	TEMPLATES = {
-		TELEPORT_URL = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\npcall(function() loadstring(game:HttpGet(\"%s\"))() end)",
-		TELEPORT_FILE = "repeat task.wait() until game:IsLoaded()\ntask.wait(1)\nif isfile and isfile(\"B0XazUniversal/AutoRun.lua\") then\n\tpcall(function() loadstring(readfile(\"B0XazUniversal/AutoRun.lua\"))() end)\nend",
+	PATHS = {
+		CONFIG = "src/Config.lua",
+		CLEANUP = "src/Cleanup.lua",
+		UTILS = "src/Utils.lua",
+		DRAWING_MANAGER = "src/Visuals/DrawingManager.lua",
+		CONTEXT = "src/Context.lua",
+		THEME = "src/UI/Theme.lua",
+		UI_ENGINE = "src/UI/UI.lua",
+		KEY_SYSTEM = "src/Systems/KeySystem.lua",
+		CONFIG_SYSTEM = "src/Systems/ConfigSystem.lua",
+		AIMBOT_SYSTEM = "src/Systems/AimbotSystem.lua",
+		ESP_SYSTEM = "src/Systems/ESPSystem.lua",
+		FLING_SYSTEM = "src/Systems/FlingSystem.lua",
+		FLY_SYSTEM = "src/Systems/FlySystem.lua",
+		MOVEMENT_SYSTEM = "src/Systems/MovementSystem.lua",
+		PERFORMANCE_SYSTEM = "src/Systems/PerformanceSystem.lua",
+		PLAYERS_SYSTEM = "src/Systems/PlayersSystem.lua",
+		OVERLAY_MANAGER = "src/Visuals/OverlayManager.lua",
+		GAME_LOADER = "src/Games/Loader.lua",
+		BUILD_UI = "src/UI/BuildUI.lua",
+		RUNTIME = "src/Runtime.lua",
 	},
 	DEFAULTS = {
-		COLOR_TABLE = { r = 1, g = 1, b = 1 },
+		BASE_URL = "https://raw.githubusercontent.com/B0Xaz/Universal/main/",
+		LOAD_TIMEOUT = 10,
 	},
 }
 
-return function(CONFIG)
-	local Players = game:GetService("Players")
-	local Workspace = game:GetService("Workspace")
-	local UserInputService = game:GetService("UserInputService")
+local globalEnv = getgenv and getgenv() or _G
 
-	local LocalPlayer = Players.LocalPlayer
-	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-
-	local function getCamera()
-		return Workspace.CurrentCamera
+local moduleCache = {}
+local function import(path)
+	if moduleCache[path] then
+		return moduleCache[path]
 	end
 
-	local cachedRaycastParams = RaycastParams.new()
-	cachedRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	cachedRaycastParams.IgnoreWater = true
+	local sourceCode = nil
 
-	local Utils = {}
-
-	function Utils.WaitForGameLoad(timeout)
-		if not game:IsLoaded() then
-			game.Loaded:Wait()
+	if readfile and isfile and isfile(path) then
+		local success, content = pcall(readfile, path)
+		if success and content then
+			sourceCode = content
 		end
-		if not LocalPlayer then
-			local startTime = os.clock()
-			local maxWait = timeout or SETTINGS.LIMITS.DEFAULT_WAIT_TIMEOUT
-			while not Players.LocalPlayer and (os.clock() - startTime) < maxWait do
-				task.wait()
-			end
-			LocalPlayer = Players.LocalPlayer
-		end
-		return LocalPlayer
 	end
 
-	function Utils.SafeGetService(serviceName)
-		local success, service = pcall(game.GetService, game, serviceName)
-		return success and service or nil
-	end
-
-	function Utils.GetCharacter()
-		return LocalPlayer and LocalPlayer.Character
-	end
-
-	function Utils.GetHumanoid()
-		local char = Utils.GetCharacter()
-		if not (char and char.Parent) then return nil end
-		return char:FindFirstChildOfClass("Humanoid")
-	end
-
-	function Utils.GetRootPart()
-		local char = Utils.GetCharacter()
-		if not (char and char.Parent) then return nil end
-		local root = char:FindFirstChild("HumanoidRootPart")
-		return (root and root:IsA("BasePart") and root:IsDescendantOf(Workspace)) and root or nil
-	end
-
-	function Utils.GetPlayerAssets(player)
-		if not player then return nil end
-		local char = player.Character
-		if not (char and char.Parent) then return nil end
-
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		local root = char:FindFirstChild("HumanoidRootPart")
-		local head = char:FindFirstChild("Head")
-
-		if not (hum and root and head) then return nil end
-		if not root:IsDescendantOf(Workspace) then return nil end
-		if hum.Health <= 0 then return nil end
-
-		return {
-			Character = char,
-			Humanoid = hum,
-			RootPart = root,
-			Head = head,
-		}
-	end
-
-	function Utils.IsAlive(player)
-		return Utils.GetPlayerAssets(player) ~= nil
-	end
-
-	function Utils.SameTeam(player)
-		if not (LocalPlayer and LocalPlayer.Team and player and player.Team) then
-			return false
-		end
-		return LocalPlayer.Team == player.Team
-	end
-
-	function Utils.IsVisible(part)
-		if not (part and part.Parent and part:IsDescendantOf(Workspace)) then
-			return false
-		end
-		local camera = getCamera()
-		if not camera then
-			return false
-		end
-
-		local origin = camera.CFrame.Position
-		local direction = part.Position - origin
-		if direction.Magnitude < SETTINGS.LIMITS.MIN_RAYCAST_MAGNITUDE then
-			return true
-		end
-
-		local filterList = { camera }
-		local character = LocalPlayer and LocalPlayer.Character
-		if character then
-			table.insert(filterList, character)
-		end
-		cachedRaycastParams.FilterDescendantsInstances = filterList
-
-		local success, result = pcall(function()
-			return Workspace:Raycast(origin, direction, cachedRaycastParams)
+	if not sourceCode and game.HttpGet then
+		local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
+		local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+		local fullUrl = baseUrl .. cleanPath
+		local success, response = pcall(function()
+			return game:HttpGet(fullUrl)
 		end)
-
-		if not success then return false end
-		if not result then return true end
-		return result.Instance:IsDescendantOf(part.Parent)
+		if success and response and #response > 0 then
+			sourceCode = response
+		end
 	end
 
-	function Utils.GetPlayerByName(name)
-		if not name or #name == 0 then return nil end
-		local searchLower = name:lower()
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player.Name == name or player.DisplayName == name or player.Name:lower() == searchLower or player.DisplayName:lower() == searchLower then
-				return player
-			end
-		end
+	if not sourceCode then
 		return nil
 	end
 
-	function Utils.GetPlayerNameList(excludeLocal)
-		local players = Players:GetPlayers()
-		local list = table.create(#players)
-		for _, player in ipairs(players) do
-			if not excludeLocal or player ~= LocalPlayer then
-				table.insert(list, player.Name)
-			end
-		end
-		table.sort(list)
-		return list
-	end
-
-	function Utils.GetKeyCode(keyStr)
-		if not keyStr or #keyStr == 0 then return nil end
-		local success, result = pcall(function()
-			return Enum.KeyCode[keyStr:upper()]
-		end)
-		return (success and typeof(result) == "EnumItem") and result or nil
-	end
-
-	function Utils.FindPlayerFromModel(model)
-		if not model then return nil end
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player.Character == model then
-				return player
-			end
-		end
+	local loaderFn, compileErr = loadstring(sourceCode, path)
+	if not loaderFn then
 		return nil
 	end
 
-	function Utils.WorldToScreen(position)
-		local camera = getCamera()
-		if not camera then return Vector2.zero, false, 0 end
-		local success, screenPos, onScreen = pcall(function()
-			return camera:WorldToViewportPoint(position)
-		end)
-		if not success then return Vector2.zero, false, 0 end
-		return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
+	local runSuccess, moduleResult = pcall(loaderFn)
+	if not runSuccess then
+		return nil
 	end
 
-	function Utils.GetMousePosition()
-		local camera = getCamera()
-		if isMobile and camera then
-			return Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y * 0.5)
-		end
-		return UserInputService:GetMouseLocation()
+	moduleCache[path] = moduleResult
+	return moduleResult
+end
+
+local cleanupFn = import(SETTINGS.PATHS.CLEANUP)
+if type(cleanupFn) == "function" then
+	pcall(cleanupFn)
+end
+
+local configFn = import(SETTINGS.PATHS.CONFIG)
+local configData, defaultLighting = {}, {}
+if type(configFn) == "function" then
+	local success, cfg, lighting = pcall(configFn)
+	if success then
+		configData = cfg or {}
+		defaultLighting = lighting or {}
+	end
+end
+
+local utilsFn = import(SETTINGS.PATHS.UTILS)
+local utils = type(utilsFn) == "function" and utilsFn(configData) or {}
+
+if utils.WaitForGameLoad then
+	utils.WaitForGameLoad(SETTINGS.DEFAULTS.LOAD_TIMEOUT)
+end
+
+local drawingMgrFn = import(SETTINGS.PATHS.DRAWING_MANAGER)
+local drawingManager = type(drawingMgrFn) == "function" and drawingMgrFn() or {}
+
+local contextFn = import(SETTINGS.PATHS.CONTEXT)
+local context = type(contextFn) == "function" and contextFn(configData, defaultLighting, utils, drawingManager) or {}
+context.import = import
+
+local themeFn = import(SETTINGS.PATHS.THEME)
+local activeTheme, themeManager = {}, {}
+if type(themeFn) == "function" then
+	local success, th, thMgr = pcall(themeFn)
+	if success then
+		activeTheme = th or {}
+		themeManager = thMgr or {}
+	end
+end
+context.Theme = activeTheme
+context.ThemeManager = themeManager
+
+local uiEngineFn = import(SETTINGS.PATHS.UI_ENGINE)
+local uiEngine = type(uiEngineFn) == "function" and uiEngineFn(context, activeTheme) or {}
+context.UIEngine = uiEngine
+
+local keySysFn = import(SETTINGS.PATHS.KEY_SYSTEM)
+local keySystem = type(keySysFn) == "function" and keySysFn(context, import) or {}
+context.KeySystem = keySystem
+
+local configSysFn = import(SETTINGS.PATHS.CONFIG_SYSTEM)
+local configSystem = type(configSysFn) == "function" and configSysFn(context) or {}
+context.ConfigSystem = configSystem
+
+local aimbotSysFn = import(SETTINGS.PATHS.AIMBOT_SYSTEM)
+local aimbotSystem = type(aimbotSysFn) == "function" and aimbotSysFn(context) or {}
+context.AimbotSystem = aimbotSystem
+
+local espSysFn = import(SETTINGS.PATHS.ESP_SYSTEM)
+local espSystem = type(espSysFn) == "function" and espSysFn(context) or {}
+context.ESPSystem = espSystem
+
+local flingSysFn = import(SETTINGS.PATHS.FLING_SYSTEM)
+local flingSystem = type(flingSysFn) == "function" and flingSysFn(context) or {}
+context.FlingSystem = flingSystem
+
+local flySysFn = import(SETTINGS.PATHS.FLY_SYSTEM)
+local flySystem = type(flySysFn) == "function" and flySysFn(context) or {}
+context.FlySystem = flySystem
+
+local moveSysFn = import(SETTINGS.PATHS.MOVEMENT_SYSTEM)
+local movementSystem = type(moveSysFn) == "function" and moveSysFn(context) or {}
+context.MovementSystem = movementSystem
+
+local perfSysFn = import(SETTINGS.PATHS.PERFORMANCE_SYSTEM)
+local performanceSystem = type(perfSysFn) == "function" and perfSysFn(context) or {}
+context.PerformanceSystem = performanceSystem
+
+local playersSysFn = import(SETTINGS.PATHS.PLAYERS_SYSTEM)
+local playersSystem = type(playersSysFn) == "function" and playersSysFn(context) or {}
+context.PlayersSystem = playersSystem
+
+local overlayMgrFn = import(SETTINGS.PATHS.OVERLAY_MANAGER)
+local overlayManager = type(overlayMgrFn) == "function" and overlayMgrFn(context) or {}
+context.OverlayManager = overlayManager
+
+local gameLoaderFn = import(SETTINGS.PATHS.GAME_LOADER)
+local gameLoader = type(gameLoaderFn) == "function" and gameLoaderFn(context, import) or {}
+context.GameLoader = gameLoader
+
+globalEnv.B0XazContext = context
+
+local function startApplication()
+	if gameLoader and gameLoader.Load then
+		pcall(gameLoader.Load)
 	end
 
-	function Utils.GetScreenCenter()
-		local camera = getCamera()
-		if not camera then return Vector2.zero end
-		return Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y * 0.5)
+	if espSystem and espSystem.InitializeAll then
+		pcall(espSystem.InitializeAll)
 	end
 
-	function Utils.ColorToTable(color)
-		if typeof(color) ~= "Color3" then
-			return SETTINGS.DEFAULTS.COLOR_TABLE
-		end
-		return { r = color.R, g = color.G, b = color.B }
+	if configSystem and configSystem.LoadAutoload then
+		pcall(configSystem.LoadAutoload)
 	end
 
-	function Utils.TableToColor(tbl)
-		if type(tbl) ~= "table" then
-			return Color3.new(1, 1, 1)
-		end
-		return Color3.new(
-			math.clamp(tonumber(tbl.r) or 1, 0, 1),
-			math.clamp(tonumber(tbl.g) or 1, 0, 1),
-			math.clamp(tonumber(tbl.b) or 1, 0, 1)
-		)
+	if configSystem and configSystem.StartAutosaveLoop then
+		pcall(configSystem.StartAutosaveLoop)
 	end
 
-	function Utils.WriteFile(path, content)
-		if not writefile then return false, "writefile unavailable" end
-		local success, err = pcall(writefile, path, content)
-		return success, err
+	local buildUiFn = import(SETTINGS.PATHS.BUILD_UI)
+	if type(buildUiFn) == "function" then
+		pcall(buildUiFn, context)
 	end
 
-	function Utils.ReadFile(path)
-		if not (readfile and isfile and isfile(path)) then return nil end
-		local success, result = pcall(readfile, path)
-		return success and result or nil
+	local runtimeFn = import(SETTINGS.PATHS.RUNTIME)
+	if type(runtimeFn) == "function" then
+		pcall(runtimeFn, context)
 	end
+end
 
-	function Utils.ListFiles(folder)
-		if not (listfiles and isfolder and isfolder(folder)) then return {} end
-		local success, result = pcall(listfiles, folder)
-		return (success and type(result) == "table") and result or {}
+local isVerified, _, verifyMsg = false, 0, ""
+if keySystem and keySystem.LoadAndVerify then
+	isVerified, _, verifyMsg = keySystem.LoadAndVerify()
+end
+
+if isVerified then
+	startApplication()
+else
+	if uiEngine and uiEngine.CreateKeyPrompt then
+		uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
+	else
+		startApplication()
 	end
-
-	function Utils.MakeFolder(folder)
-		if makefolder and isfolder and not isfolder(folder) then
-			pcall(makefolder, folder)
-		end
-	end
-
-	function Utils.SanitizeFileName(name)
-		local cleaned = tostring(name or ""):gsub(SETTINGS.PATTERNS.FILENAME_SANITIZE, "_")
-		cleaned = cleaned:match(SETTINGS.PATTERNS.TRIM_WHITESPACE) or ""
-		local maxLen = (CONFIG and CONFIG.CONFIG_NAME_MAX_LEN) or SETTINGS.LIMITS.DEFAULT_CONFIG_NAME_MAX_LEN
-		if #cleaned > maxLen then
-			cleaned = cleaned:sub(1, maxLen)
-		end
-		return cleaned
-	end
-
-	function Utils.SafeCall(func, ...)
-		if type(func) ~= "function" then return false end
-		return pcall(func, ...)
-	end
-
-	local function getQueueOnTeleport()
-		return queue_on_teleport or (syn and syn.queue_on_teleport) or queueonteleport or (Fluxus and Fluxus.queue_on_teleport)
-	end
-
-	function Utils.PrepareTeleport()
-		local queueFunction = getQueueOnTeleport()
-		if not queueFunction then return end
-
-		local globalEnv = getgenv and getgenv() or _G
-		local codeToQueue
-		if globalEnv.B0XazScriptURL then
-			codeToQueue = string.format(SETTINGS.TEMPLATES.TELEPORT_URL, tostring(globalEnv.B0XazScriptURL))
-		else
-			codeToQueue = SETTINGS.TEMPLATES.TELEPORT_FILE
-		end
-
-		pcall(queueFunction, codeToQueue)
-	end
-
-	return Utils
 end
