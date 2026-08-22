@@ -3,6 +3,7 @@ return function(Context)
 	local Workspace = game:GetService("Workspace")
 	local Players = game:GetService("Players")
 	local RS = game:GetService("RunService")
+	local UIS = game:GetService("UserInputService")
 
 	local LocalPlayer = Players.LocalPlayer
 	local FeatureConfig = Context and Context.FeatureConfig or {}
@@ -10,12 +11,40 @@ return function(Context)
 	local Connections = Context and Context.Connections or {}
 	local UIRegistry = Context and Context.UIRegistry or {}
 
+	-- Safe Defaults initialization for Game specific settings
+	if not FeatureConfig.Game then FeatureConfig.Game = {} end
+	if FeatureConfig.Game.DoorPhase == nil then FeatureConfig.Game.DoorPhase = false end
+	if FeatureConfig.Game.DoorGlow == nil then FeatureConfig.Game.DoorGlow = true end
+	if FeatureConfig.Game.GlowColor == nil then FeatureConfig.Game.GlowColor = Color3.fromRGB(0, 200, 220) end
+	if FeatureConfig.Game.PhaseTransparency == nil then FeatureConfig.Game.PhaseTransparency = 0.65 end
+	if FeatureConfig.Game.NoSpread == nil then FeatureConfig.Game.NoSpread = false end
+	if FeatureConfig.Game.FastFire == nil then FeatureConfig.Game.FastFire = false end
+	if FeatureConfig.Game.ForceAuto == nil then FeatureConfig.Game.ForceAuto = false end
+	if FeatureConfig.Game.ForceRange == nil then FeatureConfig.Game.ForceRange = false end
+	if FeatureConfig.Game.FireRateValue == nil then FeatureConfig.Game.FireRateValue = 0.001 end
+	if FeatureConfig.Game.RangeValue == nil then FeatureConfig.Game.RangeValue = 10000 end
+
+	-- Fake Macro Settings Defaults
+	if FeatureConfig.Game.FakeMacro == nil then FeatureConfig.Game.FakeMacro = false end
+	if FeatureConfig.Game.FakeMacroKey == nil then FeatureConfig.Game.FakeMacroKey = Enum.KeyCode.V end
+	if FeatureConfig.Game.FakeMacroMode == nil then FeatureConfig.Game.FakeMacroMode = "Toggle" end
+	if FeatureConfig.Game.FakeMacroDelay == nil then FeatureConfig.Game.FakeMacroDelay = 0.03 end
+
 	local DOOR_FOLDERS = {
 		"Doors",
 		"glass",
 		"CellDoors",
 		"Prison_Fences",
 		"Prison_Gate",
+	}
+
+	-- Known Roblox Prison Life Weapon Names
+	local PRISON_PL_GUNS = {
+		"Remington 870",
+		"M9",
+		"AK-47",
+		"Taser",
+		"M4A1"
 	}
 
 	local _cache = getgenv().B0XazDoorCache or {}
@@ -29,6 +58,12 @@ return function(Context)
 
 	local Game = { Name = "Prison Life" }
 	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
+
+	-- Macro Runtime State Variables
+	local macroLoopActive = false
+	local macroThread = nil
+	local currentToolIndex = 1
+	local isKeyPressed = false
 
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
@@ -255,6 +290,100 @@ return function(Context)
 		scanGuns()
 	end
 
+	----------------------------------------------------------------
+	-- FAKE MACRO SYSTEM LOGIC
+	----------------------------------------------------------------
+	local function runFakeMacroStep()
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+		if not hum or hum.Health <= 0 or not bp then return end
+
+		-- Collect all valid weapons inside inventory and character
+		local guns = {}
+		for _, tool in ipairs(bp:GetChildren()) do
+			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then
+				table.insert(guns, tool)
+			end
+		end
+		for _, tool in ipairs(char:GetChildren()) do
+			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then
+				table.insert(guns, tool)
+			end
+		end
+
+		if #guns < 2 then return end
+
+		currentToolIndex = currentToolIndex + 1
+		if currentToolIndex > #guns then
+			currentToolIndex = 1
+		end
+
+		local targetTool = guns[currentToolIndex]
+		if targetTool and targetTool.Parent ~= char then
+			hum:EquipTool(targetTool)
+		end
+	end
+
+	local function startFakeMacro()
+		if macroLoopActive then return end
+		macroLoopActive = true
+		macroThread = task.spawn(function()
+			while macroLoopActive do
+				runFakeMacroStep()
+				task.wait(FeatureConfig.Game.FakeMacroDelay or 0.03)
+			end
+		end)
+	end
+
+	local function stopFakeMacro()
+		macroLoopActive = false
+		if macroThread then
+			pcall(function() task.cancel(macroThread) end)
+			macroThread = nil
+		end
+	end
+
+	local function handleFakeMacroInput(input, isBegan)
+		if not FeatureConfig.Game.FakeMacro then return end
+		local macroKey = FeatureConfig.Game.FakeMacroKey
+
+		if not macroKey then return end
+
+		local matched = false
+		if typeof(macroKey) == "EnumItem" then
+			if macroKey.EnumType == Enum.KeyCode then
+				matched = (input.KeyCode == macroKey)
+			elseif macroKey.EnumType == Enum.UserInputType then
+				matched = (input.UserInputType == macroKey)
+			end
+		end
+
+		if not matched then return end
+
+		if FeatureConfig.Game.FakeMacroMode == "Toggle" then
+			if isBegan then
+				isKeyPressed = not isKeyPressed
+				if isKeyPressed then
+					startFakeMacro()
+				else
+					stopFakeMacro()
+				end
+			end
+		elseif FeatureConfig.Game.FakeMacroMode == "Hold" then
+			if isBegan then
+				isKeyPressed = true
+				startFakeMacro()
+			else
+				isKeyPressed = false
+				stopFakeMacro()
+			end
+		end
+	end
+
+	----------------------------------------------------------------
+	-- CONNECTIONS / HOOKS
+	----------------------------------------------------------------
 	if Connections and Connections.Add then
 		Connections.Add(RS.Stepped:Connect(function()
 			if FeatureConfig.Game.DoorPhase then
@@ -297,6 +426,16 @@ return function(Context)
 
 		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
 			if child.Name == "Backpack" then hookContainer(child) end
+		end))
+
+		Connections.Add(UIS.InputBegan:Connect(function(input, gp)
+			if gp then return end
+			handleFakeMacroInput(input, true)
+		end))
+
+		Connections.Add(UIS.InputEnded:Connect(function(input, gp)
+			if gp then return end
+			handleFakeMacroInput(input, false)
 		end))
 	end
 
@@ -379,7 +518,7 @@ return function(Context)
 			end
 		end)
 
-		local combat = tab:AddSection("Combat")
+		local combat = tab:AddSection("Combat Modifications")
 
 		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
 			Game.SetNoSpread(v)
@@ -415,6 +554,33 @@ return function(Context)
 				Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent)
 			end
 		end)
+
+		local macroSec = tab:AddSection("Fake Macro (Gun Spam)")
+
+		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
+			FeatureConfig.Game.FakeMacro = v
+			if not v then stopFakeMacro() end
+		end)
+
+		UIRegistry.Game_FakeMacroKey = macroSec:AddKeybind("Macro Activation Key", FeatureConfig.Game.FakeMacroKey, function(k)
+			FeatureConfig.Game.FakeMacroKey = k
+			stopFakeMacro()
+			isKeyPressed = false
+		end)
+
+		UIRegistry.Game_FakeMacroMode = macroSec:AddDropdown("Activation Mode", {"Toggle", "Hold"}, function(v)
+			FeatureConfig.Game.FakeMacroMode = v
+			stopFakeMacro()
+			isKeyPressed = false
+		end, FeatureConfig.Game.FakeMacroMode)
+
+		UIRegistry.Game_FakeMacroDelay = macroSec:AddSlider("Macro Speed Delay", math.floor((FeatureConfig.Game.FakeMacroDelay or 0.03) * 1000), 10, 200, function(v)
+			FeatureConfig.Game.FakeMacroDelay = v / 1000
+			if macroLoopActive then
+				stopFakeMacro()
+				startFakeMacro()
+			end
+		end, " ms")
 	end
 
 	function Game.Update(dt)
@@ -429,6 +595,7 @@ return function(Context)
 	end
 
 	function Game.Destroy()
+		stopFakeMacro()
 		restoreAllDoors()
 		restoreGuns()
 	end
