@@ -12,7 +12,8 @@ return function(Context)
 
     local ConfigSystem = {
         Dirty = false,
-        AutoloadFile = "_autoload"
+        AutoloadFile = "_autoload",
+        DefaultSnapshot = nil
     }
 
     local function serializeKeybind(k)
@@ -48,7 +49,6 @@ return function(Context)
     end
 
     function ConfigSystem.Serialize()
-        -- Collect all theme colors
         local themeData = {}
         for k, v in pairs(Theme) do
             if typeof(v) == "Color3" then
@@ -125,7 +125,7 @@ return function(Context)
                 RangeValue = FeatureConfig.Game.RangeValue
             },
             Theme = {
-                PresetName = ThemeManager and ThemeManager.ActivePreset or "Custom",
+                PresetName = ThemeManager and ThemeManager.ActivePreset or "Default Cyan",
                 Colors = themeData
             },
             Settings = {
@@ -137,7 +137,7 @@ return function(Context)
 
     function ConfigSystem.Deserialize(data)
         if type(data) ~= "table" then return end
-        
+
         if type(data.Aimbot) == "table" then
             for k, v in pairs(data.Aimbot) do
                 if k == "Keybind" then
@@ -218,6 +218,17 @@ return function(Context)
         if type(data.Settings) == "table" then
             State.MenuKeybind = deserializeKeybind(data.Settings.MenuKeybind) or State.MenuKeybind
             State.includeSelf = data.Settings.IncludeSelf or false
+        end
+
+        -- Cleanup residual active states if disabled by config
+        if not FeatureConfig.Aimbot.Enabled and Context.AimbotSystem then
+            Context.AimbotSystem.LockOff()
+        end
+        if not FeatureConfig.Movement.FlyEnabled and Context.FlySystem then
+            Context.FlySystem.Stop()
+        end
+        if not FeatureConfig.Extras.Hitbox.Enabled and Context.ResetHitboxes then
+            Context.ResetHitboxes()
         end
     end
 
@@ -307,7 +318,6 @@ return function(Context)
         set("Game_ForceAuto", FeatureConfig.Game.ForceAuto)
         set("Game_ForceRange", FeatureConfig.Game.ForceRange)
 
-        -- Theme Toggles & Color pickers
         set("Theme_Accent", Theme.Accent)
         set("Theme_Bg", Theme.Bg)
         set("Theme_Panel", Theme.Panel)
@@ -321,28 +331,49 @@ return function(Context)
     end
 
     function ConfigSystem.GetSavedNames()
-        local names = {}
+        local customNames = {}
         for _, path in ipairs(Utils.ListFiles(CONFIG.FOLDER)) do
             local name = path:match("[/\\]?([^/\\]+)$") or path
             if name:sub(-#CONFIG.EXT) == CONFIG.EXT then
                 local finalName = name:sub(1, -#CONFIG.EXT - 1)
-                if finalName ~= ConfigSystem.AutoloadFile then
-                    table.insert(names, finalName)
+                if finalName ~= ConfigSystem.AutoloadFile and finalName:lower() ~= "default" then
+                    table.insert(customNames, finalName)
                 end
             end
         end
-        table.sort(names)
+        table.sort(customNames)
+
+        -- "Default" is always guaranteed at the top
+        local names = { "Default" }
+        for _, n in ipairs(customNames) do
+            table.insert(names, n)
+        end
         return names
     end
 
     function ConfigSystem.Save(name)
         if not name or #name == 0 then return false, "Empty name" end
+        
+        -- Disallow overwriting Default config or system files
+        if name:lower() == "default" then
+            return false, "Cannot overwrite Default configuration"
+        end
+
         local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
         if not ok then return false, tostring(encoded) end
         return Utils.WriteFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT, encoded)
     end
 
     function ConfigSystem.Load(name)
+        if name == "Default" then
+            if ConfigSystem.DefaultSnapshot then
+                ConfigSystem.Deserialize(ConfigSystem.DefaultSnapshot)
+                ConfigSystem.UpdateUI()
+                return true
+            end
+            return false, "Default snapshot unavailable"
+        end
+
         local content = Utils.ReadFile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT)
         if not content then return false, "Not found" end
         local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
@@ -353,6 +384,12 @@ return function(Context)
     end
 
     function ConfigSystem.Delete(name)
+        if not name or name:lower() == "default" then
+            return false, "Default configuration cannot be deleted"
+        end
+        if name:lower() == ConfigSystem.AutoloadFile:lower() then
+            return false, "Cannot delete system autoload file"
+        end
         return pcall(function() delfile(CONFIG.FOLDER .. "/" .. name .. CONFIG.EXT) end)
     end
 
@@ -368,23 +405,28 @@ return function(Context)
         return false
     end
 
-    -- Autosave Engine loop
     function ConfigSystem.StartAutosaveLoop()
         local isSaving = false
         Connections.Track(task.spawn(function()
             while true do
-                task.wait(1.5) -- Debounce check
+                task.wait(1.5)
                 if ConfigSystem.Dirty and not isSaving then
                     ConfigSystem.Dirty = false
                     isSaving = true
                     pcall(function()
-                        ConfigSystem.Save(ConfigSystem.AutoloadFile)
+                        local ok, encoded = pcall(function() return HttpService:JSONEncode(ConfigSystem.Serialize()) end)
+                        if ok then
+                            Utils.WriteFile(CONFIG.FOLDER .. "/" .. ConfigSystem.AutoloadFile .. CONFIG.EXT, encoded)
+                        end
                     end)
                     isSaving = false
                 end
             end
         end))
     end
+
+    -- Capture baseline vanilla state snapshot
+    ConfigSystem.DefaultSnapshot = ConfigSystem.Serialize()
 
     return ConfigSystem
 end
