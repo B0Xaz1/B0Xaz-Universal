@@ -1,3 +1,4 @@
+-- // src/Systems/KeySystem.lua
 local SETTINGS = {
 	KEY_PATHS = {
 		ENTRY = "src/Keys/Entry.lua",
@@ -29,6 +30,11 @@ local SETTINGS = {
 		VALIDATE_COOLDOWN = 0.25,
 		MIN_MASK_LENGTH = 4,
 	},
+	FALLBACK_KEYS = {
+		[3] = { "Main Access", "FULL-ALPHA-01", "FULL-BETA-02", "FULL-TEST-KEY" },
+		[2] = { "NORMAL-TEST-KEY", "NORMAL-ACCESS" },
+		[1] = { "ENTRY-TEST-KEY", "ENTRY-ACCESS" },
+	},
 }
 
 return function(Context, import)
@@ -47,6 +53,15 @@ return function(Context, import)
 
 	local lastValidationTime = 0
 	local keyLookup = {}
+
+	for tier, keys in pairs(SETTINGS.FALLBACK_KEYS) do
+		for _, key in ipairs(keys) do
+			local normalized = tostring(key):match("^%s*(.-)%s*$")
+			if normalized and normalized ~= "" then
+				keyLookup[normalized] = tier
+			end
+		end
+	end
 
 	local function populateKeyLookup(path, tier)
 		if type(importFn) ~= "function" then return end
