@@ -1,4 +1,3 @@
--- src/Systems/AimbotSystem.lua
 return function(Context)
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
@@ -17,34 +16,22 @@ return function(Context)
     local ActiveHeldInputs = {}
 
     local R6Parts = {
-        Head = "Head",
-        Torso = "Torso",
-        Root = "HumanoidRootPart",
-        LeftArm = "Left Arm",
-        RightArm = "Right Arm",
-        LeftLeg = "Left Leg",
-        RightLeg = "Right Leg",
+        Head = "Head", Torso = "Torso", Root = "HumanoidRootPart",
+        LeftArm = "Left Arm", RightArm = "Right Arm",
+        LeftLeg = "Left Leg", RightLeg = "Right Leg",
     }
-
     local R15Parts = {
-        Head = "Head",
-        Torso = "UpperTorso",
-        LowerTorso = "LowerTorso",
+        Head = "Head", Torso = "UpperTorso", LowerTorso = "LowerTorso",
         Root = "HumanoidRootPart",
-        LeftArm = "LeftUpperArm",
-        RightArm = "RightUpperArm",
-        LeftLeg = "LeftUpperLeg",
-        RightLeg = "RightUpperLeg",
+        LeftArm = "LeftUpperArm", RightArm = "RightUpperArm",
+        LeftLeg = "LeftUpperLeg", RightLeg = "RightUpperLeg",
     }
-
-    local function isR15(character)
-        return character and character:FindFirstChild("UpperTorso") ~= nil
-    end
 
     local function getHitPart(character)
-        if not character then return nil end
+        if not character or not character.Parent then return nil end
         local key = FeatureConfig.Aimbot.Hitpart or "Head"
-        local map = isR15(character) and R15Parts or R6Parts
+        local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+        local map = isR15 and R15Parts or R6Parts
         local name = map[key] or key
         return character:FindFirstChild(name)
             or character:FindFirstChild("Head")
@@ -56,15 +43,6 @@ return function(Context)
         return Utils.SameTeam(player)
     end
 
-    local function isCharacterValid(character)
-        if not character then return false end
-        local hum = character:FindFirstChildOfClass("Humanoid")
-        local root = character:FindFirstChild("HumanoidRootPart")
-        if not hum or not root then return false end
-        if FeatureConfig.Aimbot.UnlockOnDeath and hum.Health <= 0 then return false end
-        return true
-    end
-
     local function isVisible(part)
         if not FeatureConfig.Aimbot.VisCheck then return true end
         if not part then return false end
@@ -73,7 +51,6 @@ return function(Context)
 
     local function matchesBind(input, bindItem)
         if bindItem == nil then return false end
-
         if typeof(bindItem) == "string" then
             local upper = bindItem:upper()
             if upper == "MB1" or upper == "MOUSEBUTTON1" then
@@ -86,7 +63,6 @@ return function(Context)
             local kc = Utils.GetKeyCode(bindItem)
             return kc ~= nil and input.KeyCode == kc
         end
-
         if typeof(bindItem) == "EnumItem" then
             if bindItem.EnumType == Enum.KeyCode then
                 return input.KeyCode == bindItem
@@ -94,7 +70,6 @@ return function(Context)
                 return input.UserInputType == bindItem
             end
         end
-
         return false
     end
 
@@ -120,14 +95,15 @@ return function(Context)
         local closest = nil
         local mouse = UIS:GetMouseLocation()
         local fovSize = (cfg.FOV and cfg.FOV.Size) or 150
-        local myRoot = Utils.GetRootPart()
+        local myAssets = Utils.GetPlayerAssets(LocalPlayer)
 
         for _, player in ipairs(Players:GetPlayers()) do
             if player == LocalPlayer then continue end
             if isTeammate(player) then continue end
-            if not isCharacterValid(player.Character) then continue end
+            local assets = Utils.GetPlayerAssets(player)
+            if not assets then continue end
 
-            local hit = getHitPart(player.Character)
+            local hit = getHitPart(assets.Character)
             if not hit then continue end
 
             local screen, onScreen = Camera:WorldToViewportPoint(hit.Position)
@@ -139,8 +115,8 @@ return function(Context)
 
             if dist2d > fovSize then continue end
 
-            if myRoot and cfg.MaxDistance then
-                local worldDist = (myRoot.Position - hit.Position).Magnitude
+            if myAssets and cfg.MaxDistance then
+                local worldDist = (myAssets.RootPart.Position - hit.Position).Magnitude
                 if worldDist > cfg.MaxDistance then continue end
             end
 
@@ -178,12 +154,12 @@ return function(Context)
     function AimbotSystem.UpdateAim(dt)
         local cfg = FeatureConfig.Aimbot
         if not cfg or not cfg.Enabled then return end
-
         dt = dt or 0.016
 
         if cfg.LockMode == "Hold" then
             if isAnyKeyHeld() then
-                if not TargetPlayer or not isCharacterValid(TargetPlayer.Character) then
+                local assets = TargetPlayer and Utils.GetPlayerAssets(TargetPlayer)
+                if not assets then
                     local t = getClosestPlayer()
                     if t then setTarget(t) end
                 end
@@ -195,13 +171,14 @@ return function(Context)
 
         if not TargetPlayer then return end
 
-        if not isCharacterValid(TargetPlayer.Character) then
+        local assets = Utils.GetPlayerAssets(TargetPlayer)
+        if not assets then
             setTarget(nil)
             return
         end
 
-        local hit = getHitPart(TargetPlayer.Character)
-        if not hit then
+        local hit = getHitPart(assets.Character)
+        if not hit or not hit:IsDescendantOf(Workspace) then
             setTarget(nil)
             return
         end
@@ -267,71 +244,10 @@ return function(Context)
         for _, p in ipairs(Players:GetPlayers()) do
             if p == LocalPlayer then continue end
             if isTeammate(p) then continue end
-            if not Utils.IsAlive(p) then continue end
+            local assets = Utils.GetPlayerAssets(p)
+            if not assets then continue end
 
-            local char = p.Character
-            if not char then continue end
-
-            for _, part in ipairs(char:GetChildren()) do
+            for _, part in ipairs(assets.Character:GetChildren()) do
                 if not part:IsA("BasePart") then continue end
                 local sp, onScreen, depth = Utils.WorldToScreen(part.Position)
-                if not onScreen or depth <= 0 then continue end
-                if (mousePos - sp).Magnitude < 14 then
-                    task.delay(cfg.Triggerbot.Delay or 0.05, function()
-                        if not FeatureConfig.Aimbot.Triggerbot.Enabled then return end
-                        if mouse1click then
-                            pcall(mouse1click)
-                        else
-                            local vim = game:GetService("VirtualInputManager")
-                            pcall(function()
-                                vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                                task.wait(0.02)
-                                vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                            end)
-                        end
-                    end)
-                    return
-                end
-            end
-        end
-    end
-
-    Connections.Add(UIS.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if not FeatureConfig.Aimbot.Enabled then return end
-
-        local matched = getMatchingBind(input)
-        if not matched then return end
-
-        ActiveHeldInputs[tostring(matched)] = true
-
-        if FeatureConfig.Aimbot.LockMode == "Toggle" then
-            if TargetPlayer then
-                AimbotSystem.LockOff()
-            else
-                AimbotSystem.LockOn()
-            end
-        else
-            AimbotSystem.LockOn()
-        end
-    end))
-
-    Connections.Add(UIS.InputEnded:Connect(function(input)
-        local matched = getMatchingBind(input)
-        if not matched then return end
-
-        ActiveHeldInputs[tostring(matched)] = nil
-
-        if FeatureConfig.Aimbot.LockMode == "Hold" and not isAnyKeyHeld() then
-            AimbotSystem.LockOff()
-        end
-    end))
-
-    Connections.Add(Players.PlayerRemoving:Connect(function(player)
-        if player == TargetPlayer then
-            AimbotSystem.LockOff()
-        end
-    end))
-
-    return AimbotSystem
-end
+                if not 
