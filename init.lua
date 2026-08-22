@@ -131,65 +131,209 @@ local FALLBACK_MODULES = {
 	["src/Games/Loader.lua"] = function()
 		return function(Context, import)
 			local placeId = tostring(game.PlaceId)
-			local GameLoader = {
-				PlaceId = placeId,
-				Info = { Name = "Prison Life", Folder = "155615604" },
-				Module = nil,
-				LoadError = nil,
-				Supported = true,
+
+			local function createPrisonLife(Ctx)
+				local Workspace = game:GetService("Workspace")
+				local Players = game:GetService("Players")
+				local RunService = game:GetService("RunService")
+				local UserInputService = game:GetService("UserInputService")
+				local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+				local LocalPlayer = Players.LocalPlayer
+				local FeatureConfig = Ctx and Ctx.FeatureConfig or {}
+				local Theme = Ctx and Ctx.Theme or {}
+				local Connections = Ctx and Ctx.Connections or {}
+				local UIRegistry = Ctx and Ctx.UIRegistry or {}
+				local Utils = Ctx and Ctx.Utils or {}
+
+				local GAME_SETTINGS = {
+					DEFAULTS = {
+						DoorPhase = false, DoorGlow = true, GlowColor = Color3.fromRGB(0, 200, 220),
+						PhaseTransparency = 0.65, NoSpread = false, FastFire = false, ForceAuto = false,
+						ForceRange = false, FireRateValue = 0.001, RangeValue = 10000,
+						FakeMacro = false, FakeMacroKey = Enum.KeyCode.V, FakeMacroMode = "Toggle", FakeMacroDelay = 0.03,
+						AntiRestrict = false, PunchAura = false, PunchAuraRange = 15, SuperPunch = false, SuperPunchHits = 10,
+					},
+					LIMITS = {
+						PUNCH_AURA_INTERVAL = 0.1, SUPER_PUNCH_COOLDOWN = 0.15,
+						MIN_MACRO_DELAY = 0.01, MAX_MACRO_DELAY = 0.5,
+						MIN_SUPER_PUNCH_HITS = 1, MAX_SUPER_PUNCH_HITS = 30,
+						MIN_PUNCH_AURA_RANGE = 5, MAX_PUNCH_AURA_RANGE = 40,
+						MIN_PHASE_TRANSPARENCY = 0.1, MAX_PHASE_TRANSPARENCY = 0.95,
+						GUN_GRAB_WAIT = 1.3, CRIMINAL_SWITCH_WAIT = 3.5,
+					},
+					LOCATIONS = {
+						{ "Prison Cells", CFrame.new(920, 98, 2436) },
+						{ "Cafeteria", CFrame.new(920, 98, 2290) },
+						{ "Prison Yard", CFrame.new(779, 98, 2463) },
+						{ "Criminal Base", CFrame.new(-943, 95, 2058) },
+						{ "Police Armory", CFrame.new(831, 98, 2284) },
+						{ "Parking Lot", CFrame.new(745, 98, 2148) },
+						{ "Roof", CFrame.new(845, 130, 2235) },
+						{ "Secret Room", CFrame.new(674, 98, 2384) },
+						{ "Tunnels", CFrame.new(918, 80, 2284) },
+						{ "Outside of Prison", CFrame.new(451.67, 98.04, 2216.34) },
+						{ "Kitchen", CFrame.new(906.64, 99.99, 2237.67) },
+						{ "Break Room", CFrame.new(800.09, 99.99, 2266.72) },
+					},
+					GUN_SPAWNS = {
+						["MP5"] = Vector3.new(813.72, 102.50, 2229.37),
+						["Remington 870"] = Vector3.new(820.27, 102.50, 2229.31),
+						["AK-47"] = Vector3.new(-932, 100.74, 2039.5),
+					},
+					DOOR_FOLDERS = { "doors", "glass", "celldoors", "prison_fences", "prison_gate" },
+					PRISON_GUNS = { "Remington 870", "M9", "AK-47", "Taser", "M4A1", "MP5" },
+					GUN_ATTRIBUTES = { "SpreadRadius", "FireRate", "AutoFire", "Range" },
+					RESTRICTED_GUIS = { "Taser", "Flashbang", "Cuffs" },
+					CRIMINAL_BASE_POS = Vector3.new(-943, 95, 2058),
+					DEFAULT_WALKSPEED = 16, DEFAULT_JUMPPOWER = 50,
+				},
+				THEME_FALLBACKS = {
+					Danger = Color3.fromRGB(220, 80, 80), Success = Color3.fromRGB(80, 220, 80),
+					Accent = Color3.fromRGB(0, 200, 220), Bg = Color3.fromRGB(20, 20, 20),
+				},
 			}
 
-			function GameLoader.GetDisplayName()
-				return "Prison Life"
+			if not FeatureConfig.Game then FeatureConfig.Game = {} end
+			for k, v in pairs(GAME_SETTINGS.DEFAULTS) do
+				if FeatureConfig.Game[k] == nil then FeatureConfig.Game[k] = v end
 			end
 
-			function GameLoader.IsSupported()
-				return true
+			local function getThemeColor(key)
+				return Theme[key] or GAME_SETTINGS.THEME_FALLBACKS[key] or Color3.fromRGB(255, 255, 255)
 			end
 
-			function GameLoader.Load()
-				if GameLoader.Module then return GameLoader.Module end
-				if type(import) == "function" then
-					local success, factory = pcall(import, "src/Games/155615604.lua", true)
+			local Game = { Name = "Prison Life" }
+			local isTeleporting = false
+
+			local function notify(title, message, duration, color)
+				if Ctx and Ctx.UI and Ctx.UI.Notify then
+					Ctx.UI:Notify(title, message, duration, color)
+				end
+			end
+
+			local function performWarpAction(targetPos, waitTime, startMsg, successMsg, notifyTag)
+				if isTeleporting then return end
+				local root = Utils.GetRootPart and Utils.GetRootPart()
+				if not root then notify(notifyTag, "Character root not found", nil, getThemeColor("Danger")) return end
+				isTeleporting = true
+				local originalCFrame = root.CFrame
+				if startMsg then notify(notifyTag, startMsg, waitTime, getThemeColor("Accent")) end
+				root.CFrame = CFrame.new(targetPos)
+				task.wait(waitTime)
+				local curRoot = Utils.GetRootPart and Utils.GetRootPart()
+				if curRoot then
+					curRoot.CFrame = originalCFrame
+					if successMsg then notify(notifyTag, successMsg, 2, getThemeColor("Success")) end
+				end
+				isTeleporting = false
+			end
+
+			function Game.BuildUI(tab)
+				local gunGrabSec = tab:AddSection("Gun Grabbers (Warp-Return)")
+				for gunName, spawnPos in pairs(GAME_SETTINGS.GUN_SPAWNS) do
+					gunGrabSec:AddButton("Grab " .. gunName, function()
+						performWarpAction(spawnPos, GAME_SETTINGS.LIMITS.GUN_GRAB_WAIT, "Acquiring " .. gunName .. "...", gunName .. " acquired!", "Gun Grabber")
+					end)
+				end
+
+				local combatSec = tab:AddSection("Combat Modifications")
+				UIRegistry.Game_NoSpread = combatSec:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v) FeatureConfig.Game.NoSpread = v end)
+				UIRegistry.Game_FastFire = combatSec:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v) FeatureConfig.Game.FastFire = v end)
+				UIRegistry.Game_ForceAuto = combatSec:AddToggle("Force Automatic Fire", FeatureConfig.Game.ForceAuto, function(v) FeatureConfig.Game.ForceAuto = v end)
+				UIRegistry.Game_ForceRange = combatSec:AddToggle("Force Range", FeatureConfig.Game.ForceRange, function(v) FeatureConfig.Game.ForceRange = v end)
+
+				local defSec = tab:AddSection("Defenses & Teams")
+				UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser / Anti-Freeze", FeatureConfig.Game.AntiRestrict, function(v) FeatureConfig.Game.AntiRestrict = v end)
+				defSec:AddButton("Become Criminal (Inside)", function()
+					performWarpAction(GAME_SETTINGS.CRIMINAL_BASE_POS, GAME_SETTINGS.LIMITS.CRIMINAL_SWITCH_WAIT, "Becoming Criminal...", "Returned Inside as Criminal!", "Prison Life")
+				end)
+				defSec:AddButton("Become Criminal (Outside)", function()
+					local root = Utils.GetRootPart and Utils.GetRootPart()
+					if root then root.CFrame = CFrame.new(GAME_SETTINGS.CRIMINAL_BASE_POS) notify("Prison Life", "Warped Outside to Criminal Base!", 2, getThemeColor("Success")) end
+				end)
+
+				local tpSec = tab:AddSection("Map Teleports")
+				for _, loc in ipairs(GAME_SETTINGS.LOCATIONS) do
+					local name, cf = loc[1], loc[2]
+					tpSec:AddButton(name, function()
+						local root = Utils.GetRootPart and Utils.GetRootPart()
+						if root then
+							root.CFrame = cf
+							notify("Teleport", "Moved to " .. name, nil, getThemeColor("Success"))
+						end
+					end)
+				end
+			end
+
+			function Game.Update(dt) end
+			function Game.Destroy() end
+
+			return Game
+		end
+
+		local GameLoader = {
+			PlaceId = placeId,
+			Info = { Name = "Prison Life", Folder = "155615604" },
+			Module = nil,
+			LoadError = nil,
+			Supported = true,
+		}
+
+		function GameLoader.GetDisplayName() return "Prison Life" end
+		function GameLoader.IsSupported() return true end
+
+		function GameLoader.Load()
+			if GameLoader.Module then return GameLoader.Module end
+			if type(import) == "function" then
+				local pathsToTry = {
+					string.format("src/Games/%s.lua", placeId),
+					"src/Games/155615604.lua",
+				}
+				for _, path in ipairs(pathsToTry) do
+					local success, factory = pcall(import, path, true)
 					if success and factory then
-						local res = factory
+						local resolvedModule = factory
 						if type(factory) == "function" then
 							local rOk, rVal = pcall(factory, Context)
-							if rOk then res = rVal end
+							if rOk then resolvedModule = rVal end
 						end
-						if type(res) == "table" then
-							GameLoader.Module = res
-							return res
+						if type(resolvedModule) == "table" then
+							GameLoader.Module = resolvedModule
+							return resolvedModule
 						end
 					end
 				end
-				return nil
 			end
 
-			function GameLoader.BuildUI(tab)
-				local mod = GameLoader.Load()
-				if mod and type(mod.BuildUI) == "function" then
-					pcall(mod.BuildUI, tab)
-					return true
-				end
-				return false, "Failed to load Prison Life module"
-			end
-
-			function GameLoader.Update(dt)
-				if GameLoader.Module and type(GameLoader.Module.Update) == "function" then
-					pcall(GameLoader.Module.Update, dt)
-				end
-			end
-
-			function GameLoader.Destroy()
-				if GameLoader.Module and type(GameLoader.Module.Destroy) == "function" then
-					pcall(GameLoader.Module.Destroy)
-				end
-				GameLoader.Module = nil
-			end
-
-			return GameLoader
+			local plObj = createPrisonLife(Context)
+			GameLoader.Module = plObj
+			return plObj
 		end
+
+		function GameLoader.BuildUI(tab)
+			local mod = GameLoader.Load()
+			if mod and type(mod.BuildUI) == "function" then
+				pcall(mod.BuildUI, tab)
+				return true
+			end
+			return false, "Failed to build game UI"
+		end
+
+		function GameLoader.Update(dt)
+			if GameLoader.Module and type(GameLoader.Module.Update) == "function" then
+				pcall(GameLoader.Module.Update, dt)
+			end
+		end
+
+		function GameLoader.Destroy()
+			if GameLoader.Module and type(GameLoader.Module.Destroy) == "function" then
+				pcall(GameLoader.Module.Destroy)
+			end
+			GameLoader.Module = nil
+		end
+
+		return GameLoader
 	end,
 }
 
@@ -240,46 +384,39 @@ end
 
 local function import(path, isOptional)
 	if moduleCache[path] ~= nil then return moduleCache[path] end
-	
+
 	local sourceCode = fetchSource(path)
-	
-	-- Fall back to embedded module if network fetch misses
-	if not sourceCode and FALLBACK_MODULES[path] then
-		local fallbackFactory = FALLBACK_MODULES[path]()
-		moduleCache[path] = fallbackFactory
-		print("[B0Xaz] Loaded module (In-Memory Fallback): " .. path)
-		return fallbackFactory
-	end
+	local resolvedResult = nil
 
-	if not sourceCode then
-		moduleCache[path] = false
-		if not isOptional then
-			warn("[B0Xaz] Could not load required module: " .. tostring(path))
+	if sourceCode then
+		local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
+		if loaderFn then
+			local runSuccess, moduleResult = pcall(loaderFn)
+			if runSuccess then
+				resolvedResult = moduleResult
+			end
 		end
-		return nil
 	end
 
-	local loaderFn, compileErr = loadstring(sourceCode, "=" .. path)
-	if not loaderFn then
-		if not isOptional then
-			warn("[B0Xaz] Syntax error in " .. path .. ": " .. tostring(compileErr))
+	-- Fall back to embedded module if remote fetch, compilation, or execution failed
+	if resolvedResult == nil and FALLBACK_MODULES[path] then
+		local ok, fallbackFactory = pcall(FALLBACK_MODULES[path])
+		if ok and fallbackFactory then
+			resolvedResult = fallbackFactory
 		end
-		moduleCache[path] = false
-		return nil
 	end
 
-	local runSuccess, moduleResult = pcall(loaderFn)
-	if not runSuccess then
-		if not isOptional then
-			warn("[B0Xaz] Runtime error in " .. path .. ": " .. tostring(moduleResult))
-		end
-		moduleCache[path] = false
-		return nil
+	if resolvedResult ~= nil then
+		print("[B0Xaz] Loaded module: " .. path)
+		moduleCache[path] = resolvedResult
+		return resolvedResult
 	end
 
-	print("[B0Xaz] Loaded module: " .. path)
-	moduleCache[path] = moduleResult
-	return moduleResult
+	moduleCache[path] = false
+	if not isOptional then
+		warn("[B0Xaz] Could not load required module: " .. tostring(path))
+	end
+	return nil
 end
 
 -- Core Cleanup
