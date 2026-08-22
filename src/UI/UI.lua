@@ -904,9 +904,29 @@ return function(Context, Theme)
 					Size = UDim2.new(1, -64, 1, 0),
 					Parent = content,
 				})
+
 				local currentKey = defaultKey
+
+				local function getKeyDisplay(key)
+					if not key then return "None" end
+					if typeof(key) == "string" then return key:upper() end
+					if typeof(key) == "EnumItem" then
+						if key.EnumType == Enum.KeyCode then
+							return key.Name
+						elseif key.EnumType == Enum.UserInputType then
+							local map = {
+								[Enum.UserInputType.MouseButton1] = "MB1",
+								[Enum.UserInputType.MouseButton2] = "MB2",
+								[Enum.UserInputType.MouseButton3] = "MB3",
+							}
+							return map[key] or key.Name
+						end
+					end
+					return "None"
+				end
+
 				local keyBtn = create("TextButton", {
-					Text = defaultKey and defaultKey.Name or "None",
+					Text = getKeyDisplay(defaultKey),
 					Font = Enum.Font.Code,
 					TextSize = 10,
 					TextColor3 = Theme.Text,
@@ -917,31 +937,48 @@ return function(Context, Theme)
 					AutoButtonColor = false,
 					Parent = content,
 				}, { stroke(Theme.Border, 1) })
+
 				local listening = false
 				keyBtn.MouseButton1Click:Connect(function()
 					listening = true
 					keyBtn.Text = "..."
 					keyBtn.TextColor3 = Theme.Accent
 				end)
+
 				Connections.Add(UIS.InputBegan:Connect(function(input, processed)
-					if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+					if not listening then return end
+
+					local bound = nil
+					local finalize = false
+
+					if input.UserInputType == Enum.UserInputType.Keyboard then
 						if input.KeyCode == Enum.KeyCode.Escape then
-							currentKey = nil
-							keyBtn.Text = "None"
+							bound = nil
+							finalize = true
 						else
-							currentKey = input.KeyCode
-							keyBtn.Text = input.KeyCode.Name
+							bound = input.KeyCode
+							finalize = true
 						end
+					elseif input.UserInputType == Enum.UserInputType.MouseButton1
+						or input.UserInputType == Enum.UserInputType.MouseButton2
+						or input.UserInputType == Enum.UserInputType.MouseButton3 then
+						bound = input.UserInputType
+						finalize = true
+					end
+
+					if finalize then
+						currentKey = bound
+						keyBtn.Text = getKeyDisplay(bound)
 						keyBtn.TextColor3 = Theme.Text
 						listening = false
-					elseif not processed and currentKey and input.KeyCode == currentKey then
-						if callback then Utils.SafeCall(callback) end
+						if callback then Utils.SafeCall(callback, bound) end
 					end
 				end))
+
 				return {
 					Set = function(k)
 						currentKey = k
-						keyBtn.Text = k and k.Name or "None"
+						keyBtn.Text = getKeyDisplay(k)
 					end,
 					Get = function() return currentKey end,
 				}
