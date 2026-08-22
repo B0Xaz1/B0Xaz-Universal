@@ -1,3 +1,4 @@
+-- init.lua
 local GITHUB_USER = "B0Xaz1"
 local GITHUB_REPO = "B0Xaz-Universal"
 local GITHUB_BRANCH = "main"
@@ -10,18 +11,12 @@ local Context = getgenv().B0XazContext
 
 local function import(path)
 	local url = BASE_URL .. path .. "?t=" .. tostring(tick())
-	local ok, source = pcall(function()
-		return game:HttpGet(url)
-	end)
-
+	local ok, source = pcall(function() return game:HttpGet(url) end)
 	if not ok or not source or #source == 0 or source:sub(1, 3) == "404" or source:find("404: Not Found") or source:find("<!DOCTYPE html>") then
 		error("[B0Xaz Loader] 404 File Not Found: " .. path .. "\nCheck URL: " .. url)
 	end
-
 	local chunk, err = loadstring(source, path)
-	if not chunk then
-		error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err))
-	end
+	if not chunk then error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) end
 	return chunk()
 end
 
@@ -42,41 +37,49 @@ for k, v in pairs(ctxData) do Context[k] = v end
 local activeTheme, themeMgr = import("src/UI/Theme.lua")()
 Context.Theme = activeTheme
 Context.ThemeManager = themeMgr
-Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
 
-if not Context.UIEngine then
-	error("[B0Xaz Loader] src/UI/UI.lua failed to return the UI engine!")
+-- Load KeySystem First
+Context.KeySystem = import("src/Systems/KeySystem.lua")(Context)
+
+Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
+if not Context.UIEngine then error("[B0Xaz Loader] src/UI/UI.lua failed to return the UI engine!") end
+
+local function BootScript()
+	Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
+	Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
+	Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
+	Context.ESPSystem = import("src/Systems/ESPSystem.lua")(Context)
+	Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
+	Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
+	Context.PerformanceSystem = import("src/Systems/PerformanceSystem.lua")(Context)
+	Context.PlayersSystem = import("src/Systems/PlayersSystem.lua")(Context)
+	Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
+
+	Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
+	Context.GameModule = Context.GameLoader.Load()
+
+	import("src/UI/BuildUI.lua")(Context)
+
+	pcall(function()
+		if Context.ConfigSystem then
+			if Context.ConfigSystem.LoadAutoload() then
+				Context.ConfigSystem.UpdateUI()
+			end
+			Context.ConfigSystem.StartAutosaveLoop()
+		end
+	end)
+
+	Context.ESPSystem.InitializeAll()
+	import("src/Runtime.lua")(Context)
+
+	local gameName = Context.GameLoader.GetDisplayName()
+	Context.UI:Notify("B0Xaz Universal", "Access Granted: " .. Context.KeySystem.GetTierName(), 5, Context.Theme.Success)
 end
 
-Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
-Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
-Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
-Context.ESPSystem = import("src/Systems/ESPSystem.lua")(Context)
-Context.AimbotSystem = import("src/Systems/AimbotSystem.lua")(Context)
-Context.ConfigSystem = import("src/Systems/ConfigSystem.lua")(Context)
-Context.PerformanceSystem = import("src/Systems/PerformanceSystem.lua")(Context)
-Context.PlayersSystem = import("src/Systems/PlayersSystem.lua")(Context)
-Context.OverlayManager = import("src/Visuals/OverlayManager.lua")(Context)
-
-Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
-Context.GameModule = Context.GameLoader.Load()
-
-import("src/UI/BuildUI.lua")(Context)
-
-pcall(function()
-	if Context.ConfigSystem then
-		local loaded = Context.ConfigSystem.LoadAutoload()
-		if loaded then
-			Context.ConfigSystem.UpdateUI()
-			print("[B0Xaz] Last session settings restored!")
-		end
-		Context.ConfigSystem.StartAutosaveLoop()
-	end
-end)
-
-Context.ESPSystem.InitializeAll()
-import("src/Runtime.lua")(Context)
-
-local gameName = Context.GameLoader.GetDisplayName()
-local supportStr = Context.GameLoader.IsSupported() and "Supported Game" or "Universal Mode"
-Context.UI:Notify("B0Xaz Universal", gameName .. " (" .. supportStr .. ")", 4, Context.Theme.Success)
+-- Validate Key before booting
+local hasKey, tier, msg = Context.KeySystem.LoadAndVerify()
+if hasKey then
+	BootScript()
+else
+	Context.UIEngine:CreateKeyPrompt(Context.KeySystem, Context.Theme, BootScript, msg)
+end
