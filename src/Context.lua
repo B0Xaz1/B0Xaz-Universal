@@ -93,10 +93,8 @@ return function(CONFIG, DefaultLighting, Utils, DrawingManager)
             Wallbang = false,
             StretchRes = {
                 Enabled = false,
-                FOV = 100,
-                Amount = 1.25,
-                Bars = false,
-                BarOpacity = 0.85,
+                X = 1.333, -- Horizontal 3D stretch (1.333 = 4:3 aspect ratio)
+                Y = 1.0,   -- Vertical stretch
             },
         },
         Performance = {
