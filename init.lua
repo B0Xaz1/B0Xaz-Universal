@@ -24,7 +24,7 @@ local SETTINGS = {
 	},
 	DEFAULTS = {
 		-- CHANGE "YOUR_USERNAME" AND "YOUR_REPO" BELOW TO MATCH YOUR GITHUB REPOSITORY:
-		BASE_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/",
+		BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/main/init.lua",
 		LOAD_TIMEOUT = 10,
 		RETRY_ATTEMPTS = 2,
 	},
