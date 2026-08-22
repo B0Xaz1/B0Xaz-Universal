@@ -24,6 +24,12 @@ return function(Context)
     local OverlayManager = Context.OverlayManager
     local GameLoader = Context.GameLoader
 
+    -- Session tracking to kill old loops instantly on re-execution
+    local SessionId = getgenv().B0XazSessionId or 0
+    local function isSessionAlive()
+        return getgenv().B0XazSessionId == SessionId
+    end
+
     local _fpsCounter = 0
     local _fpsTimer = 0
     local _fpsDisplay = 0
@@ -63,6 +69,7 @@ return function(Context)
     if Connections.Add then
         pcall(function()
             Connections.Add(LocalPlayer.OnTeleport:Connect(function(teleportState)
+                if not isSessionAlive() then return end
                 if teleportState == Enum.TeleportState.Started or teleportState == Enum.TeleportState.InProgress then
                     if Utils.PrepareTeleport then Utils.PrepareTeleport() end
                 end
@@ -72,6 +79,7 @@ return function(Context)
 
     if Connections.Add then
         Connections.Add(UIS.JumpRequest:Connect(function()
+            if not isSessionAlive() then return end
             if FeatureConfig.Movement and FeatureConfig.Movement.InfJump then
                 local h = Utils.GetHumanoid and Utils.GetHumanoid()
                 if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
@@ -81,6 +89,7 @@ return function(Context)
 
     if IsMobile and Connections.Add then
         Connections.Add(UIS.TouchTap:Connect(function(tps)
+            if not isSessionAlive() then return end
             if not State.TpToMouse then return end
             local r = Utils.GetRootPart and Utils.GetRootPart()
             if not r then return end
@@ -93,6 +102,7 @@ return function(Context)
         end))
     elseif Connections.Add then
         Connections.Add(Mouse.Button1Down:Connect(function()
+            if not isSessionAlive() then return end
             if State.TpToMouse and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
                 local r = Utils.GetRootPart and Utils.GetRootPart()
                 if r then r.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0)) end
@@ -102,6 +112,8 @@ return function(Context)
 
     if Connections.Add then
         Connections.Add(RS.RenderStepped:Connect(function(dt)
+            if not isSessionAlive() then return end
+
             if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
                 Camera.FieldOfView = FeatureConfig.Camera.FOV
             end
@@ -171,6 +183,8 @@ return function(Context)
 
     if Connections.Add then
         Connections.Add(RS.Heartbeat:Connect(function(dt)
+            if not isSessionAlive() then return end
+
             local hum = Utils.GetHumanoid and Utils.GetHumanoid()
             if hum and FeatureConfig.Movement then
                 if FeatureConfig.Movement.SprintEnabled and UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
