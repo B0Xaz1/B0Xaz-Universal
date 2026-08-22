@@ -7,7 +7,6 @@ return function(Context)
 	local HttpService = game:GetService("HttpService")
 
 	local LocalPlayer = Players.LocalPlayer
-	local Camera = Workspace.CurrentCamera
 	local IsMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
 	local CONFIG = Context.CONFIG
@@ -26,6 +25,7 @@ return function(Context)
 	local FlySystem = Context.FlySystem
 	local ConfigSystem = Context.ConfigSystem
 	local OverlayManager = Context.OverlayManager
+	local PerfSystem = Context.PerformanceSystem
 
 	local UI = UIEngine.new("B0Xaz Universal")
 	Context.UI = UI
@@ -44,88 +44,91 @@ return function(Context)
 	-- TAB: Aimbot
 	----------------------------------------------------------------
 	local aimbotTab = UI:AddTab("Aimbot")
-	local aimMain = aimbotTab:AddSection("Main")
+	local aimMain = aimbotTab:AddSection("Main Controls")
+
 	UIRegistry.Aimbot_Enabled = aimMain:AddToggle("Aimbot Enabled", FeatureConfig.Aimbot.Enabled, function(v)
 		FeatureConfig.Aimbot.Enabled = v
 		if not v then AimbotSystem.LockOff() end
 	end)
-	UIRegistry.Aimbot_Keybind = aimMain:AddTextbox("Keybind", FeatureConfig.Aimbot.Keybind, function(text, enter)
-		if not enter then return end
-		local k = (text or ""):gsub("%s", ""):upper():sub(1, 1)
-		if Utils.GetKeyCode(k) then
-			FeatureConfig.Aimbot.Keybind = k
-			UI:Notify("Keybind", "Set to " .. k, nil, Theme.Success)
-		else
-			UI:Notify("Keybind", "Invalid key", nil, Theme.Danger)
-		end
-	end, "Key")
-	UIRegistry.Aimbot_LockMode = aimMain:AddDropdown("Lock Mode", {"Toggle", "Hold"}, function(v)
+
+	UIRegistry.Aimbot_Keybind = aimMain:AddKeybind("Activation Bind", FeatureConfig.Aimbot.Keybind, function(k)
+		FeatureConfig.Aimbot.Keybind = k
+		UI:Notify("Aimbot", "Bind updated", nil, Theme.Success)
+	end)
+
+	UIRegistry.Aimbot_LockMode = aimMain:AddDropdown("Lock Mode", {"Hold", "Toggle"}, function(v)
 		FeatureConfig.Aimbot.LockMode = v
 		AimbotSystem.LockOff()
 	end, FeatureConfig.Aimbot.LockMode)
-	UIRegistry.Aimbot_Hitpart = aimMain:AddDropdown("Hit Part", {"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso"}, function(v)
+
+	UIRegistry.Aimbot_Hitpart = aimMain:AddDropdown("Hit Part", {"Head", "Torso", "Root", "LeftArm", "RightArm", "LeftLeg", "RightLeg"}, function(v)
 		FeatureConfig.Aimbot.Hitpart = v
 	end, FeatureConfig.Aimbot.Hitpart)
-	UIRegistry.Aimbot_AirHitpart = aimMain:AddDropdown("Air Hit Part", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, function(v)
-		FeatureConfig.Aimbot.AirHitpart = v
-	end, FeatureConfig.Aimbot.AirHitpart)
-	UIRegistry.Aimbot_Smoothness = aimMain:AddSlider("Smoothness", math.floor(FeatureConfig.Aimbot.Smoothness * 10), 1, 50, function(v)
-		FeatureConfig.Aimbot.Smoothness = math.max(v / 10, CONFIG.AIM_MIN_SMOOTHNESS)
+
+	UIRegistry.Aimbot_Smoothness = aimMain:AddSlider("Smoothness", FeatureConfig.Aimbot.Smoothness, 1, 20, function(v)
+		FeatureConfig.Aimbot.Smoothness = v
 	end)
-	UIRegistry.Aimbot_ShakeIntensity = aimMain:AddSlider("Shake", FeatureConfig.Aimbot.ShakeIntensity, 0, 10, function(v)
+
+	UIRegistry.Aimbot_ShakeIntensity = aimMain:AddSlider("Shake Intensity", FeatureConfig.Aimbot.ShakeIntensity, 0, 10, function(v)
 		FeatureConfig.Aimbot.ShakeIntensity = v
 	end)
 
-	local aimCheck = aimbotTab:AddSection("Checks")
+	local aimCheck = aimbotTab:AddSection("Target Checks & Limits")
+
 	UIRegistry.Aimbot_TeamCheck = aimCheck:AddToggle("Team Check", FeatureConfig.Aimbot.TeamCheck, function(v)
 		FeatureConfig.Aimbot.TeamCheck = v
 	end)
-	UIRegistry.Aimbot_VisCheck = aimCheck:AddToggle("Visibility Check", FeatureConfig.Aimbot.VisCheck, function(v)
+
+	UIRegistry.Aimbot_VisCheck = aimCheck:AddToggle("Visibility Check (Raycast)", FeatureConfig.Aimbot.VisCheck, function(v)
 		FeatureConfig.Aimbot.VisCheck = v
 	end)
-	UIRegistry.Aimbot_LockNPC = aimCheck:AddToggle("Target NPCs", FeatureConfig.Aimbot.LockNPC, function(v)
-		FeatureConfig.Aimbot.LockNPC = v
+
+	UIRegistry.Aimbot_UnlockOnDeath = aimCheck:AddToggle("Unlock On Target Death", FeatureConfig.Aimbot.UnlockOnDeath, function(v)
+		FeatureConfig.Aimbot.UnlockOnDeath = v
 	end)
-	UIRegistry.Aimbot_MaxDistance = aimCheck:AddSlider("Max Distance", FeatureConfig.Aimbot.MaxDistance, 50, 500, function(v)
+
+	UIRegistry.Aimbot_BreakOnPull = aimCheck:AddToggle("Break Lock On Mouse Pull", FeatureConfig.Aimbot.BreakOnPull, function(v)
+		FeatureConfig.Aimbot.BreakOnPull = v
+	end)
+
+	UIRegistry.Aimbot_MaxLockRadius = aimCheck:AddSlider("Max Lock Radius", FeatureConfig.Aimbot.MaxLockRadius or 200, 50, 500, function(v)
+		FeatureConfig.Aimbot.MaxLockRadius = v
+	end, " px")
+
+	UIRegistry.Aimbot_MaxDistance = aimCheck:AddSlider("Max Target Distance", FeatureConfig.Aimbot.MaxDistance, 50, 2000, function(v)
 		FeatureConfig.Aimbot.MaxDistance = v
-	end)
+	end, " studs")
 
 	local aimFov = aimbotTab:AddSection("FOV Circle")
-	UIRegistry.Aimbot_FOV_Show = aimFov:AddToggle("Show FOV", FeatureConfig.Aimbot.FOV.Show, function(v)
+	UIRegistry.Aimbot_FOV_Show = aimFov:AddToggle("Show FOV Circle", FeatureConfig.Aimbot.FOV.Show, function(v)
 		FeatureConfig.Aimbot.FOV.Show = v
 	end)
-	UIRegistry.Aimbot_FOV_Filled = aimFov:AddToggle("Filled", FeatureConfig.Aimbot.FOV.Filled, function(v)
+	UIRegistry.Aimbot_FOV_Filled = aimFov:AddToggle("Filled Circle", FeatureConfig.Aimbot.FOV.Filled, function(v)
 		FeatureConfig.Aimbot.FOV.Filled = v
 	end)
-	UIRegistry.Aimbot_FOV_Rainbow = aimFov:AddToggle("Rainbow", FeatureConfig.Aimbot.FOV.Rainbow, function(v)
+	UIRegistry.Aimbot_FOV_Rainbow = aimFov:AddToggle("Rainbow FOV", FeatureConfig.Aimbot.FOV.Rainbow, function(v)
 		FeatureConfig.Aimbot.FOV.Rainbow = v
 	end)
-	UIRegistry.Aimbot_FOV_Pulse = aimFov:AddToggle("Pulse", FeatureConfig.Aimbot.FOV.Pulse, function(v)
-		FeatureConfig.Aimbot.FOV.Pulse = v
-	end)
-	UIRegistry.Aimbot_FOV_Size = aimFov:AddSlider("FOV Size", FeatureConfig.Aimbot.FOV.Size, 10, 500, function(v)
+	UIRegistry.Aimbot_FOV_Size = aimFov:AddSlider("FOV Radius", FeatureConfig.Aimbot.FOV.Size, 10, 600, function(v)
 		FeatureConfig.Aimbot.FOV.Size = v
-	end)
-	UIRegistry.Aimbot_FOV_Thickness = aimFov:AddSlider("Thickness", FeatureConfig.Aimbot.FOV.Thickness, 1, 10, function(v)
+	end, " px")
+	UIRegistry.Aimbot_FOV_Thickness = aimFov:AddSlider("Line Thickness", FeatureConfig.Aimbot.FOV.Thickness, 1, 10, function(v)
 		FeatureConfig.Aimbot.FOV.Thickness = v
 	end)
-	UIRegistry.Aimbot_FOV_Sides = aimFov:AddSlider("Sides", FeatureConfig.Aimbot.FOV.Sides, 3, 100, function(v)
-		FeatureConfig.Aimbot.FOV.Sides = v
-	end)
 
-	local aimPred = aimbotTab:AddSection("Prediction")
-	UIRegistry.Aimbot_Prediction_Horizontal = aimPred:AddSlider("Horizontal", math.floor(FeatureConfig.Aimbot.Prediction.Horizontal * 200), 0, 100, function(v)
+	local aimPred = aimbotTab:AddSection("Target Prediction")
+	UIRegistry.Aimbot_Prediction_Horizontal = aimPred:AddSlider("Horizontal Lead", math.floor((FeatureConfig.Aimbot.Prediction.Horizontal or 0) * 200), 0, 100, function(v)
 		FeatureConfig.Aimbot.Prediction.Horizontal = v / 200
 	end)
-	UIRegistry.Aimbot_Prediction_Vertical = aimPred:AddSlider("Vertical", math.floor(FeatureConfig.Aimbot.Prediction.Vertical * 200), 0, 100, function(v)
+	UIRegistry.Aimbot_Prediction_Vertical = aimPred:AddSlider("Vertical Lead", math.floor((FeatureConfig.Aimbot.Prediction.Vertical or 0) * 200), 0, 100, function(v)
 		FeatureConfig.Aimbot.Prediction.Vertical = v / 200
 	end)
 	aimPred:AddButton("Reset Prediction", function()
-		FeatureConfig.Aimbot.Prediction.Horizontal = 0.165
-		FeatureConfig.Aimbot.Prediction.Vertical = 0.100
-		if UIRegistry.Aimbot_Prediction_Horizontal then UIRegistry.Aimbot_Prediction_Horizontal.Set(33, true) end
-		if UIRegistry.Aimbot_Prediction_Vertical then UIRegistry.Aimbot_Prediction_Vertical.Set(20, true) end
-		UI:Notify("Prediction", "Reset to default", nil, Theme.Success)
+		FeatureConfig.Aimbot.Prediction.Horizontal = 0
+		FeatureConfig.Aimbot.Prediction.Vertical = 0
+		if UIRegistry.Aimbot_Prediction_Horizontal then UIRegistry.Aimbot_Prediction_Horizontal.Set(0, true) end
+		if UIRegistry.Aimbot_Prediction_Vertical then UIRegistry.Aimbot_Prediction_Vertical.Set(0, true) end
+		UI:Notify("Prediction", "Reset to zero", nil, Theme.Success)
 	end)
 
 	local aimTrig = aimbotTab:AddSection("Triggerbot")
@@ -313,6 +316,72 @@ return function(Context)
 	end)
 
 	----------------------------------------------------------------
+	-- TAB: Optimization
+	----------------------------------------------------------------
+	local optTab = UI:AddTab("Optimization")
+
+	local gpuSec = optTab:AddSection("GPU Boosters")
+
+	UIRegistry.Perf_NoTextures = gpuSec:AddToggle("Remove Textures & Decals", FeatureConfig.Performance.NoTextures, function(v)
+		PerfSystem.SetNoTextures(v)
+	end)
+	UIRegistry.Perf_LowMaterials = gpuSec:AddToggle("Force Smooth Plastic", FeatureConfig.Performance.LowMaterials, function(v)
+		PerfSystem.SetLowMaterials(v)
+	end)
+	UIRegistry.Perf_OptimizeTerrain = gpuSec:AddToggle("Optimize 3D Terrain", FeatureConfig.Performance.OptimizeTerrain, function(v)
+		PerfSystem.SetOptimizeTerrain(v)
+	end)
+	UIRegistry.Perf_NoPostProcessing = gpuSec:AddToggle("Disable Post-Processing Effects", FeatureConfig.Performance.NoPostProcessing, function(v)
+		PerfSystem.SetNoPostProcessing(v)
+	end)
+
+	local fxSec = optTab:AddSection("Effects Optimizer")
+
+	UIRegistry.Perf_NoShadows = fxSec:AddToggle("Disable Part Shadows", FeatureConfig.Performance.NoShadows, function(v)
+		PerfSystem.SetNoShadows(v)
+	end)
+	UIRegistry.Perf_NoParticles = fxSec:AddToggle("Disable Particle Systems", FeatureConfig.Performance.NoParticles, function(v)
+		PerfSystem.SetNoParticles(v)
+	end)
+
+	local fpsSec = optTab:AddSection("Framerate Adjusters")
+
+	fpsSec:AddButton("Unlock FPS (Internal Cap 999)", function()
+		pcall(function() setfpscap(999) end)
+		UI:Notify("Optimization", "Framerate capability unlocked", nil, Theme.Success)
+	end)
+
+	fpsSec:AddButton("Reset Frame Lock to 60 FPS", function()
+		pcall(function() setfpscap(60) end)
+		UI:Notify("Optimization", "Framerate locked to 60 FPS", nil, Theme.Warning)
+	end)
+
+	fpsSec:AddButton("Cap Framerate to 144 FPS", function()
+		pcall(function() setfpscap(144) end)
+		UI:Notify("Optimization", "Framerate locked to 144 FPS", nil, Theme.Success)
+	end)
+
+	local lightSec = optTab:AddSection("Lighting")
+	UIRegistry.Visuals_Fullbright = lightSec:AddToggle("Fullbright", false, function(v)
+		FeatureConfig.Visuals.Fullbright = v
+		if not v then
+			Lighting.Ambient = DefaultLighting.Ambient
+			Lighting.OutdoorAmbient = DefaultLighting.OutdoorAmbient
+			Lighting.Brightness = DefaultLighting.Brightness
+			Lighting.GlobalShadows = DefaultLighting.GlobalShadows
+		end
+	end)
+	lightSec:AddSlider("Clock Time", math.floor(Lighting.ClockTime), 0, 24, function(v)
+		Lighting.ClockTime = v
+	end)
+	lightSec:AddButton("Reset Lighting", function()
+		for k, v in pairs(DefaultLighting) do
+			pcall(function() Lighting[k] = v end)
+		end
+		UI:Notify("Lighting", "Reset to original values", nil, Theme.Success)
+	end)
+
+	----------------------------------------------------------------
 	-- TAB: Game Specific
 	----------------------------------------------------------------
 	local gameTab = UI:AddTab("Game")
@@ -329,7 +398,7 @@ return function(Context)
 		local ok, err = gameLoader.BuildUI(gameTab)
 		if not ok then
 			local errSec = gameTab:AddSection("Module Error")
-			errSec:AddButton("Load failed — click for details", function()
+			errSec:AddButton("Load failed - click for details", function()
 				UI:Notify("Module Error", tostring(err), 8, Theme.Danger)
 			end)
 		end
@@ -405,27 +474,7 @@ return function(Context)
 		end
 	end)
 
-	local lightSec = extrasTab:AddSection("Lighting")
-	UIRegistry.Visuals_Fullbright = lightSec:AddToggle("Fullbright", false, function(v)
-		FeatureConfig.Visuals.Fullbright = v
-		if not v then
-			Lighting.Ambient = DefaultLighting.Ambient
-			Lighting.OutdoorAmbient = DefaultLighting.OutdoorAmbient
-			Lighting.Brightness = DefaultLighting.Brightness
-			Lighting.GlobalShadows = DefaultLighting.GlobalShadows
-		end
-	end)
-	lightSec:AddSlider("Clock Time", math.floor(Lighting.ClockTime), 0, 24, function(v)
-		Lighting.ClockTime = v
-	end)
-	lightSec:AddButton("Reset Lighting", function()
-		for k, v in pairs(DefaultLighting) do
-			pcall(function() Lighting[k] = v end)
-		end
-		UI:Notify("Lighting", "Reset to original values", nil, Theme.Success)
-	end)
-
-	local perfSec = extrasTab:AddSection("Performance")
+	local perfSec = extrasTab:AddSection("Stats")
 	perfSec:AddToggle("Show FPS", false, function(v)
 		StatsConfig.ShowFPS = v
 		if OverlayManager.FPSLabel then OverlayManager.FPSLabel.Visible = v end
@@ -433,27 +482,6 @@ return function(Context)
 	perfSec:AddToggle("Show Ping", false, function(v)
 		StatsConfig.ShowPing = v
 		if OverlayManager.PingLabel then OverlayManager.PingLabel.Visible = v end
-	end)
-	perfSec:AddToggle("Remove Shadows", false, function(v)
-		Lighting.GlobalShadows = not v
-		for _, o in ipairs(Workspace:GetDescendants()) do
-			if o:IsA("BasePart") then o.CastShadow = not v end
-		end
-	end)
-	perfSec:AddToggle("Disable Particles", false, function(v)
-		for _, o in ipairs(Workspace:GetDescendants()) do
-			if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Smoke") or o:IsA("Fire") or o:IsA("Sparkles") then
-				pcall(function() o.Enabled = not v end)
-			end
-		end
-	end)
-	perfSec:AddButton("Unlock FPS", function()
-		pcall(function() setfpscap(999) end)
-		UI:Notify("FPS", "Unlocked", nil, Theme.Success)
-	end)
-	perfSec:AddButton("Cap FPS 60", function()
-		pcall(function() setfpscap(60) end)
-		UI:Notify("FPS", "Capped to 60")
 	end)
 
 	local miscSec = extrasTab:AddSection("Misc")
@@ -664,65 +692,6 @@ return function(Context)
 		else
 			UI:Notify("Import", "Invalid config format", nil, Theme.Danger)
 		end
-	end)
-
-		----------------------------------------------------------------
-	-- TAB: Optimization
-	----------------------------------------------------------------
-	local optTab = UI:AddTab("Optimization")
-	local PerfSystem = Context.PerformanceSystem
-
-	-- 1. Rendering Optimization Group
-	local gpuSec = optTab:AddSection("GPU Boosters")
-
-	UIRegistry.Perf_NoTextures = gpuSec:AddToggle("Remove Textures & Decals", FeatureConfig.Performance.NoTextures, function(v)
-		PerfSystem.SetNoTextures(v)
-	end)
-
-	UIRegistry.Perf_LowMaterials = gpuSec:AddToggle("Force Smooth Plastic", FeatureConfig.Performance.LowMaterials, function(v)
-		PerfSystem.SetLowMaterials(v)
-	end)
-
-	UIRegistry.Perf_OptimizeTerrain = gpuSec:AddToggle("Optimize 3D Terrain", FeatureConfig.Performance.OptimizeTerrain, function(v)
-		PerfSystem.SetOptimizeTerrain(v)
-	end)
-
-	UIRegistry.Perf_NoPostProcessing = gpuSec:AddToggle("Disable Post-Processing Effects", FeatureConfig.Performance.NoPostProcessing, function(v)
-		PerfSystem.SetNoPostProcessing(v)
-	end)
-
-	-- 2. Effects & Processing Controls
-	local fxSec = optTab:AddSection("Effects Optimizer")
-
-	UIRegistry.Perf_NoShadows = fxSec:AddToggle("Disable Part Shadows", FeatureConfig.Performance.NoShadows, function(v)
-		PerfSystem.SetNoShadows(v)
-	end)
-
-	UIRegistry.Perf_NoParticles = fxSec:AddToggle("Disable Particle Systems", FeatureConfig.Performance.NoParticles, function(v)
-		FeatureConfig.Performance.NoParticles = v
-		for _, o in ipairs(Workspace:GetDescendants()) do
-			if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Smoke") or o:IsA("Fire") or o:IsA("Sparkles") then
-				pcall(function() o.Enabled = not v end)
-			end
-		end
-	end)
-
-	-- 3. Framerate Tools
-	local fpsSec = optTab:AddSection("Framerate Adjusters")
-
-	fpsSec:AddButton("Unlock FPS (Internal Cap 999)", function()
-		pcall(function() setfpscap(999) end)
-		UI:Notify("Optimization", "Framerate capability unlocked", nil, Theme.Success)
-	end)
-
-	fpsSec:AddButton("Reset Frame Lock to 60 FPS", function()
-		pcall(function() setfpscap(60) end)
-		UI:Notify("Optimization", "Framerate locked to 60 FPS", nil, Theme.Warning)
-	end)
-
-	fpsSec:AddButton("Cap Framerate to 144 FPS", function()
-		pcall(function() setfpscap(144) end)
-		UI:Notify("Optimization", "Framerate locked to 144 FPS", nil, Theme.Success)
 	end)
 
 	return UI
