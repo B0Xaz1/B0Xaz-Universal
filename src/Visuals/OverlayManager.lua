@@ -7,15 +7,21 @@ return function(Context)
     local Utils = Context.Utils
     local DrawingManager = Context.DrawingManager
 
-    getgenv().B0XazDrawings = getgenv().B0XazDrawings or {}
+    local SessionId = getgenv().B0XazSessionId or 0
+    local function isSessionAlive()
+        return getgenv().B0XazSessionId == SessionId
+    end
+
+    -- Fresh list for this session only
+    getgenv().B0XazDrawings = {}
 
     local fovCircle = DrawingManager.NewCircle({Radius = 100, Color = Color3.fromRGB(0, 200, 255), Thickness = 2, NumSides = 64})
     if fovCircle then table.insert(getgenv().B0XazDrawings, fovCircle) end
 
     local fpsLabel = DrawingManager.NewText({Size = 14, Color = Color3.fromRGB(255, 255, 255)})
     local pingLabel = DrawingManager.NewText({Size = 14, Color = Color3.fromRGB(255, 255, 255)})
-    if fpsLabel then fpsLabel.Center = false; fpsLabel.Outline = true; table.insert(getgenv().B0XazDrawings, fpsLabel) end
-    if pingLabel then pingLabel.Center = false; pingLabel.Outline = true; table.insert(getgenv().B0XazDrawings, pingLabel) end
+    if fpsLabel then fpsLabel.Center = false; fpsLabel.Outline = true; fpsLabel.Text = ""; table.insert(getgenv().B0XazDrawings, fpsLabel) end
+    if pingLabel then pingLabel.Center = false; pingLabel.Outline = true; pingLabel.Text = ""; table.insert(getgenv().B0XazDrawings, pingLabel) end
 
     local crosshairLines = {}
     if DrawingManager.Available then
@@ -50,7 +56,7 @@ return function(Context)
     }
 
     function OverlayManager.UpdateFOVCircle(dt)
-        if not fovCircle then return end
+        if not isSessionAlive() or not fovCircle then return end
         fovCircle.Position = Utils.GetMousePosition()
         if FeatureConfig.Aimbot.FOV.Rainbow then
             State.FOVHue = (State.FOVHue + (dt or 0.016) * 0.5) % 1
@@ -73,6 +79,7 @@ return function(Context)
     end
 
     function OverlayManager.UpdateCrosshair()
+        if not isSessionAlive() then return end
         if not FeatureConfig.Extras.Crosshair.Visible or #crosshairLines < 4 then
             for _, l in ipairs(crosshairLines) do pcall(function() l.Visible = false end) end
             return
@@ -92,6 +99,7 @@ return function(Context)
     end
 
     function OverlayManager.UpdateSpeedLines(dt)
+        if not isSessionAlive() then return end
         if not FeatureConfig.Extras.SpeedLines or #speedLines == 0 then
             for _, l in ipairs(speedLines) do pcall(function() l.Visible = false end) end
             return
