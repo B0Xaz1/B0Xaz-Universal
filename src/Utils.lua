@@ -30,12 +30,13 @@ return function(CONFIG)
 
 	function Utils.GetHumanoid()
 		local char = Utils.GetCharacter()
-		return char and char:FindFirstChildOfClass("Humanoid")
+		if not (char and char.Parent) then return nil end
+		return char:FindFirstChildOfClass("Humanoid")
 	end
 
 	function Utils.GetRootPart()
 		local char = Utils.GetCharacter()
-		if not char then return nil end
+		if not (char and char.Parent) then return nil end
 		local root = char:FindFirstChild("HumanoidRootPart")
 		if root and root:IsA("BasePart") and root:IsDescendantOf(Workspace) then
 			return root
@@ -51,7 +52,6 @@ return function(CONFIG)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		local root = char:FindFirstChild("HumanoidRootPart")
 		local head = char:FindFirstChild("Head")
-
 		if not (hum and root and head) then return nil end
 		if not root:IsDescendantOf(Workspace) then return nil end
 		if hum.Health <= 0 then return nil end
@@ -215,21 +215,19 @@ return function(CONFIG)
 		return cleaned
 	end
 
-	function Utils.SafeCall(fn, ...)
-		if type(fn) ~= "function" then return false end
-		return pcall(fn, ...)
-	end
-
-	local function getQueueOnTeleport()
-		return queue_on_teleport
-			or (syn and syn.queue_on_teleport)
-			or queueonteleport
-			or (Fluxus and Fluxus.queue_on_teleport)
+	function Utils.SafeCall(func, ...)
+		if type(func) ~= "function" then return false end
+		return pcall(func, ...)
 	end
 
 	function Utils.PrepareTeleport()
-		local queueFn = getQueueOnTeleport()
+		local queueFn = queue_on_teleport
+			or (syn and syn.queue_on_teleport)
+			or queueonteleport
+			or (fluxus and fluxus.queue_on_teleport)
+
 		if not queueFn then return end
+
 		local env = (getgenv and getgenv()) or _G
 		local code
 		if env.B0XazScriptURL then
