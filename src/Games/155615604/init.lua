@@ -1,22 +1,41 @@
+-- src/Games/155615604/init.lua (Prison Life Full Functional Module)
 return function(Context)
 	local Workspace = game:GetService("Workspace")
 	local Players = game:GetService("Players")
 	local RS = game:GetService("RunService")
 	local UIS = game:GetService("UserInputService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 	local LocalPlayer = Players.LocalPlayer
 	local FeatureConfig = Context and Context.FeatureConfig or {}
 	local Theme = Context and Context.Theme or {}
 	local Connections = Context and Context.Connections or {}
 	local UIRegistry = Context and Context.UIRegistry or {}
+	local Utils = Context and Context.Utils or {}
 
+	-- Safe Defaults initialization
 	if not FeatureConfig.Game then FeatureConfig.Game = {} end
 	local defaults = {
-		DoorPhase = false, DoorGlow = true, GlowColor = Color3.fromRGB(0, 200, 220),
-		PhaseTransparency = 0.65, NoSpread = false, FastFire = false,
-		ForceAuto = false, ForceRange = false, FireRateValue = 0.001, RangeValue = 10000,
-		FakeMacro = false, FakeMacroKey = Enum.KeyCode.V,
-		FakeMacroMode = "Toggle", FakeMacroDelay = 0.03
+		DoorPhase = false,
+		DoorGlow = true,
+		GlowColor = Color3.fromRGB(0, 200, 220),
+		PhaseTransparency = 0.65,
+		NoSpread = false,
+		FastFire = false,
+		ForceAuto = false,
+		ForceRange = false,
+		FireRateValue = 0.001,
+		RangeValue = 10000,
+		FakeMacro = false,
+		FakeMacroKey = Enum.KeyCode.V,
+		FakeMacroMode = "Toggle",
+		FakeMacroDelay = 0.03,
+		PunchAura = false,
+		PunchAuraRange = 15,
+		SuperPunch = false,
+		SuperPunchHits = 10,
+		AntiTaser = false,
+		AntiArrest = false,
 	}
 	for k, v in pairs(defaults) do
 		if FeatureConfig.Game[k] == nil then FeatureConfig.Game[k] = v end
@@ -24,6 +43,18 @@ return function(Context)
 
 	local DOOR_FOLDERS = {"Doors", "glass", "CellDoors", "Prison_Fences", "Prison_Gate"}
 	local PRISON_PL_GUNS = {"Remington 870", "M9", "AK-47", "Taser", "M4A1"}
+
+	-- Teleport Coordinates for Prison Life
+	local PL_LOCATIONS = {
+		["Yard"] = CFrame.new(779, 98, 2465),
+		["Armory / Guard Room"] = CFrame.new(837, 100, 2270),
+		["Criminal Base"] = CFrame.new(-975, 110, 2055),
+		["Cell Block"] = CFrame.new(918, 100, 2445),
+		["Cafeteria"] = CFrame.new(935, 100, 2300),
+		["Roof"] = CFrame.new(825, 119, 2330),
+		["Sewers Exit"] = CFrame.new(917, 78, 2246),
+		["Police Spawn"] = CFrame.new(615, 99, 2480),
+	}
 
 	local _cache = getgenv().B0XazDoorCache or {}
 	getgenv().B0XazDoorCache = _cache
@@ -35,11 +66,104 @@ return function(Context)
 	local Game = { Name = "Prison Life" }
 	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
 
+	-- Macro state
 	local macroLoopActive = false
 	local macroThread = nil
 	local currentToolIndex = 1
 	local isKeyPressed = false
 
+	-- Remotes
+	local ItemHandler = Workspace:FindFirstChild("Remote") and Workspace.Remote:FindFirstChild("ItemHandler")
+	local TeamEvent = Workspace:FindFirstChild("Remote") and Workspace.Remote:FindFirstChild("TeamEvent")
+	local MeleeEvent = ReplicatedStorage:FindFirstChild("meleeEvent")
+
+	----------------------------------------------------------------
+	-- ITEM GIVER ENGINE
+	----------------------------------------------------------------
+	local function giveItem(itemName)
+		pcall(function()
+			local giver = Workspace:FindFirstChild("Prison_ITEMS") and Workspace.Prison_ITEMS:FindFirstChild("giver")
+			if giver and giver:FindFirstChild(itemName) then
+				local pickup = giver[itemName]:FindFirstChild("ITEMPICKUP")
+				if pickup and ItemHandler then
+					ItemHandler:InvokeServer(pickup)
+					return
+				end
+			end
+			-- Fallback: Check single items (e.g., Key card)
+			local single = Workspace:FindFirstChild("Prison_ITEMS") and Workspace.Prison_ITEMS:FindFirstChild("single")
+			if single and single:FindFirstChild(itemName) then
+				local pickup = single[itemName]:FindFirstChild("ITEMPICKUP")
+				if pickup and ItemHandler then
+					ItemHandler:InvokeServer(pickup)
+					return
+				end
+			end
+		end)
+	end
+
+	function Game.GiveRemington() giveItem("Remington 870") end
+	function Game.GiveAK47() giveItem("AK-47") end
+	function Game.GiveM9() giveItem("M9") end
+	function Game.GiveTaser() giveItem("Taser") end
+	function Game.GiveRiotShield() giveItem("Riot Shield") end
+	function Game.GiveKeycard() giveItem("Key card") end
+	function Game.GiveAllGuns()
+		Game.GiveRemington()
+		task.wait(0.05)
+		Game.GiveAK47()
+		task.wait(0.05)
+		Game.GiveM9()
+		task.wait(0.05)
+		Game.GiveKeycard()
+	end
+
+	----------------------------------------------------------------
+	-- TEAM SWITCHER & AUTO-CRIMINAL
+	----------------------------------------------------------------
+	function Game.SetTeam(teamColor)
+		pcall(function()
+			if TeamEvent then
+				TeamEvent:FireServer(teamColor)
+			end
+		end)
+	end
+
+	function Game.BecomeCriminal()
+		local myRoot = Utils.GetRootPart()
+		if not myRoot then return end
+		local oldPos = myRoot.CFrame
+		-- Teleport to criminal spawn pad, touch it, then return
+		myRoot.CFrame = PL_LOCATIONS["Criminal Base"]
+		task.wait(0.3)
+		myRoot.CFrame = oldPos
+	end
+
+	----------------------------------------------------------------
+	-- COMBAT & MELEE LOGIC
+	----------------------------------------------------------------
+	local function runPunchAura()
+		if not FeatureConfig.Game.PunchAura or not MeleeEvent then return end
+		local myRoot = Utils.GetRootPart()
+		if not myRoot then return end
+
+		local maxDist = FeatureConfig.Game.PunchAuraRange or 15
+
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and Utils.IsAlive(p) and not Utils.SameTeam(p) then
+				local tRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+				if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= maxDist then
+					pcall(function()
+						MeleeEvent:FireServer(p)
+					end)
+				end
+			end
+		end
+	end
+
+	----------------------------------------------------------------
+	-- DOORS ENGINE
+	----------------------------------------------------------------
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
 			if name:lower() == folderName:lower() then return true end
@@ -116,12 +240,10 @@ return function(Context)
 
 		pcall(function()
 			if part.CanCollide then part.CanCollide = false end
-
 			local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
 			if math.abs(part.Transparency - targetTrans) > 0.01 then
 				part.Transparency = targetTrans
 			end
-
 			if FeatureConfig.Game.DoorGlow then
 				if part.Material ~= Enum.Material.Neon then part.Material = Enum.Material.Neon end
 				if part.Color ~= FeatureConfig.Game.GlowColor then part.Color = FeatureConfig.Game.GlowColor end
@@ -132,6 +254,9 @@ return function(Context)
 		end)
 	end
 
+	----------------------------------------------------------------
+	-- GUN MODS ENGINE
+	----------------------------------------------------------------
 	local function getGunContainers()
 		local list = {}
 		if LocalPlayer then
@@ -220,6 +345,9 @@ return function(Context)
 		scanGuns()
 	end
 
+	----------------------------------------------------------------
+	-- FAKE MACRO SYSTEM
+	----------------------------------------------------------------
 	local function runFakeMacroStep()
 		local char = LocalPlayer.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -228,14 +356,10 @@ return function(Context)
 
 		local guns = {}
 		for _, tool in ipairs(bp:GetChildren()) do
-			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then
-				table.insert(guns, tool)
-			end
+			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then table.insert(guns, tool) end
 		end
 		for _, tool in ipairs(char:GetChildren()) do
-			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then
-				table.insert(guns, tool)
-			end
+			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then table.insert(guns, tool) end
 		end
 
 		if #guns < 2 then return end
@@ -299,10 +423,37 @@ return function(Context)
 		end
 	end
 
+	----------------------------------------------------------------
+	-- CONNECTIONS / RUNTIME
+	----------------------------------------------------------------
 	if Connections and Connections.Add then
 		if FeatureConfig.Game.DoorPhase then
 			task.spawn(scanAllDoors)
 		end
+
+		Connections.Add(RS.Heartbeat:Connect(function()
+			runPunchAura()
+
+			-- Anti-Taser Defense
+			if FeatureConfig.Game.AntiTaser and LocalPlayer.Character then
+				local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+				if hum then
+					pcall(function()
+						hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+						hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+						if hum.PlatformStand then hum.PlatformStand = false end
+					end)
+				end
+			end
+
+			-- Anti-Arrest Defense (breaks handcuffs)
+			if FeatureConfig.Game.AntiArrest and LocalPlayer.Character then
+				local cuffs = LocalPlayer.Character:FindFirstChild("Handcuffs")
+				if cuffs then
+					pcall(function() cuffs:Destroy() end)
+				end
+			end
+		end))
 
 		Connections.Add(RS.Stepped:Connect(function()
 			if FeatureConfig.Game.DoorPhase then
@@ -317,31 +468,19 @@ return function(Context)
 			end
 		end))
 
-		local function hookContainer(container)
-			if not container then return end
-			Connections.Add(container.ChildAdded:Connect(function(child)
-				if anyGunModEnabled() and child:IsA("Tool") then
-					task.defer(function() applyGunModsTo(child) end)
-				end
-			end))
-		end
-
-		if LocalPlayer:FindFirstChild("Backpack") then hookContainer(LocalPlayer.Backpack) end
-		if LocalPlayer.Character then hookContainer(LocalPlayer.Character) end
-
-		Connections.Add(LocalPlayer.CharacterAdded:Connect(function(char)
-			hookContainer(char)
-			task.wait(0.5)
-			if anyGunModEnabled() then scanGuns() end
-		end))
-
-		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
-			if child.Name == "Backpack" then hookContainer(child) end
-		end))
-
+		-- Super Punch listener
 		Connections.Add(UIS.InputBegan:Connect(function(input, gp)
 			if gp then return end
 			handleFakeMacroInput(input, true)
+
+			if FeatureConfig.Game.SuperPunch and input.UserInputType == Enum.UserInputType.MouseButton1 then
+				if MeleeEvent and not LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+					local hits = FeatureConfig.Game.SuperPunchHits or 10
+					for _ = 1, hits do
+						MeleeEvent:FireServer()
+					end
+				end
+			end
 		end))
 
 		Connections.Add(UIS.InputEnded:Connect(function(input, gp)
@@ -350,55 +489,95 @@ return function(Context)
 		end))
 	end
 
-	function Game.SetDoorPhase(enabled)
-		FeatureConfig.Game.DoorPhase = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then scanAllDoors() else restoreAllDoors() end
-	end
-
-	function Game.SetDoorGlow(enabled)
-		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then scanAllDoors() end
-	end
-
-	function Game.SetGlowColor(color) FeatureConfig.Game.GlowColor = color end
-
-	local function afterGunToggle()
-		if anyGunModEnabled() then scanGuns() else restoreGuns() end
-	end
-
-	function Game.SetNoSpread(enabled) FeatureConfig.Game.NoSpread = enabled and true or false; afterGunToggle() end
-	function Game.SetFastFire(enabled) FeatureConfig.Game.FastFire = enabled and true or false; afterGunToggle() end
-	function Game.SetForceAuto(enabled) FeatureConfig.Game.ForceAuto = enabled and true or false; afterGunToggle() end
-	function Game.SetForceRange(enabled) FeatureConfig.Game.ForceRange = enabled and true or false; afterGunToggle() end
-
+	----------------------------------------------------------------
+	-- UI BUILDER FOR PRISON LIFE
+	----------------------------------------------------------------
 	function Game.BuildUI(tab)
-		local doors = tab:AddSection("Doors & Fences")
-		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Through Doors", FeatureConfig.Game.DoorPhase, function(v)
-			Game.SetDoorPhase(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Door phase enabled" or "Door phase disabled", nil, Theme.Success)
-			end
+		-- Section 1: Item & Weapon Givers
+		local weaponsSec = tab:AddSection("Weapons & Item Giver")
+		weaponsSec:AddButton("Get All Weapons + Card", function()
+			Game.GiveAllGuns()
+			if Context and Context.UI then Context.UI:Notify("Prison Life", "Inventory filled!", nil, Theme.Success) end
 		end)
-		UIRegistry.Game_DoorGlow = doors:AddToggle("Door Glow (Neon)", FeatureConfig.Game.DoorGlow, function(v) Game.SetDoorGlow(v) end)
-		UIRegistry.Game_PhaseTransparency = doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v) FeatureConfig.Game.PhaseTransparency = v / 100 end, "%")
-		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c) Game.SetGlowColor(c) end)
-		doors:AddButton("Refresh Door List", function()
-			if FeatureConfig.Game.DoorPhase then
-				scanAllDoors()
-				if Context and Context.UI then Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme.Success) end
-			end
-		end)
+		weaponsSec:AddButton("Get Remington 870 (Shotgun)", function() Game.GiveRemington() end)
+		weaponsSec:AddButton("Get AK-47 (Rifle)", function() Game.GiveAK47() end)
+		weaponsSec:AddButton("Get M9 (Pistol)", function() Game.GiveM9() end)
+		weaponsSec:AddButton("Get Taser", function() Game.GiveTaser() end)
+		weaponsSec:AddButton("Get Riot Shield", function() Game.GiveRiotShield() end)
+		weaponsSec:AddButton("Get Keycard", function() Game.GiveKeycard() end)
 
+		-- Section 2: Combat Modifications
 		local combat = tab:AddSection("Combat Modifications")
-		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v) Game.SetNoSpread(v) end)
-		UIRegistry.Game_FastFire = combat:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v) Game.SetFastFire(v) end)
-		UIRegistry.Game_ForceAuto = combat:AddToggle("Force AutoFire", FeatureConfig.Game.ForceAuto, function(v) Game.SetForceAuto(v) end)
-		UIRegistry.Game_ForceRange = combat:AddToggle("Force Range (10k)", FeatureConfig.Game.ForceRange, function(v) Game.SetForceRange(v) end)
+		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
+			FeatureConfig.Game.NoSpread = v
+			if anyGunModEnabled() then scanGuns() else restoreGuns() end
+		end)
+		UIRegistry.Game_FastFire = combat:AddToggle("Fast Fire (0.001s)", FeatureConfig.Game.FastFire, function(v)
+			FeatureConfig.Game.FastFire = v
+			if anyGunModEnabled() then scanGuns() else restoreGuns() end
+		end)
+		UIRegistry.Game_ForceAuto = combat:AddToggle("Force Automatic Fire", FeatureConfig.Game.ForceAuto, function(v)
+			FeatureConfig.Game.ForceAuto = v
+			if anyGunModEnabled() then scanGuns() else restoreGuns() end
+		end)
+		UIRegistry.Game_ForceRange = combat:AddToggle("Force Range (10,000)", FeatureConfig.Game.ForceRange, function(v)
+			FeatureConfig.Game.ForceRange = v
+			if anyGunModEnabled() then scanGuns() else restoreGuns() end
+		end)
 		combat:AddButton("Force Apply Gun Mods", function()
 			scanGuns()
 			if Context and Context.UI then Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent) end
 		end)
 
+		-- Section 3: Melee & Punch Enhancements
+		local meleeSec = tab:AddSection("Melee & Auras")
+		UIRegistry.Game_PunchAura = meleeSec:AddToggle("Punch Aura", FeatureConfig.Game.PunchAura, function(v)
+			FeatureConfig.Game.PunchAura = v
+		end)
+		UIRegistry.Game_PunchAuraRange = meleeSec:AddSlider("Punch Aura Range", FeatureConfig.Game.PunchAuraRange or 15, 5, 40, function(v)
+			FeatureConfig.Game.PunchAuraRange = v
+		end, " studs")
+		UIRegistry.Game_SuperPunch = meleeSec:AddToggle("Super Multi-Punch (Click)", FeatureConfig.Game.SuperPunch, function(v)
+			FeatureConfig.Game.SuperPunch = v
+		end)
+		UIRegistry.Game_SuperPunchHits = meleeSec:AddSlider("Multi-Hit Multiplier", FeatureConfig.Game.SuperPunchHits or 10, 2, 30, function(v)
+			FeatureConfig.Game.SuperPunchHits = v
+		end, " hits")
+
+		-- Section 4: Defenses & Team Control
+		local defSec = tab:AddSection("Defenses & Team")
+		UIRegistry.Game_AntiTaser = defSec:AddToggle("Anti-Taser (No Ragdoll)", FeatureConfig.Game.AntiTaser, function(v)
+			FeatureConfig.Game.AntiTaser = v
+		end)
+		UIRegistry.Game_AntiArrest = defSec:AddToggle("Anti-Arrest (Break Cuffs)", FeatureConfig.Game.AntiArrest, function(v)
+			FeatureConfig.Game.AntiArrest = v
+		end)
+		defSec:AddButton("Instant Become Criminal", function()
+			Game.BecomeCriminal()
+			if Context and Context.UI then Context.UI:Notify("Prison Life", "Switched to Criminal", nil, Theme.Success) end
+		end)
+		defSec:AddButton("Join Inmates Team", function() Game.SetTeam("Bright orange") end)
+		defSec:AddButton("Join Guards Team", function() Game.SetTeam("Bright blue") end)
+		defSec:AddButton("Join Neutral Team", function() Game.SetTeam("Medium stone grey") end)
+
+		-- Section 5: Doors & Fences
+		local doors = tab:AddSection("Doors & Fences")
+		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Through Doors & Fences", FeatureConfig.Game.DoorPhase, function(v)
+			FeatureConfig.Game.DoorPhase = v
+			if v then scanAllDoors() else restoreAllDoors() end
+		end)
+		UIRegistry.Game_DoorGlow = doors:AddToggle("Door Glow Effect", FeatureConfig.Game.DoorGlow, function(v)
+			FeatureConfig.Game.DoorGlow = v
+			if FeatureConfig.Game.DoorPhase then scanAllDoors() end
+		end)
+		UIRegistry.Game_PhaseTransparency = doors:AddSlider("Phase Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
+			FeatureConfig.Game.PhaseTransparency = v / 100
+		end, "%")
+		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
+			FeatureConfig.Game.GlowColor = c
+		end)
+
+		-- Section 6: Fake Macro
 		local macroSec = tab:AddSection("Fake Macro (Gun Spam)")
 		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
 			FeatureConfig.Game.FakeMacro = v
@@ -414,9 +593,21 @@ return function(Context)
 			stopFakeMacro()
 			isKeyPressed = false
 		end, FeatureConfig.Game.FakeMacroMode)
-		UIRegistry.Game_FakeMacroDelay = macroSec:AddSlider("Macro Speed Delay", math.floor((FeatureConfig.Game.FakeMacroDelay or 0.03) * 1000), 10, 200, function(v)
+		UIRegistry.Game_FakeMacroDelay = macroSec:AddSlider("Macro Delay", math.floor((FeatureConfig.Game.FakeMacroDelay or 0.03) * 1000), 10, 200, function(v)
 			FeatureConfig.Game.FakeMacroDelay = v / 1000
 		end, " ms")
+
+		-- Section 7: Map Teleports
+		local tpSec = tab:AddSection("Map Teleports")
+		for name, cf in pairs(PL_LOCATIONS) do
+			tpSec:AddButton(name, function()
+				local r = Utils.GetRootPart()
+				if r then
+					r.CFrame = cf
+					if Context and Context.UI then Context.UI:Notify("Teleport", "Moved to " .. name, nil, Theme.Success) end
+				end
+			end)
+		end
 	end
 
 	function Game.Update(dt)
