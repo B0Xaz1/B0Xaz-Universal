@@ -12,9 +12,8 @@ return function(Context)
 	-- Service ID from Platoboost top-right: (ID: 30171)
 	KeySystem.SERVICE_ID = "30171"
 
-	-- Paste your Platoboost GATEWAY link here (Settings > Monetization / Gateway)
-	-- Example: https://gateway.platoboost.com/a/xxxxx
-	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/30171"
+	-- Platoboost Loader/Gateway link (this is what users open to get a key)
+	KeySystem.GET_KEY_URL = "https://platoboost.com/loader/30171"
 
 	-- Optional exact overrides (always checked after Platoboost says valid)
 	local EXACT_TIER_OVERRIDES = {
@@ -86,13 +85,29 @@ return function(Context)
 	end
 
 	local function platoboostVerify(serviceId, key)
-		local url = string.format(
-			"https://api.platoboost.com/public/whitelist/v2/verify?service=%s&key=%s",
-			HttpService:UrlEncode(tostring(serviceId)),
-			HttpService:UrlEncode(tostring(key))
-		)
+		local hwid = getHWID()
 
-		local body = httpGet(url)
+		-- Try primary host first, fall back to .net if .com fails
+		local hosts = {
+			"https://api.platoboost.com",
+			"https://api.platoboost.net"
+		}
+
+		local body = nil
+
+		for _, host in ipairs(hosts) do
+			local url = string.format(
+				"%s/public/whitelist/%s?identifier=%s&key=%s",
+				host,
+				HttpService:UrlEncode(tostring(serviceId)),
+				HttpService:UrlEncode(tostring(hwid)),
+				HttpService:UrlEncode(tostring(key))
+			)
+
+			body = httpGet(url)
+			if body then break end
+		end
+
 		if not body then
 			return false, "Could not reach Platoboost API."
 		end
@@ -104,8 +119,8 @@ return function(Context)
 			return false, "Invalid Platoboost response."
 		end
 
-		if data.success == true then
-			return true, data.message or "OK"
+		if data.success == true and data.data and data.data.valid == true then
+			return true, "Authenticated Successfully!"
 		end
 
 		return false, data.message or data.error or "Invalid or expired key."
