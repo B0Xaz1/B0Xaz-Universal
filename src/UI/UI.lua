@@ -1,3 +1,4 @@
+-- // src/UI/UI.lua
 local SETTINGS = {
 	GEOMETRY = {
 		DEFAULT_W = 660,
@@ -60,6 +61,20 @@ return function(Context, Theme)
 
 	local activeDragCallback = nil
 
+	local function getSafeParent()
+		local parent = nil
+		pcall(function()
+			if gethui then parent = gethui() end
+		end)
+		if not parent then
+			pcall(function() parent = CoreGui end)
+		end
+		if not parent and LocalPlayer then
+			parent = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 2)
+		end
+		return parent or CoreGui
+	end
+
 	local function createInstance(className, properties, children)
 		local instance = Instance.new(className)
 		if properties then
@@ -77,7 +92,7 @@ return function(Context, Theme)
 
 	local function createStroke(color, thickness)
 		return createInstance("UIStroke", {
-			Color = color or Theme.Border,
+			Color = color or Theme.Border or Color3.fromRGB(55, 55, 65),
 			Thickness = thickness or 1,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		})
@@ -118,17 +133,7 @@ return function(Context, Theme)
 
 	function UI.CreateKeyPrompt(_, KeySystem, CurrentTheme, onSuccess, initialError)
 		local theme = CurrentTheme or Theme
-		local parent = nil
-
-		pcall(function()
-			if gethui then parent = gethui() end
-		end)
-		if not parent then
-			pcall(function() parent = CoreGui end)
-		end
-		if not parent and LocalPlayer then
-			parent = LocalPlayer:WaitForChild("PlayerGui")
-		end
+		local parent = getSafeParent()
 
 		local gui = createInstance("ScreenGui", {
 			Name = "B0XazAuth",
@@ -241,16 +246,21 @@ return function(Context, Theme)
 		local function submit()
 			authenticateBtn.Text = "Checking..."
 			task.wait(0.05)
-			local success, _, msg = KeySystem.ApplyKey(box.Text)
-			if success then
-				gui:Destroy()
-				if onSuccess then
-					task.spawn(onSuccess)
+			if KeySystem and KeySystem.ApplyKey then
+				local success, _, msg = KeySystem.ApplyKey(box.Text)
+				if success then
+					gui:Destroy()
+					if onSuccess then
+						task.spawn(onSuccess)
+					end
+				else
+					authenticateBtn.Text = "Authenticate"
+					errorLabel.Text = msg or "Invalid Key"
+					errorLabel.TextColor3 = theme.Danger or Color3.fromRGB(220, 80, 80)
 				end
 			else
-				authenticateBtn.Text = "Authenticate"
-				errorLabel.Text = msg or "Invalid Key"
-				errorLabel.TextColor3 = theme.Danger or Color3.fromRGB(220, 80, 80)
+				gui:Destroy()
+				if onSuccess then task.spawn(onSuccess) end
 			end
 		end
 
@@ -268,35 +278,21 @@ return function(Context, Theme)
 		self._themeBindings = {}
 		self.Title = title or "B0Xaz"
 
+		local parent = getSafeParent()
+
 		self.ScreenGui = createInstance("ScreenGui", {
 			Name = "B0XazUI",
 			ResetOnSpawn = false,
 			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 			IgnoreGuiInset = true,
 			DisplayOrder = SETTINGS.DISPLAY_ORDERS.MAIN,
+			Parent = parent,
 		})
-
-		local parented = false
-		pcall(function()
-			if gethui then
-				self.ScreenGui.Parent = gethui()
-				parented = true
-			end
-		end)
-		if not parented then
-			pcall(function()
-				self.ScreenGui.Parent = CoreGui
-				parented = true
-			end)
-		end
-		if not parented and LocalPlayer then
-			self.ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-		end
 
 		self.Main = createInstance("Frame", {
 			Size = UDim2.new(0, UI_W, 0, UI_H),
 			Position = UDim2.new(0.5, -UI_W / 2, 0.5, -UI_H / 2),
-			BackgroundColor3 = Theme.Bg,
+			BackgroundColor3 = Theme.Bg or Color3.fromRGB(18, 18, 20),
 			BorderSizePixel = 0,
 			ClipsDescendants = true,
 			Parent = self.ScreenGui,
@@ -308,7 +304,7 @@ return function(Context, Theme)
 
 		self.TitleBar = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, TITLE_H),
-			BackgroundColor3 = Theme.Side,
+			BackgroundColor3 = Theme.Side or Color3.fromRGB(22, 22, 26),
 			BorderSizePixel = 0,
 			Parent = self.Main,
 		})
@@ -317,7 +313,7 @@ return function(Context, Theme)
 		local titleLine = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 1),
 			Position = UDim2.new(0, 0, 1, -1),
-			BackgroundColor3 = Theme.Border,
+			BackgroundColor3 = Theme.Border or Color3.fromRGB(55, 55, 65),
 			BorderSizePixel = 0,
 			Parent = self.TitleBar,
 		})
@@ -327,7 +323,7 @@ return function(Context, Theme)
 			Text = self.Title,
 			Font = Enum.Font.Code,
 			TextSize = 13,
-			TextColor3 = Theme.Text,
+			TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0, 10, 0, 0),
@@ -340,7 +336,7 @@ return function(Context, Theme)
 			Text = "x",
 			Font = Enum.Font.Code,
 			TextSize = 14,
-			TextColor3 = Theme.TextDim,
+			TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
 			BackgroundTransparency = 1,
 			Size = UDim2.new(0, 28, 1, 0),
 			Position = UDim2.new(1, -28, 0, 0),
@@ -349,10 +345,10 @@ return function(Context, Theme)
 		})
 		self:BindTheme(closeBtn, "TextColor3", "TextDim")
 		closeBtn.MouseEnter:Connect(function()
-			closeBtn.TextColor3 = Theme.Danger
+			closeBtn.TextColor3 = Theme.Danger or Color3.fromRGB(220, 80, 80)
 		end)
 		closeBtn.MouseLeave:Connect(function()
-			closeBtn.TextColor3 = Theme.TextDim
+			closeBtn.TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155)
 		end)
 		closeBtn.MouseButton1Click:Connect(function()
 			self.Main.Visible = false
@@ -362,7 +358,7 @@ return function(Context, Theme)
 		self.TabBar = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, TAB_H),
 			Position = UDim2.new(0, 0, 0, TITLE_H),
-			BackgroundColor3 = Theme.Side,
+			BackgroundColor3 = Theme.Side or Color3.fromRGB(22, 22, 26),
 			BorderSizePixel = 0,
 			Parent = self.Main,
 		})
@@ -371,7 +367,7 @@ return function(Context, Theme)
 		local tabLine = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 1),
 			Position = UDim2.new(0, 0, 1, -1),
-			BackgroundColor3 = Theme.BorderDim,
+			BackgroundColor3 = Theme.BorderDim or Color3.fromRGB(40, 40, 48),
 			BorderSizePixel = 0,
 			Parent = self.TabBar,
 		})
@@ -418,12 +414,12 @@ return function(Context, Theme)
 					startPos = self.Main.Position
 				end
 			end)
-			self.TitleBar.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = false
-				end
-			end)
 			if Connections and Connections.Add then
+				Connections.Add(UserInputService.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = false
+					end
+				end))
 				Connections.Add(UserInputService.InputChanged:Connect(function(input)
 					if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 						local delta = input.Position - dragStart
@@ -524,11 +520,11 @@ return function(Context, Theme)
 	end
 
 	function UI:Notify(title, text, duration, color)
-		local accent = color or Theme.Accent
+		local accent = color or Theme.Accent or Color3.fromRGB(0, 200, 220)
 		local notif = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundColor3 = Theme.Panel,
+			BackgroundColor3 = Theme.Panel or Color3.fromRGB(26, 26, 30),
 			BorderSizePixel = 0,
 			Parent = self.NotifyContainer,
 		}, {
@@ -542,7 +538,7 @@ return function(Context, Theme)
 				Text = title or "Notification",
 				Font = Enum.Font.Code,
 				TextSize = 12,
-				TextColor3 = Theme.Text,
+				TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, 14),
@@ -552,7 +548,7 @@ return function(Context, Theme)
 				Text = text or "",
 				Font = Enum.Font.Code,
 				TextSize = 11,
-				TextColor3 = Theme.TextDim,
+				TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextWrapped = true,
 				BackgroundTransparency = 1,
@@ -571,85 +567,34 @@ return function(Context, Theme)
 	function UI:SelectTab(tab)
 		for _, t in ipairs(self.Tabs) do
 			t.Page.Visible = false
-			t.Button.TextColor3 = Theme.TextDim
+			t.Button.TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155)
 			if t.Underline then t.Underline.Visible = false end
 		end
 		tab.Page.Visible = true
-		tab.Button.TextColor3 = Theme.Text
+		tab.Button.TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230)
 		if tab.Underline then
-			tab.Underline.BackgroundColor3 = Theme.Accent
+			tab.Underline.BackgroundColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220)
 			tab.Underline.Visible = true
 		end
 		self.ActiveTab = tab
 		self:CloseAllDropdownsExcept(nil)
 	end
 
-	local function createDummyTab()
-		local d = {}
-		function d:AddSection()
-			local s = {}
-			function s:AddToggle(_, def)
-				return {
-					Set = function() end,
-					Get = function() return def end,
-					UpdateTheme = function() end,
-				}
-			end
-			function s:AddSlider(_, def)
-				return {
-					Set = function() end,
-					Get = function() return def end,
-				}
-			end
-			function s:AddButton() end
-			function s:AddDropdown(_, _, _, def)
-				return {
-					Set = function() end,
-					Get = function() return def end,
-					Refresh = function() end,
-					Close = function() end,
-				}
-			end
-			function s:AddTextbox(_, def)
-				return {
-					Set = function() end,
-					Get = function() return def end,
-				}
-			end
-			function s:AddColorPicker(_, def)
-				return {
-					Set = function() end,
-					Get = function() return def or Color3.new() end,
-				}
-			end
-			function s:AddKeybind(_, def)
-				return {
-					Set = function() end,
-					Get = function() return def end,
-				}
-			end
-			return s
-		end
-		return d
-	end
-
 	function UI:AddTab(name, reqTier)
 		reqTier = reqTier or 1
 		local currentT = (Context.KeySystem and Context.KeySystem.CurrentTier) or 0
-		if reqTier > currentT then
-			return createDummyTab()
-		end
+		local isLockedTab = (reqTier > currentT) and (currentT > 0)
 
 		local ui = self
 		local tab = { Name = name, Sections = {}, UI = ui, _col = 0 }
 
 		tab.Button = createInstance("TextButton", {
-			Text = name,
+			Text = name .. (isLockedTab and " [LOCKED]" or ""),
 			Font = Enum.Font.Code,
 			TextSize = 12,
-			TextColor3 = Theme.TextDim,
+			TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
 			BackgroundTransparency = 1,
-			Size = UDim2.new(0, math.max(52, #name * 7 + 16), 1, 0),
+			Size = UDim2.new(0, math.max(52, #name * 7 + (isLockedTab and 60 or 16)), 1, 0),
 			AutoButtonColor = false,
 			Parent = self.TabList,
 		})
@@ -658,7 +603,7 @@ return function(Context, Theme)
 		tab.Underline = createInstance("Frame", {
 			Size = UDim2.new(1, -8, 0, 2),
 			Position = UDim2.new(0, 4, 1, -2),
-			BackgroundColor3 = Theme.Accent,
+			BackgroundColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220),
 			BorderSizePixel = 0,
 			Visible = false,
 			Parent = tab.Button,
@@ -682,7 +627,7 @@ return function(Context, Theme)
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollBarThickness = scrollBarW,
-			ScrollBarImageColor3 = Theme.AccentDark,
+			ScrollBarImageColor3 = Theme.AccentDark or Color3.fromRGB(0, 140, 160),
 			ScrollingDirection = Enum.ScrollingDirection.Y,
 			CanvasSize = UDim2.new(0, 0, 0, 0),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -704,7 +649,7 @@ return function(Context, Theme)
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollBarThickness = scrollBarW,
-			ScrollBarImageColor3 = Theme.AccentDark,
+			ScrollBarImageColor3 = Theme.AccentDark or Color3.fromRGB(0, 140, 160),
 			ScrollingDirection = Enum.ScrollingDirection.Y,
 			CanvasSize = UDim2.new(0, 0, 0, 0),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -720,10 +665,10 @@ return function(Context, Theme)
 		ui:BindTheme(tab.RightCol, "ScrollBarImageColor3", "AccentDark")
 
 		tab.Button.MouseEnter:Connect(function()
-			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.Text end
+			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230) end
 		end)
 		tab.Button.MouseLeave:Connect(function()
-			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.TextDim end
+			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155) end
 		end)
 		tab.Button.MouseButton1Click:Connect(function() ui:SelectTab(tab) end)
 
@@ -736,7 +681,7 @@ return function(Context, Theme)
 			local parentCol = (tab._col == 1) and tab.LeftCol or tab.RightCol
 
 			section.Frame = createInstance("Frame", {
-				BackgroundColor3 = Theme.Panel,
+				BackgroundColor3 = Theme.Panel or Color3.fromRGB(26, 26, 30),
 				Size = UDim2.new(1, 0, 0, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 				BorderSizePixel = 0,
@@ -754,7 +699,7 @@ return function(Context, Theme)
 
 			local titleBar = createInstance("Frame", {
 				Size = UDim2.new(1, 0, 0, 20),
-				BackgroundColor3 = Theme.Side,
+				BackgroundColor3 = Theme.Side or Color3.fromRGB(22, 22, 26),
 				BorderSizePixel = 0,
 				LayoutOrder = 0,
 				Parent = section.Frame,
@@ -764,7 +709,7 @@ return function(Context, Theme)
 			local secLine = createInstance("Frame", {
 				Size = UDim2.new(1, 0, 0, 1),
 				Position = UDim2.new(0, 0, 1, -1),
-				BackgroundColor3 = Theme.Accent,
+				BackgroundColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220),
 				BorderSizePixel = 0,
 				Parent = titleBar,
 			})
@@ -774,7 +719,7 @@ return function(Context, Theme)
 				Text = "  " .. secName,
 				Font = Enum.Font.Code,
 				TextSize = 11,
-				TextColor3 = Theme.TextDim,
+				TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 1, 0),
@@ -827,7 +772,8 @@ return function(Context, Theme)
 			end
 
 			local function isLocked(rTier)
-				return rTier and rTier > ((Context.KeySystem and Context.KeySystem.CurrentTier) or 0)
+				local cTier = (Context.KeySystem and Context.KeySystem.CurrentTier) or 0
+				return rTier and cTier > 0 and rTier > cTier
 			end
 
 			function section:AddToggle(name, default, callback, rTier)
@@ -843,7 +789,7 @@ return function(Context, Theme)
 				local box = createInstance("Frame", {
 					Size = UDim2.new(0, 12, 0, 12),
 					Position = UDim2.new(0, 2, 0.5, -6),
-					BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff,
+					BackgroundColor3 = state and (Theme.ToggleOn or Color3.fromRGB(0, 200, 220)) or (Theme.ToggleOff or Color3.fromRGB(40, 40, 48)),
 					BorderSizePixel = 0,
 					Parent = rowContent,
 				})
@@ -855,7 +801,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 20, 0, 0),
@@ -873,7 +819,7 @@ return function(Context, Theme)
 
 				local function setState(v, silent)
 					state = v and true or false
-					box.BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff
+					box.BackgroundColor3 = state and (Theme.ToggleOn or Color3.fromRGB(0, 200, 220)) or (Theme.ToggleOff or Color3.fromRGB(40, 40, 48))
 					if not silent and callback then
 						Utils.SafeCall(callback, state)
 					end
@@ -885,7 +831,7 @@ return function(Context, Theme)
 					Set = setState,
 					Get = function() return state end,
 					UpdateTheme = function()
-						box.BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff
+						box.BackgroundColor3 = state and (Theme.ToggleOn or Color3.fromRGB(0, 200, 220)) or (Theme.ToggleOff or Color3.fromRGB(40, 40, 48))
 					end,
 				}
 			end
@@ -904,7 +850,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
@@ -917,7 +863,7 @@ return function(Context, Theme)
 					Text = tostring(default) .. "/" .. tostring(max) .. suffix,
 					Font = Enum.Font.Code,
 					TextSize = 10,
-					TextColor3 = Theme.TextDim,
+					TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
 					TextXAlignment = Enum.TextXAlignment.Right,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(1, -48, 0, 0),
@@ -929,7 +875,7 @@ return function(Context, Theme)
 				local track = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 0, 4),
 					Position = UDim2.new(0, 2, 0, 22),
-					BackgroundColor3 = Theme.Elem,
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Parent = rowContent,
 				})
@@ -941,7 +887,7 @@ return function(Context, Theme)
 				local initRel = math.clamp((default - min) / math.max(max - min, SETTINGS.LIMITS.MIN_GEOM_SIZE), 0, 1)
 				local fill = createInstance("Frame", {
 					Size = UDim2.new(initRel, 0, 1, 0),
-					BackgroundColor3 = Theme.Accent,
+					BackgroundColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220),
 					BorderSizePixel = 0,
 					Parent = track,
 				})
@@ -998,8 +944,8 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
-					BackgroundColor3 = Theme.Elem,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Size = UDim2.new(1, 0, 0, 20),
 					Position = UDim2.new(0, 0, 0, 2),
@@ -1012,12 +958,12 @@ return function(Context, Theme)
 				ui:BindTheme(btn, "TextColor3", "Text")
 				ui:BindTheme(btnStroke, "Color", "Border")
 				btn.MouseEnter:Connect(function()
-					btn.BackgroundColor3 = Theme.ElemHover
-					btn.TextColor3 = Theme.Accent
+					btn.BackgroundColor3 = Theme.ElemHover or Color3.fromRGB(42, 42, 50)
+					btn.TextColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220)
 				end)
 				btn.MouseLeave:Connect(function()
-					btn.BackgroundColor3 = Theme.Elem
-					btn.TextColor3 = Theme.Text
+					btn.BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38)
+					btn.TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230)
 				end)
 				btn.MouseButton1Click:Connect(function()
 					if callback then Utils.SafeCall(callback) end
@@ -1039,7 +985,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
@@ -1054,8 +1000,8 @@ return function(Context, Theme)
 					Text = (selected ~= "" and tostring(selected) or "None") .. "  v",
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.TextDim,
-					BackgroundColor3 = Theme.Elem,
+					TextColor3 = Theme.TextDim or Color3.fromRGB(145, 145, 155),
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Size = UDim2.new(1, -4, 0, 18),
 					Position = UDim2.new(0, 2, 0, 16),
@@ -1078,12 +1024,12 @@ return function(Context, Theme)
 				local listBox = createInstance("ScrollingFrame", {
 					Size = UDim2.new(1, -4, 1, 0),
 					Position = UDim2.new(0, 2, 0, 0),
-					BackgroundColor3 = Theme.Elem,
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					CanvasSize = UDim2.new(0, 0, 0, 0),
 					AutomaticCanvasSize = Enum.AutomaticSize.Y,
 					ScrollBarThickness = 2,
-					ScrollBarImageColor3 = Theme.AccentDark,
+					ScrollBarImageColor3 = Theme.AccentDark or Color3.fromRGB(0, 140, 160),
 					Parent = expansion,
 				}, {
 					createInstance("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
@@ -1121,7 +1067,7 @@ return function(Context, Theme)
 							Text = "  " .. tostring(opt),
 							Font = Enum.Font.Code,
 							TextSize = 11,
-							TextColor3 = Theme.Text,
+							TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 							TextXAlignment = Enum.TextXAlignment.Left,
 							BackgroundTransparency = 1,
 							Size = UDim2.new(1, 0, 0, CONFIG.DROPDOWN_ROW_HEIGHT or SETTINGS.GEOMETRY.DROPDOWN_ROW_H),
@@ -1131,7 +1077,7 @@ return function(Context, Theme)
 						ui:BindTheme(optBtn, "TextColor3", "Text")
 						optBtn.MouseEnter:Connect(function()
 							optBtn.BackgroundTransparency = 0
-							optBtn.BackgroundColor3 = Theme.ElemHover
+							optBtn.BackgroundColor3 = Theme.ElemHover or Color3.fromRGB(42, 42, 50)
 						end)
 						optBtn.MouseLeave:Connect(function()
 							optBtn.BackgroundTransparency = 1
@@ -1186,7 +1132,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
@@ -1198,7 +1144,7 @@ return function(Context, Theme)
 				local boxFrame = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 0, 18),
 					Position = UDim2.new(0, 2, 0, 16),
-					BackgroundColor3 = Theme.Elem,
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Parent = rowContent,
 				})
@@ -1212,8 +1158,8 @@ return function(Context, Theme)
 					PlaceholderText = placeholder or "",
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
-					PlaceholderColor3 = Theme.TextMuted,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
+					PlaceholderColor3 = Theme.TextMuted or Color3.fromRGB(95, 95, 105),
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, -8, 1, 0),
 					Position = UDim2.new(0, 4, 0, 0),
@@ -1246,7 +1192,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
@@ -1291,7 +1237,7 @@ return function(Context, Theme)
 				local pickerBox = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 1, 0),
 					Position = UDim2.new(0, 2, 0, 0),
-					BackgroundColor3 = Theme.Elem,
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Parent = expansion,
 				}, {
@@ -1358,7 +1304,7 @@ return function(Context, Theme)
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
-					TextColor3 = Theme.Text,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
@@ -1375,7 +1321,7 @@ return function(Context, Theme)
 						if key.EnumType == Enum.KeyCode then
 							return key.Name
 						elseif key.EnumType == Enum.UserInputType then
-							return SET_MAP and SET_MAP[key] or SETTINGS.MOUSE_MAP[key] or key.Name
+							return SETTINGS.MOUSE_MAP[key] or key.Name
 						end
 					end
 					return "None"
@@ -1385,8 +1331,8 @@ return function(Context, Theme)
 					Text = getKeyDisplay(defaultKey),
 					Font = Enum.Font.Code,
 					TextSize = 10,
-					TextColor3 = Theme.Text,
-					BackgroundColor3 = Theme.Elem,
+					TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230),
+					BackgroundColor3 = Theme.Elem or Color3.fromRGB(32, 32, 38),
 					BorderSizePixel = 0,
 					Size = UDim2.new(0, 56, 0, 16),
 					Position = UDim2.new(1, -58, 0.5, -8),
@@ -1403,7 +1349,7 @@ return function(Context, Theme)
 				keyBtn.MouseButton1Click:Connect(function()
 					listening = true
 					keyBtn.Text = "..."
-					keyBtn.TextColor3 = Theme.Accent
+					keyBtn.TextColor3 = Theme.Accent or Color3.fromRGB(0, 200, 220)
 				end)
 
 				if Connections and Connections.Add then
@@ -1425,7 +1371,7 @@ return function(Context, Theme)
 						if finalize then
 							currentKey = bound
 							keyBtn.Text = getKeyDisplay(bound)
-							keyBtn.TextColor3 = Theme.Text
+							keyBtn.TextColor3 = Theme.Text or Color3.fromRGB(225, 225, 230)
 							listening = false
 							if callback then Utils.SafeCall(callback, bound) end
 							triggerAutosave()
