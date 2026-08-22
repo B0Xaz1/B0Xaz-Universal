@@ -8,29 +8,61 @@ return function(CONFIG)
 
 	local Utils = {}
 
+	function Utils.WaitForGameLoad()
+		if not game:IsLoaded() then
+			game.Loaded:Wait()
+		end
+		if not LocalPlayer then
+			repeat task.wait() until Players.LocalPlayer
+			LocalPlayer = Players.LocalPlayer
+		end
+	end
+
+	function Utils.SafeGetService(name)
+		local ok, service = pcall(function() return game:GetService(name) end)
+		return ok and service or nil
+	end
+
 	function Utils.GetCharacter()
 		return LocalPlayer and LocalPlayer.Character
 	end
 
 	function Utils.GetHumanoid()
 		local c = Utils.GetCharacter()
-		return c and c:FindFirstChildOfClass("Humanoid")
+		if not c or not c.Parent then return nil end
+		return c:FindFirstChildOfClass("Humanoid")
 	end
 
 	function Utils.GetRootPart()
 		local c = Utils.GetCharacter()
-		if not c then return nil end
+		if not c or not c.Parent then return nil end
 		local r = c:FindFirstChild("HumanoidRootPart")
-		return (r and r:IsA("BasePart")) and r or nil
+		return (r and r:IsA("BasePart") and r:IsDescendantOf(Workspace)) and r or nil
+	end
+
+	function Utils.GetPlayerAssets(player)
+		if not player then return nil end
+		local char = player.Character
+		if not char or not char.Parent then return nil end
+
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local root = char:FindFirstChild("HumanoidRootPart")
+		local head = char:FindFirstChild("Head")
+
+		if not hum or not root or not head then return nil end
+		if not root:IsDescendantOf(Workspace) then return nil end
+		if hum.Health <= 0 then return nil end
+
+		return {
+			Character = char,
+			Humanoid = hum,
+			RootPart = root,
+			Head = head
+		}
 	end
 
 	function Utils.IsAlive(player)
-		if not player then return false end
-		local c = player.Character
-		if not c then return false end
-		local root = c:FindFirstChild("HumanoidRootPart")
-		local hum = c:FindFirstChildOfClass("Humanoid")
-		return root ~= nil and hum ~= nil and hum.Health > 0
+		return Utils.GetPlayerAssets(player) ~= nil
 	end
 
 	function Utils.SameTeam(player)
@@ -39,18 +71,22 @@ return function(CONFIG)
 	end
 
 	function Utils.IsVisible(part)
-		if not part or not part.Parent then return false end
+		if not part or not part.Parent or not part:IsDescendantOf(Workspace) then return false end
 		local origin = Camera.CFrame.Position
 		local direction = part.Position - origin
-		local params = RaycastParams.new()
+		if direction.Magnitude < 0.1 then return true end
 
+		local params = RaycastParams.new()
 		local filter = {Camera}
-		if LocalPlayer.Character then table.insert(filter, LocalPlayer.Character) end
+		if LocalPlayer and LocalPlayer.Character then table.insert(filter, LocalPlayer.Character) end
 		params.FilterDescendantsInstances = filter
 		params.FilterType = Enum.RaycastFilterType.Exclude
 		params.IgnoreWater = true
 
-		local result = Workspace:Raycast(origin, direction, params)
+		local ok, result = pcall(function()
+			return Workspace:Raycast(origin, direction, params)
+		end)
+		if not ok then return false end
 		if not result then return true end
 		return result.Instance:IsDescendantOf(part.Parent)
 	end
@@ -89,7 +125,12 @@ return function(CONFIG)
 	end
 
 	function Utils.WorldToScreen(position)
-		local sp, onScreen = Camera:WorldToViewportPoint(position)
+		if not Camera then return Vector2.zero, false, 0 end
+		local ok, sp, onScreen = pcall(function()
+			local s, o = Camera:WorldToViewportPoint(position)
+			return s, o
+		end)
+		if not ok then return Vector2.zero, false, 0 end
 		return Vector2.new(sp.X, sp.Y), onScreen, sp.Z
 	end
 
@@ -105,11 +146,12 @@ return function(CONFIG)
 	end
 
 	function Utils.ColorToTable(c)
+		if typeof(c) ~= "Color3" then return {r = 1, g = 1, b = 1} end
 		return {r = c.R, g = c.G, b = c.B}
 	end
 
 	function Utils.TableToColor(t)
-		if not t then return Color3.new(1, 1, 1) end
+		if type(t) ~= "table" then return Color3.new(1, 1, 1) end
 		return Color3.new(
 			math.clamp(tonumber(t.r) or 1, 0, 1),
 			math.clamp(tonumber(t.g) or 1, 0, 1),
@@ -118,16 +160,21 @@ return function(CONFIG)
 	end
 
 	function Utils.WriteFile(path, content)
+		if not writefile then return false, "writefile not supported" end
 		local ok, err = pcall(function() writefile(path, content) end)
 		return ok, err
 	end
 
 	function Utils.ReadFile(path)
+		if not readfile or not isfile then return nil end
+		if not isfile(path) then return nil end
 		local ok, result = pcall(function() return readfile(path) end)
 		return ok and result or nil
 	end
 
 	function Utils.ListFiles(folder)
+		if not listfiles or not isfolder then return {} end
+		if not isfolder(folder) then return {} end
 		local ok, result = pcall(function() return listfiles(folder) end)
 		return ok and result or {}
 	end
@@ -154,6 +201,7 @@ return function(CONFIG)
 		if not ok then
 			pcall(function() warn("[B0Xaz] Error: " .. tostring(err)) end)
 		end
+		return ok
 	end
 
 	local function getQueueOnTeleport()
