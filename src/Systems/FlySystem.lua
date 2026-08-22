@@ -1,13 +1,15 @@
--- src/Systems/FlySystem.lua
 return function(Context)
     local UIS = game:GetService("UserInputService")
     local Workspace = game:GetService("Workspace")
+    local Players = game:GetService("Players")
     local Camera = Workspace.CurrentCamera
     local IsMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
     local FeatureConfig = Context.FeatureConfig
     local State = Context.State
     local Utils = Context.Utils
+    local Connections = Context.Connections
+    local LocalPlayer = Players.LocalPlayer
 
     local FlySystem = {}
 
@@ -24,28 +26,35 @@ return function(Context)
 
     function FlySystem.Start()
         if FeatureConfig.Movement.FlyEnabled then return end
-        local hum, root = Utils.GetHumanoid(), Utils.GetRootPart()
-        if not hum or not root then return end
+        local assets = Utils.GetPlayerAssets(LocalPlayer)
+        if not assets then return end
 
         FlySystem.Cleanup()
         FeatureConfig.Movement.FlyEnabled = true
 
-        local bv = Instance.new("BodyVelocity")
-        bv.MaxForce = Vector3.one * 1e5
-        bv.Velocity = Vector3.zero
-        bv.Parent = root
-        State.FlyBodyVelocity = bv
+        local ok = pcall(function()
+            local bv = Instance.new("BodyVelocity")
+            bv.MaxForce = Vector3.one * 1e5
+            bv.Velocity = Vector3.zero
+            bv.Parent = assets.RootPart
+            State.FlyBodyVelocity = bv
 
-        local bg = Instance.new("BodyGyro")
-        bg.MaxTorque = Vector3.one * 1e5
-        bg.D = 50
-        bg.P = 1000
-        bg.CFrame = root.CFrame
-        bg.Parent = root
-        State.FlyBodyGyro = bg
+            local bg = Instance.new("BodyGyro")
+            bg.MaxTorque = Vector3.one * 1e5
+            bg.D = 50
+            bg.P = 1000
+            bg.CFrame = assets.RootPart.CFrame
+            bg.Parent = assets.RootPart
+            State.FlyBodyGyro = bg
 
-        hum.PlatformStand = true
-        hum.AutoRotate = false
+            assets.Humanoid.PlatformStand = true
+            assets.Humanoid.AutoRotate = false
+        end)
+
+        if not ok then
+            FeatureConfig.Movement.FlyEnabled = false
+            FlySystem.Cleanup()
+        end
     end
 
     function FlySystem.Stop()
@@ -56,8 +65,10 @@ return function(Context)
         local hum = Utils.GetHumanoid()
         local root = Utils.GetRootPart()
         if hum then
-            hum.PlatformStand = false
-            hum.AutoRotate = true
+            pcall(function()
+                hum.PlatformStand = false
+                hum.AutoRotate = true
+            end)
         end
         if root then
             pcall(function()
@@ -74,8 +85,8 @@ return function(Context)
             FlySystem.Stop()
             return
         end
-        local root = Utils.GetRootPart()
-        if not root then
+        local assets = Utils.GetPlayerAssets(LocalPlayer)
+        if not assets then
             FlySystem.Stop()
             return
         end
@@ -93,19 +104,29 @@ return function(Context)
                 move = move - Vector3.yAxis
             end
         else
-            local hum = Utils.GetHumanoid()
-            if hum and hum.MoveDirection.Magnitude > 0.1 then
+            if assets.Humanoid.MoveDirection.Magnitude > 0.1 then
                 local fwd = Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z)
                 local right = Vector3.new(Camera.CFrame.RightVector.X, 0, Camera.CFrame.RightVector.Z)
                 if fwd.Magnitude > 0 then fwd = fwd.Unit end
                 if right.Magnitude > 0 then right = right.Unit end
-                move = fwd * -hum.MoveDirection.Z + right * hum.MoveDirection.X
+                move = fwd * -assets.Humanoid.MoveDirection.Z + right * assets.Humanoid.MoveDirection.X
             end
             if FeatureConfig.Movement.MobileFlyUp then move = move + Vector3.yAxis end
             if FeatureConfig.Movement.MobileFlyDown then move = move - Vector3.yAxis end
         end
 
         bv.Velocity = move.Magnitude > 0 and (move.Unit * FeatureConfig.Movement.FlySpeed) or Vector3.zero
+    end
+
+    if LocalPlayer then
+        Connections.Add(LocalPlayer.CharacterAdded:Connect(function()
+            if FeatureConfig.Movement.FlyEnabled then
+                FeatureConfig.Movement.FlyEnabled = false
+                FlySystem.Cleanup()
+                task.wait(1)
+                FlySystem.Start()
+            end
+        end))
     end
 
     return FlySystem
