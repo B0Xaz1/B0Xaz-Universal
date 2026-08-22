@@ -132,7 +132,7 @@ return function(Context)
 		local originalPos = root.CFrame
 
 		if Context.UI then
-			Context.UI:Notify("Prison Life", "Becoming Criminal (Returning inside in 3.5s)...", 3.5, Theme.Accent)
+			Context.UI:Notify("Prison Life", "Becoming Criminal (Returning in 3.5s)...", 3.5, Theme.Accent)
 		end
 
 		root.CFrame = CFrame.new(-943, 95, 2058)
@@ -458,7 +458,7 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- WARNING MODAL OVERLAY (Covers entire menu on first access)
+	-- WARNING MODAL OVERLAY (Pure B0Xaz Theme Style)
 	----------------------------------------------------------------
 	local function showBannableWarningModal(onAccept, onCancel)
 		local mainFrame = Context and Context.UI and Context.UI.Main
@@ -467,121 +467,171 @@ return function(Context)
 			return
 		end
 
-		local overlay = Instance.new("Frame")
-		overlay.Name = "B0XazBannableModal"
-		overlay.Size = UDim2.fromScale(1, 1)
-		overlay.Position = UDim2.fromScale(0, 0)
-		overlay.BackgroundColor3 = Color3.fromRGB(14, 10, 12)
-		overlay.BackgroundTransparency = 0.02
-		overlay.BorderSizePixel = 0
-		overlay.ZIndex = 800
-		overlay.Parent = mainFrame
+		local function create(class, props)
+			local inst = Instance.new(class)
+			if props then
+				for k, v in pairs(props) do pcall(function() inst[k] = v end) end
+			end
+			return inst
+		end
 
-		local borderStroke = Instance.new("UIStroke")
-		borderStroke.Color = Theme.Danger or Color3.fromRGB(220, 60, 60)
-		borderStroke.Thickness = 2
-		borderStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		borderStroke.Parent = overlay
+		local function stroke(color, thick)
+			return create("UIStroke", {
+				Color = color or Theme.Border,
+				Thickness = thick or 1,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			})
+		end
 
-		local titleLabel = Instance.new("TextLabel")
-		titleLabel.Text = "⚠️ CRITICAL ACCOUNT BAN WARNING ⚠️"
-		titleLabel.Font = Enum.Font.Code
-		titleLabel.TextSize = 14
-		titleLabel.TextColor3 = Theme.Danger or Color3.fromRGB(220, 60, 60)
-		titleLabel.TextXAlignment = Enum.TextXAlignment.Center
-		titleLabel.BackgroundTransparency = 1
-		titleLabel.Size = UDim2.new(1, -20, 0, 30)
-		titleLabel.Position = UDim2.new(0, 10, 0, 24)
-		titleLabel.ZIndex = 801
-		titleLabel.Parent = overlay
+		local dim = create("Frame", {
+			Name = "B0XazBannableDim",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
+			ZIndex = 500,
+			Parent = mainFrame,
+		})
 
-		local descLabel = Instance.new("TextLabel")
-		descLabel.Text = "Any functions in this tab will get your account banned from Prison Life.\n\n"
-			.. "These exploits send heavy, detectable melee payloads to the server. You are solely responsible for any penalties applied to your account.\n\n"
-			.. "To prevent accidental activation, please wait 3 seconds and hold the confirmation button for 2 seconds to unlock."
-		descLabel.Font = Enum.Font.Code
-		descLabel.TextSize = 11
-		descLabel.TextColor3 = Theme.Text or Color3.fromRGB(220, 220, 230)
-		descLabel.TextWrapped = true
-		descLabel.TextXAlignment = Enum.TextXAlignment.Center
-		descLabel.BackgroundTransparency = 1
-		descLabel.Size = UDim2.new(1, -40, 0, 140)
-		descLabel.Position = UDim2.new(0, 20, 0, 65)
-		descLabel.ZIndex = 801
-		descLabel.Parent = overlay
+		local modal = create("Frame", {
+			Name = "ModalFrame",
+			Size = UDim2.fromOffset(400, 240),
+			Position = UDim2.new(0.5, -200, 0.5, -120),
+			BackgroundColor3 = Theme.Bg,
+			BorderSizePixel = 0,
+			ZIndex = 501,
+			Parent = dim,
+		})
+		stroke(Theme.Danger or Color3.fromRGB(220, 80, 80), 1).Parent = modal
 
-		-- Confirm / Hold Button Container
-		local holdButton = Instance.new("TextButton")
-		holdButton.Name = "HoldToUnlock"
-		holdButton.Size = UDim2.new(1, -60, 0, 38)
-		holdButton.Position = UDim2.new(0, 30, 0, 225)
-		holdButton.BackgroundColor3 = Color3.fromRGB(30, 24, 26)
-		holdButton.BorderSizePixel = 0
-		holdButton.AutoButtonColor = false
-		holdButton.Text = "Please wait (3s)..."
-		holdButton.Font = Enum.Font.Code
-		holdButton.TextSize = 12
-		holdButton.TextColor3 = Theme.TextDim or Color3.fromRGB(150, 150, 160)
-		holdButton.ZIndex = 801
-		holdButton.ClipsDescendants = true
-		holdButton.Parent = overlay
+		local titleBar = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 24),
+			BackgroundColor3 = Theme.Side,
+			BorderSizePixel = 0,
+			ZIndex = 502,
+			Parent = modal,
+		})
+		local titleLine = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 1),
+			Position = UDim2.new(0, 0, 1, -1),
+			BackgroundColor3 = Theme.Danger or Color3.fromRGB(220, 80, 80),
+			BorderSizePixel = 0,
+			ZIndex = 503,
+			Parent = titleBar,
+		})
+		local titleLbl = create("TextLabel", {
+			Text = "  SECURITY ADVISORY // BAN RISK DETECTED",
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = Theme.Danger or Color3.fromRGB(220, 80, 80),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			ZIndex = 504,
+			Parent = titleBar,
+		})
 
-		local holdStroke = Instance.new("UIStroke")
-		holdStroke.Color = Theme.Border or Color3.fromRGB(60, 50, 55)
-		holdStroke.Thickness = 1
-		holdStroke.Parent = holdButton
+		local contentBody = create("Frame", {
+			Size = UDim2.new(1, -20, 0, 110),
+			Position = UDim2.fromOffset(10, 34),
+			BackgroundColor3 = Theme.Panel,
+			BorderSizePixel = 0,
+			ZIndex = 502,
+			Parent = modal,
+		})
+		stroke(Theme.BorderDim, 1).Parent = contentBody
 
-		local fillBar = Instance.new("Frame")
-		fillBar.Name = "FillProgress"
-		fillBar.Size = UDim2.new(0, 0, 1, 0)
-		fillBar.Position = UDim2.fromScale(0, 0)
-		fillBar.BackgroundColor3 = Theme.Danger or Color3.fromRGB(220, 60, 60)
-		fillBar.BackgroundTransparency = 0.35
-		fillBar.BorderSizePixel = 0
-		fillBar.ZIndex = 802
-		fillBar.Parent = holdButton
+		local descLbl = create("TextLabel", {
+			Text = "[!] WARNING: Features in this section send heavy, high-rate melee payloads directly to server remotes.\n\n"
+				.. "[!] Using Punch Aura or Super Multi-Punch WILL trigger automatic server log bans on Prison Life.\n\n"
+				.. "[!] Please wait 3s, then HOLD the button for 2s to unlock.",
+			Font = Enum.Font.Code,
+			TextSize = 10,
+			TextColor3 = Theme.TextDim,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.new(1, -16, 1, -16),
+			ZIndex = 503,
+			Parent = contentBody,
+		})
 
-		-- Cancel Button
-		local cancelButton = Instance.new("TextButton")
-		cancelButton.Name = "CancelBtn"
-		cancelButton.Size = UDim2.new(1, -60, 0, 32)
-		cancelButton.Position = UDim2.new(0, 30, 0, 275)
-		cancelButton.BackgroundColor3 = Theme.Elem or Color3.fromRGB(28, 28, 34)
-		cancelButton.BorderSizePixel = 0
-		cancelButton.AutoButtonColor = false
-		cancelButton.Text = "Cancel & Return to Safe Normal Mode"
-		cancelButton.Font = Enum.Font.Code
-		cancelButton.TextSize = 11
-		cancelButton.TextColor3 = Theme.Text or Color3.fromRGB(220, 220, 230)
-		cancelButton.ZIndex = 801
-		cancelButton.Parent = overlay
+		local btnContainer = create("Frame", {
+			Size = UDim2.new(1, -20, 0, 70),
+			Position = UDim2.fromOffset(10, 155),
+			BackgroundTransparency = 1,
+			ZIndex = 502,
+			Parent = modal,
+		})
 
-		local cancelStroke = Instance.new("UIStroke")
-		cancelStroke.Color = Theme.Border or Color3.fromRGB(60, 60, 70)
-		cancelStroke.Thickness = 1
-		cancelStroke.Parent = cancelButton
+		local holdBtn = create("TextButton", {
+			Size = UDim2.new(1, 0, 0, 30),
+			Position = UDim2.fromOffset(0, 0),
+			BackgroundColor3 = Theme.Elem,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "[ LOCKED // WAIT 3s ]",
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = Theme.TextMuted,
+			ClipsDescendants = true,
+			ZIndex = 503,
+			Parent = btnContainer,
+		})
+		local holdStroke = stroke(Theme.Border, 1)
+		holdStroke.Parent = holdBtn
 
-		cancelButton.MouseButton1Click:Connect(function()
-			overlay:Destroy()
+		local fillBar = create("Frame", {
+			Size = UDim2.new(0, 0, 1, 0),
+			BackgroundColor3 = Theme.Danger or Color3.fromRGB(220, 80, 80),
+			BackgroundTransparency = 0.4,
+			BorderSizePixel = 0,
+			ZIndex = 504,
+			Parent = holdBtn,
+		})
+
+		local cancelBtn = create("TextButton", {
+			Size = UDim2.new(1, 0, 0, 24),
+			Position = UDim2.fromOffset(0, 36),
+			BackgroundColor3 = Theme.Elem,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "[ ABORT & RETURN TO SAFE MODE ]",
+			Font = Enum.Font.Code,
+			TextSize = 10,
+			TextColor3 = Theme.Text,
+			ZIndex = 503,
+			Parent = btnContainer,
+		})
+		stroke(Theme.Border, 1).Parent = cancelBtn
+
+		cancelBtn.MouseEnter:Connect(function()
+			cancelBtn.BackgroundColor3 = Theme.ElemHover
+		end)
+		cancelBtn.MouseLeave:Connect(function()
+			cancelBtn.BackgroundColor3 = Theme.Elem
+		end)
+		cancelBtn.MouseButton1Click:Connect(function()
+			dim:Destroy()
 			if onCancel then onCancel() end
 		end)
 
-		-- 3-Second Wait Countdown
 		local canInteract = false
 		task.spawn(function()
 			for i = 3, 1, -1 do
-				if not overlay or not overlay.Parent then return end
-				holdButton.Text = "Please wait (" .. i .. "s)..."
+				if not dim or not dim.Parent then return end
+				holdBtn.Text = string.format("[ LOCKED // WAIT %ds ]", i)
 				task.wait(1)
 			end
-			if not overlay or not overlay.Parent then return end
+			if not dim or not dim.Parent then return end
 			canInteract = true
-			holdButton.Text = "HOLD FOR 2 SECONDS TO UNLOCK"
-			holdButton.TextColor3 = Theme.Danger or Color3.fromRGB(240, 80, 80)
-			holdStroke.Color = Theme.Danger or Color3.fromRGB(220, 60, 60)
+			holdBtn.Text = "[ HOLD 2.0s TO ACKNOWLEDGE & UNLOCK ]"
+			holdBtn.TextColor3 = Theme.Danger or Color3.fromRGB(220, 80, 80)
+			holdStroke.Color = Theme.Danger or Color3.fromRGB(220, 80, 80)
 		end)
 
-		-- 2-Second Hold Mechanism
 		local isHolding = false
 		local holdTime = 0
 		local holdConn = nil
@@ -590,8 +640,8 @@ return function(Context)
 			isHolding = false
 			holdTime = 0
 			fillBar.Size = UDim2.new(0, 0, 1, 0)
-			if canInteract and overlay and overlay.Parent then
-				holdButton.Text = "HOLD FOR 2 SECONDS TO UNLOCK"
+			if canInteract and dim and dim.Parent then
+				holdBtn.Text = "[ HOLD 2.0s TO ACKNOWLEDGE & UNLOCK ]"
 			end
 			if holdConn then
 				holdConn:Disconnect()
@@ -609,24 +659,24 @@ return function(Context)
 				holdTime = holdTime + dt
 				local progress = math.clamp(holdTime / 2.0, 0, 1)
 				fillBar.Size = UDim2.new(progress, 0, 1, 0)
-				holdButton.Text = string.format("HOLDING... (%.1fs / 2.0s)", holdTime)
+				holdBtn.Text = string.format("[ HOLDING: %.1fs / 2.0s ]", holdTime)
 
 				if holdTime >= 2.0 then
 					stopHolding()
 					hasAcceptedBannableWarning = true
-					overlay:Destroy()
+					dim:Destroy()
 					if onAccept then onAccept() end
 				end
 			end)
 		end
 
-		holdButton.InputBegan:Connect(function(input)
+		holdBtn.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				startHolding()
 			end
 		end)
 
-		holdButton.InputEnded:Connect(function(input)
+		holdBtn.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				stopHolding()
 			end
@@ -734,7 +784,6 @@ return function(Context)
 		local normalSections = {}
 		local bannableSections = {}
 
-		-- Sub-Tab Navigation Bar Section (always visible at top of Game tab)
 		local navSec = tab:AddSection("Prison Life Categories")
 
 		local function updateSubTabs(active)
@@ -746,14 +795,14 @@ return function(Context)
 			end
 		end
 
-		navSec:AddButton("Switch to: [ Normal Mode ]", function()
+		navSec:AddButton("[ Mode: Normal Features ]", function()
 			updateSubTabs("Normal")
 			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", "Switched to Normal Features", 2, Theme.Success)
+				Context.UI:Notify("Prison Life", "Switched to Normal Mode", 2, Theme.Success)
 			end
 		end)
 
-		navSec:AddButton("Switch to: [ ⚠️ Bannable Exploits ]", function()
+		navSec:AddButton("[ Mode: ⚠️ Bannable Exploits ]", function()
 			if not hasAcceptedBannableWarning then
 				showBannableWarningModal(
 					function()
