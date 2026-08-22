@@ -1,115 +1,144 @@
--- src/UI/UI.lua
+local SETTINGS = {
+	GEOMETRY = {
+		DEFAULT_W = 660,
+		DEFAULT_H = 460,
+		TITLE_H = 28,
+		TAB_H = 26,
+		COL_GAP = 8,
+		PAD = 8,
+		ROW_HEIGHT = 22,
+		DROPDOWN_ROW_H = 22,
+		DROPDOWN_MAX_ROWS = 6,
+		NOTIFY_DEFAULT_T = 3.5,
+	},
+	PRESETS = {
+		COLORS = {
+			WHITE = Color3.fromRGB(255, 255, 255),
+			BLACK = Color3.fromRGB(0, 0, 0),
+			RED = Color3.fromRGB(255, 50, 50),
+			ORANGE = Color3.fromRGB(255, 150, 50),
+			YELLOW = Color3.fromRGB(255, 230, 50),
+			GREEN = Color3.fromRGB(50, 255, 80),
+			CYAN = Color3.fromRGB(0, 200, 220),
+			BLUE = Color3.fromRGB(80, 80, 255),
+			PURPLE = Color3.fromRGB(200, 80, 255),
+			PINK = Color3.fromRGB(255, 80, 180),
+		},
+	},
+	MOUSE_MAP = {
+		[Enum.UserInputType.MouseButton1] = "MB1",
+		[Enum.UserInputType.MouseButton2] = "MB2",
+		[Enum.UserInputType.MouseButton3] = "MB3",
+	},
+	DISPLAY_ORDERS = {
+		AUTH = 10000,
+		MAIN = 999,
+	},
+	LIMITS = {
+		MIN_GEOM_SIZE = 1e-6,
+	},
+}
+
 return function(Context, Theme)
-	local UIS = game:GetService("UserInputService")
+	local UserInputService = game:GetService("UserInputService")
 	local CoreGui = game:GetService("CoreGui")
 	local Players = game:GetService("Players")
+
 	local LocalPlayer = Players.LocalPlayer
+	local CONFIG = (Context and Context.CONFIG) or {}
+	local State = (Context and Context.State) or {}
+	local Utils = (Context and Context.Utils) or {}
+	local Connections = (Context and Context.Connections) or {}
+	local ThemeManager = Context and Context.ThemeManager
 
-	local CONFIG = Context.CONFIG or {}
-	local State = Context.State or {}
-	local Utils = Context.Utils or {}
-	local Connections = Context.Connections or {}
-	local ThemeManager = Context.ThemeManager
+	local UI_W = CONFIG.UI_W or SETTINGS.GEOMETRY.DEFAULT_W
+	local UI_H = CONFIG.UI_H or SETTINGS.GEOMETRY.DEFAULT_H
+	local TITLE_H = SETTINGS.GEOMETRY.TITLE_H
+	local TAB_H = SETTINGS.GEOMETRY.TAB_H
+	local COL_GAP = SETTINGS.GEOMETRY.COL_GAP
+	local PAD = SETTINGS.GEOMETRY.PAD
 
-	local UI_W = CONFIG.UI_W or 660
-	local UI_H = CONFIG.UI_H or 460
-	local TITLE_H = 28
-	local TAB_H = 26
-	local COL_GAP = 8
-	local PAD = 8
+	local activeDragCallback = nil
 
-	local function create(class, props, children)
-		local inst = Instance.new(class)
-		if props then
-			for k, v in pairs(props) do
-				pcall(function()
-					inst[k] = v
-				end)
+	local function createInstance(className, properties, children)
+		local instance = Instance.new(className)
+		if properties then
+			for k, v in pairs(properties) do
+				pcall(function() instance[k] = v end)
 			end
 		end
 		if children then
-			for _, c in ipairs(children) do
-				c.Parent = inst
+			for _, child in ipairs(children) do
+				child.Parent = instance
 			end
 		end
-		return inst
+		return instance
 	end
 
-	local function stroke(color, thick)
-		return create("UIStroke", {
+	local function createStroke(color, thickness)
+		return createInstance("UIStroke", {
 			Color = color or Theme.Border,
-			Thickness = thick or 1,
+			Thickness = thickness or 1,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		})
 	end
 
-	local function pad(t, b, l, r)
-		if b == nil then
-			return create("UIPadding", {
-				PaddingTop = UDim.new(0, t),
-				PaddingBottom = UDim.new(0, t),
-				PaddingLeft = UDim.new(0, t),
-				PaddingRight = UDim.new(0, t),
+	local function createPadding(top, bottom, left, right)
+		if bottom == nil then
+			return createInstance("UIPadding", {
+				PaddingTop = UDim.new(0, top),
+				PaddingBottom = UDim.new(0, top),
+				PaddingLeft = UDim.new(0, top),
+				PaddingRight = UDim.new(0, top),
 			})
 		end
-		return create("UIPadding", {
-			PaddingTop = UDim.new(0, t or 0),
-			PaddingBottom = UDim.new(0, b or 0),
-			PaddingLeft = UDim.new(0, l or 0),
-			PaddingRight = UDim.new(0, r or 0),
+		return createInstance("UIPadding", {
+			PaddingTop = UDim.new(0, top or 0),
+			PaddingBottom = UDim.new(0, bottom or 0),
+			PaddingLeft = UDim.new(0, left or 0),
+			PaddingRight = UDim.new(0, right or 0),
 		})
 	end
 
-	local _activeDrag = nil
-	Connections.Add(UIS.InputChanged:Connect(function(input)
-		if _activeDrag
-			and (input.UserInputType == Enum.UserInputType.MouseMovement
-				or input.UserInputType == Enum.UserInputType.Touch)
-		then
-			_activeDrag(input.Position.X)
-		end
-	end))
-	Connections.Add(UIS.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch
-		then
-			_activeDrag = nil
-		end
-	end))
+	if Connections and Connections.Add then
+		Connections.Add(UserInputService.InputChanged:Connect(function(input)
+			if activeDragCallback and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				activeDragCallback(input.Position.X)
+			end
+		end))
+		Connections.Add(UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				activeDragCallback = nil
+			end
+		end))
+	end
 
 	local UI = {}
 	UI.__index = UI
 
-	----------------------------------------------------------------
-	-- Auth prompt (blocks until key is valid)
-	----------------------------------------------------------------
 	function UI.CreateKeyPrompt(_, KeySystem, CurrentTheme, onSuccess, initialError)
-		local themeCol = CurrentTheme or Theme
-
+		local theme = CurrentTheme or Theme
 		local parent = nil
+
 		pcall(function()
-			if gethui then
-				parent = gethui()
-			end
+			if gethui then parent = gethui() end
 		end)
 		if not parent then
-			pcall(function()
-				parent = CoreGui
-			end)
+			pcall(function() parent = CoreGui end)
 		end
 		if not parent and LocalPlayer then
 			parent = LocalPlayer:WaitForChild("PlayerGui")
 		end
 
-		local gui = create("ScreenGui", {
+		local gui = createInstance("ScreenGui", {
 			Name = "B0XazAuth",
-			DisplayOrder = 10000,
+			DisplayOrder = SETTINGS.DISPLAY_ORDERS.AUTH,
 			IgnoreGuiInset = true,
 			ResetOnSpawn = false,
 			Parent = parent,
 		})
 
-		local dim = create("Frame", {
+		local dim = createInstance("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundColor3 = Color3.new(0, 0, 0),
 			BackgroundTransparency = 0.45,
@@ -117,29 +146,29 @@ return function(Context, Theme)
 			Parent = gui,
 		})
 
-		local modal = create("Frame", {
+		local modal = createInstance("Frame", {
 			Size = UDim2.fromOffset(360, 230),
 			Position = UDim2.new(0.5, -180, 0.5, -115),
-			BackgroundColor3 = themeCol.Bg or Color3.fromRGB(18, 18, 20),
+			BackgroundColor3 = theme.Bg or Color3.fromRGB(18, 18, 20),
 			BorderSizePixel = 0,
 			Parent = dim,
 		}, {
-			stroke(themeCol.Border or Color3.fromRGB(60, 60, 70), 1),
+			createStroke(theme.Border or Color3.fromRGB(60, 60, 70), 1),
 		})
 
-		create("TextLabel", {
+		createInstance("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -20, 0, 28),
 			Position = UDim2.fromOffset(10, 12),
 			Font = Enum.Font.Code,
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = themeCol.Text or Color3.fromRGB(230, 230, 230),
+			TextColor3 = theme.Text or Color3.fromRGB(230, 230, 230),
 			Text = "Authentication Required",
 			Parent = modal,
 		})
 
-		local err = create("TextLabel", {
+		local errorLabel = createInstance("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -20, 0, 36),
 			Position = UDim2.fromOffset(10, 44),
@@ -147,24 +176,22 @@ return function(Context, Theme)
 			TextSize = 11,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = (initialError and initialError ~= "" and (themeCol.Danger or Color3.fromRGB(220, 80, 80)))
-				or (themeCol.TextDim or Color3.fromRGB(160, 160, 170)),
-			Text = (initialError and initialError ~= "" and initialError)
-				or "Enter your access key to continue.",
+			TextColor3 = (initialError and initialError ~= "" and (theme.Danger or Color3.fromRGB(220, 80, 80))) or (theme.TextDim or Color3.fromRGB(160, 160, 170)),
+			Text = (initialError and initialError ~= "" and initialError) or "Enter your access key to continue.",
 			Parent = modal,
 		})
 
-		local boxBg = create("Frame", {
+		local boxBg = createInstance("Frame", {
 			Size = UDim2.new(1, -20, 0, 32),
 			Position = UDim2.fromOffset(10, 90),
-			BackgroundColor3 = themeCol.Panel or Color3.fromRGB(28, 28, 32),
+			BackgroundColor3 = theme.Panel or Color3.fromRGB(28, 28, 32),
 			BorderSizePixel = 0,
 			Parent = modal,
 		}, {
-			stroke(themeCol.Border or Color3.fromRGB(60, 60, 70), 1),
+			createStroke(theme.Border or Color3.fromRGB(60, 60, 70), 1),
 		})
 
-		local box = create("TextBox", {
+		local box = createInstance("TextBox", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -12, 1, 0),
 			Position = UDim2.fromOffset(6, 0),
@@ -172,16 +199,16 @@ return function(Context, Theme)
 			TextSize = 12,
 			Text = "",
 			PlaceholderText = "Paste access key here...",
-			TextColor3 = themeCol.Text or Color3.fromRGB(230, 230, 230),
-			PlaceholderColor3 = themeCol.TextMuted or Color3.fromRGB(100, 100, 110),
+			TextColor3 = theme.Text or Color3.fromRGB(230, 230, 230),
+			PlaceholderColor3 = theme.TextMuted or Color3.fromRGB(100, 100, 110),
 			ClearTextOnFocus = false,
 			Parent = boxBg,
 		})
 
-		local btn = create("TextButton", {
+		local authenticateBtn = createInstance("TextButton", {
 			Size = UDim2.fromOffset(150, 34),
 			Position = UDim2.new(0.5, -75, 0, 138),
-			BackgroundColor3 = themeCol.Accent or Color3.fromRGB(0, 200, 220),
+			BackgroundColor3 = theme.Accent or Color3.fromRGB(0, 200, 220),
 			Text = "Authenticate",
 			Font = Enum.Font.Code,
 			TextSize = 12,
@@ -191,52 +218,48 @@ return function(Context, Theme)
 			Parent = modal,
 		})
 
-		local getKey = create("TextButton", {
+		local getKeyBtn = createInstance("TextButton", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -20, 0, 20),
 			Position = UDim2.new(0, 10, 1, -28),
 			Text = "Get Key Info",
 			Font = Enum.Font.Code,
 			TextSize = 10,
-			TextColor3 = themeCol.TextDim or Color3.fromRGB(150, 150, 160),
+			TextColor3 = theme.TextDim or Color3.fromRGB(150, 150, 160),
 			Parent = modal,
 		})
 
-		getKey.MouseButton1Click:Connect(function()
-			local ok, msg = false, "No link"
+		getKeyBtn.MouseButton1Click:Connect(function()
+			local copied, msg = false, "No Link"
 			if KeySystem and KeySystem.CopyGetKeyLink then
-				ok, msg = KeySystem.CopyGetKeyLink()
+				copied, msg = KeySystem.CopyGetKeyLink()
 			end
-			err.Text = msg or (ok and "Information copied." or "Failed to copy info.")
-			err.TextColor3 = ok and (themeCol.Success or themeCol.Accent or Color3.fromRGB(90, 200, 120))
-				or (themeCol.Danger or Color3.fromRGB(220, 80, 80))
+			errorLabel.Text = msg or (copied and "Information copied." or "Failed to copy info.")
+			errorLabel.TextColor3 = copied and (theme.Success or theme.Accent or Color3.fromRGB(90, 200, 120)) or (theme.Danger or Color3.fromRGB(220, 80, 80))
 		end)
 
 		local function submit()
-			btn.Text = "Checking..."
+			authenticateBtn.Text = "Checking..."
 			task.wait(0.05)
-			local ok, tier, msg = KeySystem.ApplyKey(box.Text)
-			if ok then
+			local success, _, msg = KeySystem.ApplyKey(box.Text)
+			if success then
 				gui:Destroy()
 				if onSuccess then
 					task.spawn(onSuccess)
 				end
 			else
-				btn.Text = "Authenticate"
-				err.Text = msg or "Invalid key"
-				err.TextColor3 = themeCol.Danger or Color3.fromRGB(220, 80, 80)
+				authenticateBtn.Text = "Authenticate"
+				errorLabel.Text = msg or "Invalid Key"
+				errorLabel.TextColor3 = theme.Danger or Color3.fromRGB(220, 80, 80)
 			end
 		end
 
-		btn.MouseButton1Click:Connect(submit)
+		authenticateBtn.MouseButton1Click:Connect(submit)
 		box.FocusLost:Connect(function(enter)
-			if enter then
-				submit()
-			end
+			if enter then submit() end
 		end)
 	end
 
-	----------------------------------------------------------------
 	function UI.new(title)
 		local self = setmetatable({}, UI)
 		self.Tabs = {}
@@ -245,12 +268,12 @@ return function(Context, Theme)
 		self._themeBindings = {}
 		self.Title = title or "B0Xaz"
 
-		self.ScreenGui = create("ScreenGui", {
+		self.ScreenGui = createInstance("ScreenGui", {
 			Name = "B0XazUI",
 			ResetOnSpawn = false,
 			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 			IgnoreGuiInset = true,
-			DisplayOrder = 999,
+			DisplayOrder = SETTINGS.DISPLAY_ORDERS.MAIN,
 		})
 
 		local parented = false
@@ -270,7 +293,7 @@ return function(Context, Theme)
 			self.ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 		end
 
-		self.Main = create("Frame", {
+		self.Main = createInstance("Frame", {
 			Size = UDim2.new(0, UI_W, 0, UI_H),
 			Position = UDim2.new(0.5, -UI_W / 2, 0.5, -UI_H / 2),
 			BackgroundColor3 = Theme.Bg,
@@ -278,12 +301,12 @@ return function(Context, Theme)
 			ClipsDescendants = true,
 			Parent = self.ScreenGui,
 		})
-		local mainStroke = stroke(Theme.Border, 1)
+		local mainStroke = createStroke(Theme.Border, 1)
 		mainStroke.Parent = self.Main
 		self:BindTheme(self.Main, "BackgroundColor3", "Bg")
 		self:BindTheme(mainStroke, "Color", "Border")
 
-		self.TitleBar = create("Frame", {
+		self.TitleBar = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, TITLE_H),
 			BackgroundColor3 = Theme.Side,
 			BorderSizePixel = 0,
@@ -291,7 +314,7 @@ return function(Context, Theme)
 		})
 		self:BindTheme(self.TitleBar, "BackgroundColor3", "Side")
 
-		local titleLine = create("Frame", {
+		local titleLine = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 1),
 			Position = UDim2.new(0, 0, 1, -1),
 			BackgroundColor3 = Theme.Border,
@@ -300,7 +323,7 @@ return function(Context, Theme)
 		})
 		self:BindTheme(titleLine, "BackgroundColor3", "Border")
 
-		local titleLbl = create("TextLabel", {
+		local titleLabel = createInstance("TextLabel", {
 			Text = self.Title,
 			Font = Enum.Font.Code,
 			TextSize = 13,
@@ -311,9 +334,9 @@ return function(Context, Theme)
 			Size = UDim2.new(1, -40, 1, 0),
 			Parent = self.TitleBar,
 		})
-		self:BindTheme(titleLbl, "TextColor3", "Text")
+		self:BindTheme(titleLabel, "TextColor3", "Text")
 
-		local closeBtn = create("TextButton", {
+		local closeBtn = createInstance("TextButton", {
 			Text = "x",
 			Font = Enum.Font.Code,
 			TextSize = 14,
@@ -336,7 +359,7 @@ return function(Context, Theme)
 			State.MenuVisible = false
 		end)
 
-		self.TabBar = create("Frame", {
+		self.TabBar = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, TAB_H),
 			Position = UDim2.new(0, 0, 0, TITLE_H),
 			BackgroundColor3 = Theme.Side,
@@ -345,7 +368,7 @@ return function(Context, Theme)
 		})
 		self:BindTheme(self.TabBar, "BackgroundColor3", "Side")
 
-		local tabLine = create("Frame", {
+		local tabLine = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 1),
 			Position = UDim2.new(0, 0, 1, -1),
 			BackgroundColor3 = Theme.BorderDim,
@@ -354,7 +377,7 @@ return function(Context, Theme)
 		})
 		self:BindTheme(tabLine, "BackgroundColor3", "BorderDim")
 
-		self.TabList = create("ScrollingFrame", {
+		self.TabList = createInstance("ScrollingFrame", {
 			Size = UDim2.new(1, -8, 1, 0),
 			Position = UDim2.new(0, 4, 0, 0),
 			BackgroundTransparency = 1,
@@ -366,7 +389,7 @@ return function(Context, Theme)
 			ClipsDescendants = true,
 			Parent = self.TabBar,
 		}, {
-			create("UIListLayout", {
+			createInstance("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				Padding = UDim.new(0, 4),
 				SortOrder = Enum.SortOrder.LayoutOrder,
@@ -374,13 +397,13 @@ return function(Context, Theme)
 			}),
 		})
 
-		self.Content = create("Frame", {
+		self.Content = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 1, -(TITLE_H + TAB_H)),
 			Position = UDim2.new(0, 0, 0, TITLE_H + TAB_H),
 			BackgroundTransparency = 1,
 			Parent = self.Main,
 		})
-		self.PagesContainer = create("Frame", {
+		self.PagesContainer = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
 			Parent = self.Content,
@@ -389,44 +412,39 @@ return function(Context, Theme)
 		do
 			local dragging, dragStart, startPos = false, nil, nil
 			self.TitleBar.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					dragging = true
 					dragStart = input.Position
 					startPos = self.Main.Position
 				end
 			end)
 			self.TitleBar.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					dragging = false
 				end
 			end)
-			Connections.Add(UIS.InputChanged:Connect(function(input)
-				if dragging
-					and (input.UserInputType == Enum.UserInputType.MouseMovement
-						or input.UserInputType == Enum.UserInputType.Touch)
-				then
-					local d = input.Position - dragStart
-					self.Main.Position = UDim2.new(
-						startPos.X.Scale,
-						startPos.X.Offset + d.X,
-						startPos.Y.Scale,
-						startPos.Y.Offset + d.Y
-					)
-				end
-			end))
+			if Connections and Connections.Add then
+				Connections.Add(UserInputService.InputChanged:Connect(function(input)
+					if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+						local delta = input.Position - dragStart
+						self.Main.Position = UDim2.new(
+							startPos.X.Scale,
+							startPos.X.Offset + delta.X,
+							startPos.Y.Scale,
+							startPos.Y.Offset + delta.Y
+						)
+					end
+				end))
+			end
 		end
 
-		self.NotifyContainer = create("Frame", {
+		self.NotifyContainer = createInstance("Frame", {
 			Size = UDim2.new(0, 300, 1, -20),
 			Position = UDim2.new(1, -310, 0, 10),
 			BackgroundTransparency = 1,
 			Parent = self.ScreenGui,
 		}, {
-			create("UIListLayout", {
+			createInstance("UIListLayout", {
 				Padding = UDim.new(0, 6),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				VerticalAlignment = Enum.VerticalAlignment.Bottom,
@@ -443,28 +461,22 @@ return function(Context, Theme)
 			Key = themeKey,
 		})
 		if Theme[themeKey] then
-			pcall(function()
-				instance[property] = Theme[themeKey]
-			end)
+			pcall(function() instance[property] = Theme[themeKey] end)
 		end
 	end
 
 	function UI:SetTheme(newTheme)
-		for k, v in pairs(newTheme) do
-			Theme[k] = v
-		end
+		for k, v in pairs(newTheme) do Theme[k] = v end
 		if newTheme.Accent and ThemeManager and ThemeManager.DeriveAccentTones then
-			local d = ThemeManager.DeriveAccentTones(newTheme.Accent)
-			Theme.AccentDark = newTheme.AccentDark or d.AccentDark
-			Theme.AccentDim = newTheme.AccentDim or d.AccentDim
+			local tones = ThemeManager.DeriveAccentTones(newTheme.Accent)
+			Theme.AccentDark = newTheme.AccentDark or tones.AccentDark
+			Theme.AccentDim = newTheme.AccentDim or tones.AccentDim
 		end
-		for _, b in ipairs(self._themeBindings) do
-			if b.Instance and b.Instance.Parent then
-				local val = Theme[b.Key]
+		for _, binding in ipairs(self._themeBindings) do
+			if binding.Instance and binding.Instance.Parent then
+				local val = Theme[binding.Key]
 				if val then
-					pcall(function()
-						b.Instance[b.Property] = val
-					end)
+					pcall(function() binding.Instance[binding.Property] = val end)
 				end
 			end
 		end
@@ -476,20 +488,15 @@ return function(Context, Theme)
 	function UI:UpdateThemeKey(key, color)
 		Theme[key] = color
 		if key == "Accent" and ThemeManager and ThemeManager.DeriveAccentTones then
-			local d = ThemeManager.DeriveAccentTones(color)
-			Theme.AccentDark = d.AccentDark
-			Theme.AccentDim = d.AccentDim
+			local tones = ThemeManager.DeriveAccentTones(color)
+			Theme.AccentDark = tones.AccentDark
+			Theme.AccentDim = tones.AccentDim
 		end
-		for _, b in ipairs(self._themeBindings) do
-			if b.Instance
-				and b.Instance.Parent
-				and (b.Key == key or (key == "Accent" and (b.Key == "AccentDark" or b.Key == "AccentDim")))
-			then
-				local val = Theme[b.Key]
+		for _, binding in ipairs(self._themeBindings) do
+			if binding.Instance and binding.Instance.Parent and (binding.Key == key or (key == "Accent" and (binding.Key == "AccentDark" or binding.Key == "AccentDim"))) then
+				local val = Theme[binding.Key]
 				if val then
-					pcall(function()
-						b.Instance[b.Property] = val
-					end)
+					pcall(function() binding.Instance[binding.Property] = val end)
 				end
 			end
 		end
@@ -500,9 +507,7 @@ return function(Context, Theme)
 
 	function UI:Destroy()
 		pcall(function()
-			if self.ScreenGui then
-				self.ScreenGui:Destroy()
-			end
+			if self.ScreenGui then self.ScreenGui:Destroy() end
 		end)
 	end
 
@@ -520,20 +525,20 @@ return function(Context, Theme)
 
 	function UI:Notify(title, text, duration, color)
 		local accent = color or Theme.Accent
-		local notif = create("Frame", {
+		local notif = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundColor3 = Theme.Panel,
 			BorderSizePixel = 0,
 			Parent = self.NotifyContainer,
 		}, {
-			stroke(accent, 1),
-			pad(6, 6, 8, 8),
-			create("UIListLayout", {
+			createStroke(accent, 1),
+			createPadding(6, 6, 8, 8),
+			createInstance("UIListLayout", {
 				Padding = UDim.new(0, 3),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			create("TextLabel", {
+			createInstance("TextLabel", {
 				Text = title or "Notification",
 				Font = Enum.Font.Code,
 				TextSize = 12,
@@ -543,7 +548,7 @@ return function(Context, Theme)
 				Size = UDim2.new(1, 0, 0, 14),
 				LayoutOrder = 1,
 			}),
-			create("TextLabel", {
+			createInstance("TextLabel", {
 				Text = text or "",
 				Font = Enum.Font.Code,
 				TextSize = 11,
@@ -556,11 +561,9 @@ return function(Context, Theme)
 				LayoutOrder = 2,
 			}),
 		})
-		task.delay(duration or (CONFIG.NOTIFY_DEFAULT_TIME or 3.5), function()
+		task.delay(duration or (CONFIG.NOTIFY_DEFAULT_TIME or SETTINGS.GEOMETRY.NOTIFY_DEFAULT_T), function()
 			if notif and notif.Parent then
-				pcall(function()
-					notif:Destroy()
-				end)
+				pcall(function() notif:Destroy() end)
 			end
 		end)
 	end
@@ -569,9 +572,7 @@ return function(Context, Theme)
 		for _, t in ipairs(self.Tabs) do
 			t.Page.Visible = false
 			t.Button.TextColor3 = Theme.TextDim
-			if t.Underline then
-				t.Underline.Visible = false
-			end
+			if t.Underline then t.Underline.Visible = false end
 		end
 		tab.Page.Visible = true
 		tab.Button.TextColor3 = Theme.Text
@@ -590,27 +591,21 @@ return function(Context, Theme)
 			function s:AddToggle(_, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def
-					end,
+					Get = function() return def end,
 					UpdateTheme = function() end,
 				}
 			end
 			function s:AddSlider(_, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def
-					end,
+					Get = function() return def end,
 				}
 			end
 			function s:AddButton() end
 			function s:AddDropdown(_, _, _, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def
-					end,
+					Get = function() return def end,
 					Refresh = function() end,
 					Close = function() end,
 				}
@@ -618,25 +613,19 @@ return function(Context, Theme)
 			function s:AddTextbox(_, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def
-					end,
+					Get = function() return def end,
 				}
 			end
 			function s:AddColorPicker(_, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def or Color3.new()
-					end,
+					Get = function() return def or Color3.new() end,
 				}
 			end
 			function s:AddKeybind(_, def)
 				return {
 					Set = function() end,
-					Get = function()
-						return def
-					end,
+					Get = function() return def end,
 				}
 			end
 			return s
@@ -654,7 +643,7 @@ return function(Context, Theme)
 		local ui = self
 		local tab = { Name = name, Sections = {}, UI = ui, _col = 0 }
 
-		tab.Button = create("TextButton", {
+		tab.Button = createInstance("TextButton", {
 			Text = name,
 			Font = Enum.Font.Code,
 			TextSize = 12,
@@ -666,7 +655,7 @@ return function(Context, Theme)
 		})
 		ui:BindTheme(tab.Button, "TextColor3", "TextDim")
 
-		tab.Underline = create("Frame", {
+		tab.Underline = createInstance("Frame", {
 			Size = UDim2.new(1, -8, 0, 2),
 			Position = UDim2.new(0, 4, 1, -2),
 			BackgroundColor3 = Theme.Accent,
@@ -676,7 +665,7 @@ return function(Context, Theme)
 		})
 		ui:BindTheme(tab.Underline, "BackgroundColor3", "Accent")
 
-		tab.Page = create("Frame", {
+		tab.Page = createInstance("Frame", {
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
@@ -686,7 +675,7 @@ return function(Context, Theme)
 
 		local colPad, gap, scrollBarW = PAD, COL_GAP, 3
 
-		tab.LeftCol = create("ScrollingFrame", {
+		tab.LeftCol = createInstance("ScrollingFrame", {
 			Name = "LeftCol",
 			Size = UDim2.new(0.5, -(colPad + gap / 2), 1, -colPad * 2),
 			Position = UDim2.new(0, colPad, 0, colPad),
@@ -700,15 +689,15 @@ return function(Context, Theme)
 			ClipsDescendants = true,
 			Parent = tab.Page,
 		}, {
-			create("UIListLayout", {
+			createInstance("UIListLayout", {
 				Padding = UDim.new(0, gap),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			pad(0, 4, 0, scrollBarW + 2),
+			createPadding(0, 4, 0, scrollBarW + 2),
 		})
 		ui:BindTheme(tab.LeftCol, "ScrollBarImageColor3", "AccentDark")
 
-		tab.RightCol = create("ScrollingFrame", {
+		tab.RightCol = createInstance("ScrollingFrame", {
 			Name = "RightCol",
 			Size = UDim2.new(0.5, -(colPad + gap / 2), 1, -colPad * 2),
 			Position = UDim2.new(0.5, gap / 2, 0, colPad),
@@ -722,56 +711,48 @@ return function(Context, Theme)
 			ClipsDescendants = true,
 			Parent = tab.Page,
 		}, {
-			create("UIListLayout", {
+			createInstance("UIListLayout", {
 				Padding = UDim.new(0, gap),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			pad(0, 4, 0, scrollBarW + 2),
+			createPadding(0, 4, 0, scrollBarW + 2),
 		})
 		ui:BindTheme(tab.RightCol, "ScrollBarImageColor3", "AccentDark")
 
 		tab.Button.MouseEnter:Connect(function()
-			if ui.ActiveTab ~= tab then
-				tab.Button.TextColor3 = Theme.Text
-			end
+			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.Text end
 		end)
 		tab.Button.MouseLeave:Connect(function()
-			if ui.ActiveTab ~= tab then
-				tab.Button.TextColor3 = Theme.TextDim
-			end
+			if ui.ActiveTab ~= tab then tab.Button.TextColor3 = Theme.TextDim end
 		end)
-		tab.Button.MouseButton1Click:Connect(function()
-			ui:SelectTab(tab)
-		end)
+		tab.Button.MouseButton1Click:Connect(function() ui:SelectTab(tab) end)
 
 		table.insert(self.Tabs, tab)
-		if not self.ActiveTab then
-			self:SelectTab(tab)
-		end
+		if not self.ActiveTab then self:SelectTab(tab) end
 
 		function tab:AddSection(secName)
 			local section = { Name = secName, Elements = {}, Tab = tab }
 			tab._col = (tab._col % 2) + 1
 			local parentCol = (tab._col == 1) and tab.LeftCol or tab.RightCol
 
-			section.Frame = create("Frame", {
+			section.Frame = createInstance("Frame", {
 				BackgroundColor3 = Theme.Panel,
 				Size = UDim2.new(1, 0, 0, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 				BorderSizePixel = 0,
 				Parent = parentCol,
 			}, {
-				create("UIListLayout", {
+				createInstance("UIListLayout", {
 					Padding = UDim.new(0, 0),
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
 			})
-			local secStroke = stroke(Theme.Border, 1)
+			local secStroke = createStroke(Theme.Border, 1)
 			secStroke.Parent = section.Frame
 			ui:BindTheme(section.Frame, "BackgroundColor3", "Panel")
 			ui:BindTheme(secStroke, "Color", "Border")
 
-			local titleBar = create("Frame", {
+			local titleBar = createInstance("Frame", {
 				Size = UDim2.new(1, 0, 0, 20),
 				BackgroundColor3 = Theme.Side,
 				BorderSizePixel = 0,
@@ -780,7 +761,7 @@ return function(Context, Theme)
 			})
 			ui:BindTheme(titleBar, "BackgroundColor3", "Side")
 
-			local secLine = create("Frame", {
+			local secLine = createInstance("Frame", {
 				Size = UDim2.new(1, 0, 0, 1),
 				Position = UDim2.new(0, 0, 1, -1),
 				BackgroundColor3 = Theme.Accent,
@@ -789,7 +770,7 @@ return function(Context, Theme)
 			})
 			ui:BindTheme(secLine, "BackgroundColor3", "Accent")
 
-			local secLabel = create("TextLabel", {
+			local secLabel = createInstance("TextLabel", {
 				Text = "  " .. secName,
 				Font = Enum.Font.Code,
 				TextSize = 11,
@@ -801,42 +782,42 @@ return function(Context, Theme)
 			})
 			ui:BindTheme(secLabel, "TextColor3", "TextDim")
 
-			local body = create("Frame", {
+			local body = createInstance("Frame", {
 				BackgroundTransparency = 1,
 				Size = UDim2.new(1, 0, 0, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 				LayoutOrder = 1,
 				Parent = section.Frame,
 			}, {
-				create("UIListLayout", {
+				createInstance("UIListLayout", {
 					Padding = UDim.new(0, 2),
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
-				pad(4, 6, 6, 6),
+				createPadding(4, 6, 6, 6),
 			})
 
 			table.insert(tab.Sections, section)
 			local rowOrder = 0
 
 			local function newRow(elemName, h)
-				rowOrder += 1
-				local row = create("Frame", {
+				rowOrder = rowOrder + 1
+				local row = createInstance("Frame", {
 					Size = UDim2.new(1, 0, 0, 0),
 					AutomaticSize = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
 					LayoutOrder = rowOrder,
 					Parent = body,
 				}, {
-					create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+					createInstance("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 				})
-				local content = create("Frame", {
+				local rowContent = createInstance("Frame", {
 					Size = UDim2.new(1, 0, 0, h),
 					BackgroundTransparency = 1,
 					LayoutOrder = 1,
 					Parent = row,
 				})
 				table.insert(section.Elements, { Container = row, Name = elemName })
-				return row, content
+				return row, rowContent
 			end
 
 			local function triggerAutosave()
@@ -845,34 +826,32 @@ return function(Context, Theme)
 				end
 			end
 
-			local function locked(rTier)
+			local function isLocked(rTier)
 				return rTier and rTier > ((Context.KeySystem and Context.KeySystem.CurrentTier) or 0)
 			end
 
 			function section:AddToggle(name, default, callback, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return default
-						end,
+						Get = function() return default end,
 						UpdateTheme = function() end,
 					}
 				end
-				local _, content = newRow(name, 22)
+				local _, rowContent = newRow(name, SETTINGS.GEOMETRY.ROW_HEIGHT)
 				local state = default and true or false
-				local box = create("Frame", {
+				local box = createInstance("Frame", {
 					Size = UDim2.new(0, 12, 0, 12),
 					Position = UDim2.new(0, 2, 0.5, -6),
 					BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff,
 					BorderSizePixel = 0,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local boxStroke = stroke(Theme.Border, 1)
+				local boxStroke = createStroke(Theme.Border, 1)
 				boxStroke.Parent = box
 				ui:BindTheme(boxStroke, "Color", "Border")
 
-				local lbl = create("TextLabel", {
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -881,15 +860,15 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 20, 0, 0),
 					Size = UDim2.new(1, -24, 1, 0),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
-				local btn = create("TextButton", {
+				local btn = createInstance("TextButton", {
 					Text = "",
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 1, 0),
-					Parent = content,
+					Parent = rowContent,
 				})
 
 				local function setState(v, silent)
@@ -898,19 +877,13 @@ return function(Context, Theme)
 					if not silent and callback then
 						Utils.SafeCall(callback, state)
 					end
-					if not silent then
-						triggerAutosave()
-					end
+					if not silent then triggerAutosave() end
 				end
-				btn.MouseButton1Click:Connect(function()
-					setState(not state)
-				end)
+				btn.MouseButton1Click:Connect(function() setState(not state) end)
 
 				return {
 					Set = setState,
-					Get = function()
-						return state
-					end,
+					Get = function() return state end,
 					UpdateTheme = function()
 						box.BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff
 					end,
@@ -918,18 +891,16 @@ return function(Context, Theme)
 			end
 
 			function section:AddSlider(name, default, min, max, callback, suffix, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return default
-						end,
+						Get = function() return default end,
 					}
 				end
-				local _, content = newRow(name, 36)
+				local _, rowContent = newRow(name, 36)
 				suffix = suffix or ""
 
-				local lbl = create("TextLabel", {
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -938,11 +909,11 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
 					Size = UDim2.new(1, -50, 0, 14),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
-				local valLabel = create("TextLabel", {
+				local valLabel = createInstance("TextLabel", {
 					Text = tostring(default) .. "/" .. tostring(max) .. suffix,
 					Font = Enum.Font.Code,
 					TextSize = 10,
@@ -951,24 +922,24 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(1, -48, 0, 0),
 					Size = UDim2.new(0, 46, 0, 14),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(valLabel, "TextColor3", "TextDim")
 
-				local track = create("Frame", {
+				local track = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 0, 4),
 					Position = UDim2.new(0, 2, 0, 22),
 					BackgroundColor3 = Theme.Elem,
 					BorderSizePixel = 0,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local trackStroke = stroke(Theme.BorderDim, 1)
+				local trackStroke = createStroke(Theme.BorderDim, 1)
 				trackStroke.Parent = track
 				ui:BindTheme(track, "BackgroundColor3", "Elem")
 				ui:BindTheme(trackStroke, "Color", "BorderDim")
 
-				local initRel = math.clamp((default - min) / math.max(max - min, 1e-6), 0, 1)
-				local fill = create("Frame", {
+				local initRel = math.clamp((default - min) / math.max(max - min, SETTINGS.LIMITS.MIN_GEOM_SIZE), 0, 1)
+				local fill = createInstance("Frame", {
 					Size = UDim2.new(initRel, 0, 1, 0),
 					BackgroundColor3 = Theme.Accent,
 					BorderSizePixel = 0,
@@ -985,55 +956,45 @@ return function(Context, Theme)
 					if not silent and callback then
 						Utils.SafeCall(callback, value)
 					end
-					if not silent then
-						triggerAutosave()
-					end
+					if not silent then triggerAutosave() end
 				end
 				local function updateFromX(x)
 					commit((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1))
 				end
 
 				track.InputBegan:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1
-						or input.UserInputType == Enum.UserInputType.Touch
-					then
-						_activeDrag = updateFromX
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						activeDragCallback = updateFromX
 						updateFromX(input.Position.X)
 					end
 				end)
-				local hit = create("TextButton", {
+				local hit = createInstance("TextButton", {
 					Text = "",
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 14),
 					Position = UDim2.new(0, 0, 0, 16),
-					Parent = content,
+					Parent = rowContent,
 				})
 				hit.InputBegan:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1
-						or input.UserInputType == Enum.UserInputType.Touch
-					then
-						_activeDrag = updateFromX
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						activeDragCallback = updateFromX
 						updateFromX(input.Position.X)
 					end
 				end)
 
 				return {
 					Set = function(v, silent)
-						local c = math.clamp(v, min, max)
-						commit((c - min) / math.max(max - min, 1e-6), silent)
+						local val = math.clamp(v, min, max)
+						commit((val - min) / math.max(max - min, SETTINGS.LIMITS.MIN_GEOM_SIZE), silent)
 					end,
-					Get = function()
-						return value
-					end,
+					Get = function() return value end,
 				}
 			end
 
 			function section:AddButton(name, callback, rTier)
-				if locked(rTier) then
-					return nil
-				end
-				local _, content = newRow(name, 24)
-				local btn = create("TextButton", {
+				if isLocked(rTier) then return nil end
+				local _, rowContent = newRow(name, 24)
+				local btn = createInstance("TextButton", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1043,9 +1004,9 @@ return function(Context, Theme)
 					Size = UDim2.new(1, 0, 0, 20),
 					Position = UDim2.new(0, 0, 0, 2),
 					AutoButtonColor = false,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local btnStroke = stroke(Theme.Border, 1)
+				local btnStroke = createStroke(Theme.Border, 1)
 				btnStroke.Parent = btn
 				ui:BindTheme(btn, "BackgroundColor3", "Elem")
 				ui:BindTheme(btn, "TextColor3", "Text")
@@ -1059,26 +1020,22 @@ return function(Context, Theme)
 					btn.TextColor3 = Theme.Text
 				end)
 				btn.MouseButton1Click:Connect(function()
-					if callback then
-						Utils.SafeCall(callback)
-					end
+					if callback then Utils.SafeCall(callback) end
 				end)
 				return btn
 			end
 
 			function section:AddDropdown(name, options, callback, default, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return default
-						end,
+						Get = function() return default end,
 						Refresh = function() end,
 						Close = function() end,
 					}
 				end
-				local row, content = newRow(name, 40)
-				local lbl = create("TextLabel", {
+				local row, rowContent = newRow(name, 40)
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1087,13 +1044,13 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
 					Size = UDim2.new(1, -4, 0, 14),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
 				local currentOptions = table.clone(options or {})
 				local selected = default or currentOptions[1] or ""
-				local displayBtn = create("TextButton", {
+				local displayBtn = createInstance("TextButton", {
 					Text = (selected ~= "" and tostring(selected) or "None") .. "  v",
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1103,22 +1060,22 @@ return function(Context, Theme)
 					Size = UDim2.new(1, -4, 0, 18),
 					Position = UDim2.new(0, 2, 0, 16),
 					AutoButtonColor = false,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local dispStroke = stroke(Theme.Border, 1)
+				local dispStroke = createStroke(Theme.Border, 1)
 				dispStroke.Parent = displayBtn
 				ui:BindTheme(displayBtn, "BackgroundColor3", "Elem")
 				ui:BindTheme(displayBtn, "TextColor3", "TextDim")
 				ui:BindTheme(dispStroke, "Color", "Border")
 
-				local expansion = create("Frame", {
+				local expansion = createInstance("Frame", {
 					Size = UDim2.new(1, 0, 0, 0),
 					BackgroundTransparency = 1,
 					LayoutOrder = 2,
 					Visible = false,
 					Parent = row,
 				})
-				local listBox = create("ScrollingFrame", {
+				local listBox = createInstance("ScrollingFrame", {
 					Size = UDim2.new(1, -4, 1, 0),
 					Position = UDim2.new(0, 2, 0, 0),
 					BackgroundColor3 = Theme.Elem,
@@ -1129,9 +1086,9 @@ return function(Context, Theme)
 					ScrollBarImageColor3 = Theme.AccentDark,
 					Parent = expansion,
 				}, {
-					create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+					createInstance("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 				})
-				local listStroke = stroke(Theme.Border, 1)
+				local listStroke = createStroke(Theme.Border, 1)
 				listStroke.Parent = listBox
 				ui:BindTheme(listBox, "BackgroundColor3", "Elem")
 				ui:BindTheme(listBox, "ScrollBarImageColor3", "AccentDark")
@@ -1141,9 +1098,10 @@ return function(Context, Theme)
 				local function setOpen(open)
 					isOpen = open
 					if open then
-						local h = math.min(#currentOptions, CONFIG.DROPDOWN_MAX_ROWS or 6)
-								* (CONFIG.DROPDOWN_ROW_HEIGHT or 22)
-							+ 4
+						local count = #currentOptions
+						local rowH = CONFIG.DROPDOWN_ROW_HEIGHT or SETTINGS.GEOMETRY.DROPDOWN_ROW_H
+						local maxRows = CONFIG.DROPDOWN_MAX_ROWS or SETTINGS.GEOMETRY.DROPDOWN_MAX_ROWS
+						local h = math.min(count, maxRows) * rowH + 4
 						expansion.Size = UDim2.new(1, 0, 0, math.max(h, 24))
 						expansion.Visible = true
 					else
@@ -1155,20 +1113,18 @@ return function(Context, Theme)
 
 				local function rebuildOptions()
 					for _, child in ipairs(listBox:GetChildren()) do
-						if child:IsA("TextButton") then
-							child:Destroy()
-						end
+						if child:IsA("TextButton") then child:Destroy() end
 					end
 					local opts = #currentOptions > 0 and currentOptions or { "None" }
 					for _, opt in ipairs(opts) do
-						local optBtn = create("TextButton", {
+						local optBtn = createInstance("TextButton", {
 							Text = "  " .. tostring(opt),
 							Font = Enum.Font.Code,
 							TextSize = 11,
 							TextColor3 = Theme.Text,
 							TextXAlignment = Enum.TextXAlignment.Left,
 							BackgroundTransparency = 1,
-							Size = UDim2.new(1, 0, 0, CONFIG.DROPDOWN_ROW_HEIGHT or 22),
+							Size = UDim2.new(1, 0, 0, CONFIG.DROPDOWN_ROW_HEIGHT or SETTINGS.GEOMETRY.DROPDOWN_ROW_H),
 							AutoButtonColor = false,
 							Parent = listBox,
 						})
@@ -1185,9 +1141,7 @@ return function(Context, Theme)
 								selected = opt
 								displayBtn.Text = tostring(opt) .. "  v"
 								setOpen(false)
-								if callback then
-									Utils.SafeCall(callback, opt)
-								end
+								if callback then Utils.SafeCall(callback, opt) end
 								triggerAutosave()
 							end
 						end)
@@ -1204,16 +1158,10 @@ return function(Context, Theme)
 					Set = function(v, silent)
 						selected = v
 						displayBtn.Text = tostring(v) .. "  v"
-						if not silent and callback then
-							Utils.SafeCall(callback, v)
-						end
-						if not silent then
-							triggerAutosave()
-						end
+						if not silent and callback then Utils.SafeCall(callback, v) end
+						if not silent then triggerAutosave() end
 					end,
-					Get = function()
-						return selected
-					end,
+					Get = function() return selected end,
 					Refresh = function(newOpts, preserve)
 						currentOptions = table.clone(newOpts or {})
 						if not preserve or not table.find(currentOptions, selected) then
@@ -1222,23 +1170,19 @@ return function(Context, Theme)
 						end
 						rebuildOptions()
 					end,
-					Close = function()
-						setOpen(false)
-					end,
+					Close = function() setOpen(false) end,
 				}
 			end
 
 			function section:AddTextbox(name, default, callback, placeholder, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return default
-						end,
+						Get = function() return default end,
 					}
 				end
-				local _, content = newRow(name, 40)
-				local lbl = create("TextLabel", {
+				local _, rowContent = newRow(name, 40)
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1247,23 +1191,23 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
 					Size = UDim2.new(1, -4, 0, 14),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
-				local boxFrame = create("Frame", {
+				local boxFrame = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 0, 18),
 					Position = UDim2.new(0, 2, 0, 16),
 					BackgroundColor3 = Theme.Elem,
 					BorderSizePixel = 0,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local boxStroke = stroke(Theme.Border, 1)
+				local boxStroke = createStroke(Theme.Border, 1)
 				boxStroke.Parent = boxFrame
 				ui:BindTheme(boxFrame, "BackgroundColor3", "Elem")
 				ui:BindTheme(boxStroke, "Color", "Border")
 
-				local box = create("TextBox", {
+				local box = createInstance("TextBox", {
 					Text = default or "",
 					PlaceholderText = placeholder or "",
 					Font = Enum.Font.Code,
@@ -1280,33 +1224,25 @@ return function(Context, Theme)
 				ui:BindTheme(box, "PlaceholderColor3", "TextMuted")
 
 				box.FocusLost:Connect(function(enter)
-					if callback then
-						Utils.SafeCall(callback, box.Text, enter)
-					end
+					if callback then Utils.SafeCall(callback, box.Text, enter) end
 					triggerAutosave()
 				end)
 
 				return {
-					Set = function(v)
-						box.Text = tostring(v or "")
-					end,
-					Get = function()
-						return box.Text
-					end,
+					Set = function(v) box.Text = tostring(v or "") end,
+					Get = function() return box.Text end,
 				}
 			end
 
 			function section:AddColorPicker(name, default, callback, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return default or Color3.new()
-						end,
+						Get = function() return default or Color3.new() end,
 					}
 				end
-				local row, content = newRow(name, 22)
-				local lbl = create("TextLabel", {
+				local row, rowContent = newRow(name, 22)
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1315,78 +1251,76 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
 					Size = UDim2.new(1, -30, 1, 0),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
 				local currentColor = default or Color3.new(1, 1, 1)
-				local swatch = create("TextButton", {
+				local swatch = createInstance("TextButton", {
 					Text = "",
 					Size = UDim2.new(0, 16, 0, 12),
 					Position = UDim2.new(1, -20, 0.5, -6),
 					BackgroundColor3 = currentColor,
 					BorderSizePixel = 0,
 					AutoButtonColor = false,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local swatchStroke = stroke(Theme.Border, 1)
+				local swatchStroke = createStroke(Theme.Border, 1)
 				swatchStroke.Parent = swatch
 				ui:BindTheme(swatchStroke, "Color", "Border")
 
 				local presets = {
-					Color3.fromRGB(255, 255, 255),
-					Color3.fromRGB(0, 0, 0),
-					Color3.fromRGB(255, 50, 50),
-					Color3.fromRGB(255, 150, 50),
-					Color3.fromRGB(255, 230, 50),
-					Color3.fromRGB(50, 255, 80),
-					Color3.fromRGB(0, 200, 220),
-					Color3.fromRGB(80, 80, 255),
-					Color3.fromRGB(200, 80, 255),
-					Color3.fromRGB(255, 80, 180),
+					SETTINGS.PRESETS.COLORS.WHITE,
+					SETTINGS.PRESETS.COLORS.BLACK,
+					SETTINGS.PRESETS.COLORS.RED,
+					SETTINGS.PRESETS.COLORS.ORANGE,
+					SETTINGS.PRESETS.COLORS.YELLOW,
+					SETTINGS.PRESETS.COLORS.GREEN,
+					SETTINGS.PRESETS.COLORS.CYAN,
+					SETTINGS.PRESETS.COLORS.BLUE,
+					SETTINGS.PRESETS.COLORS.PURPLE,
+					SETTINGS.PRESETS.COLORS.PINK,
 				}
-				local expansion = create("Frame", {
+				local expansion = createInstance("Frame", {
 					Size = UDim2.new(1, 0, 0, 0),
 					BackgroundTransparency = 1,
 					LayoutOrder = 2,
 					Visible = false,
 					Parent = row,
 				})
-				local pickerBox = create("Frame", {
+				local pickerBox = createInstance("Frame", {
 					Size = UDim2.new(1, -4, 1, 0),
 					Position = UDim2.new(0, 2, 0, 0),
 					BackgroundColor3 = Theme.Elem,
 					BorderSizePixel = 0,
 					Parent = expansion,
 				}, {
-					create("UIGridLayout", {
+					createInstance("UIGridLayout", {
 						CellSize = UDim2.new(0, 18, 0, 18),
 						CellPadding = UDim2.new(0, 2, 0, 2),
 					}),
-					pad(4),
+					createPadding(4),
 				})
-				local pboxStroke = stroke(Theme.Border, 1)
+				local pboxStroke = createStroke(Theme.Border, 1)
 				pboxStroke.Parent = pickerBox
 				ui:BindTheme(pickerBox, "BackgroundColor3", "Elem")
 				ui:BindTheme(pboxStroke, "Color", "Border")
 
-				for _, c in ipairs(presets) do
-					local pb = create("TextButton", {
+				for _, col in ipairs(presets) do
+					local pb = createInstance("TextButton", {
 						Text = "",
-						BackgroundColor3 = c,
+						BackgroundColor3 = col,
 						BorderSizePixel = 0,
 						AutoButtonColor = false,
 						Parent = pickerBox,
 					})
-					local pbStroke = stroke(Theme.BorderDim, 1)
+					local pbStroke = createStroke(Theme.BorderDim, 1)
 					pbStroke.Parent = pb
 					ui:BindTheme(pbStroke, "Color", "BorderDim")
 					pb.MouseButton1Click:Connect(function()
-						currentColor = c
-						swatch.BackgroundColor3 = c
-						if callback then
-							Utils.SafeCall(callback, c)
-						end
+						currentColor = col
+						swatch.BackgroundColor3 = col
+						if callback then Utils.SafeCall(callback, col) end
 						triggerAutosave()
 					end)
 				end
@@ -1405,30 +1339,22 @@ return function(Context, Theme)
 					Set = function(c, silent)
 						currentColor = c
 						swatch.BackgroundColor3 = c
-						if not silent and callback then
-							Utils.SafeCall(callback, c)
-						end
-						if not silent then
-							triggerAutosave()
-						end
+						if not silent and callback then Utils.SafeCall(callback, c) end
+						if not silent then triggerAutosave() end
 					end,
-					Get = function()
-						return currentColor
-					end,
+					Get = function() return currentColor end,
 				}
 			end
 
 			function section:AddKeybind(name, defaultKey, callback, rTier)
-				if locked(rTier) then
+				if isLocked(rTier) then
 					return {
 						Set = function() end,
-						Get = function()
-							return defaultKey
-						end,
+						Get = function() return defaultKey end,
 					}
 				end
-				local _, content = newRow(name, 22)
-				local lbl = create("TextLabel", {
+				local _, rowContent = newRow(name, 22)
+				local lbl = createInstance("TextLabel", {
 					Text = name,
 					Font = Enum.Font.Code,
 					TextSize = 11,
@@ -1437,34 +1363,25 @@ return function(Context, Theme)
 					BackgroundTransparency = 1,
 					Position = UDim2.new(0, 2, 0, 0),
 					Size = UDim2.new(1, -64, 1, 0),
-					Parent = content,
+					Parent = rowContent,
 				})
 				ui:BindTheme(lbl, "TextColor3", "Text")
 
 				local currentKey = defaultKey
 				local function getKeyDisplay(key)
-					if not key then
-						return "None"
-					end
-					if typeof(key) == "string" then
-						return key:upper()
-					end
+					if not key then return "None" end
+					if typeof(key) == "string" then return key:upper() end
 					if typeof(key) == "EnumItem" then
 						if key.EnumType == Enum.KeyCode then
 							return key.Name
 						elseif key.EnumType == Enum.UserInputType then
-							local map = {
-								[Enum.UserInputType.MouseButton1] = "MB1",
-								[Enum.UserInputType.MouseButton2] = "MB2",
-								[Enum.UserInputType.MouseButton3] = "MB3",
-							}
-							return map[key] or key.Name
+							return SET_MAP and SET_MAP[key] or SETTINGS.MOUSE_MAP[key] or key.Name
 						end
 					end
 					return "None"
 				end
 
-				local keyBtn = create("TextButton", {
+				local keyBtn = createInstance("TextButton", {
 					Text = getKeyDisplay(defaultKey),
 					Font = Enum.Font.Code,
 					TextSize = 10,
@@ -1474,9 +1391,9 @@ return function(Context, Theme)
 					Size = UDim2.new(0, 56, 0, 16),
 					Position = UDim2.new(1, -58, 0.5, -8),
 					AutoButtonColor = false,
-					Parent = content,
+					Parent = rowContent,
 				})
-				local kbStroke = stroke(Theme.Border, 1)
+				local kbStroke = createStroke(Theme.Border, 1)
 				kbStroke.Parent = keyBtn
 				ui:BindTheme(keyBtn, "BackgroundColor3", "Elem")
 				ui:BindTheme(keyBtn, "TextColor3", "Text")
@@ -1489,52 +1406,41 @@ return function(Context, Theme)
 					keyBtn.TextColor3 = Theme.Accent
 				end)
 
-				Connections.Add(UIS.InputBegan:Connect(function(input)
-					if not listening then
-						return
-					end
-					local bound, finalize = nil, false
-					if input.UserInputType == Enum.UserInputType.Keyboard then
-						if input.KeyCode == Enum.KeyCode.Escape then
-							bound = nil
-							finalize = true
-						else
-							bound = input.KeyCode
+				if Connections and Connections.Add then
+					Connections.Add(UserInputService.InputBegan:Connect(function(input)
+						if not listening then return end
+						local bound, finalize = nil, false
+						if input.UserInputType == Enum.UserInputType.Keyboard then
+							if input.KeyCode == Enum.KeyCode.Escape then
+								bound = nil
+								finalize = true
+							else
+								bound = input.KeyCode
+								finalize = true
+							end
+						elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
+							bound = input.UserInputType
 							finalize = true
 						end
-					elseif input.UserInputType == Enum.UserInputType.MouseButton1
-						or input.UserInputType == Enum.UserInputType.MouseButton2
-						or input.UserInputType == Enum.UserInputType.MouseButton3
-					then
-						bound = input.UserInputType
-						finalize = true
-					end
-					if finalize then
-						currentKey = bound
-						keyBtn.Text = getKeyDisplay(bound)
-						keyBtn.TextColor3 = Theme.Text
-						listening = false
-						if callback then
-							Utils.SafeCall(callback, bound)
+						if finalize then
+							currentKey = bound
+							keyBtn.Text = getKeyDisplay(bound)
+							keyBtn.TextColor3 = Theme.Text
+							listening = false
+							if callback then Utils.SafeCall(callback, bound) end
+							triggerAutosave()
 						end
-						triggerAutosave()
-					end
-				end))
+					end))
+				end
 
 				return {
 					Set = function(k, silent)
 						currentKey = k
 						keyBtn.Text = getKeyDisplay(k)
-						if not silent and callback then
-							Utils.SafeCall(callback, k)
-						end
-						if not silent then
-							triggerAutosave()
-						end
+						if not silent and callback then Utils.SafeCall(callback, k) end
+						if not silent then triggerAutosave() end
 					end,
-					Get = function()
-						return currentKey
-					end,
+					Get = function() return currentKey end,
 				}
 			end
 
