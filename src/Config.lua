@@ -1,7 +1,5 @@
-return function()
-	local Lighting = game:GetService("Lighting")
-
-	local CONFIG = {
+local SETTINGS = {
+	CONFIG = {
 		AIM_SETTLE_FRAMES = 0,
 		AIM_DEADZONE = 0.5,
 		AIM_MAX_STEP = 25,
@@ -30,10 +28,15 @@ return function()
 		DROPDOWN_MAX_ROWS = 6,
 		NOTIFY_DEFAULT_TIME = 3.5,
 		CONFIG_NAME_MAX_LEN = 40,
-	}
+	},
+}
 
-	if not getgenv().B0XazDefaultLighting then
-		getgenv().B0XazDefaultLighting = {
+return function()
+	local Lighting = game:GetService("Lighting")
+	local globalEnv = getgenv and getgenv() or _G
+
+	if not globalEnv.B0XazDefaultLighting then
+		globalEnv.B0XazDefaultLighting = {
 			FogEnd = Lighting.FogEnd,
 			FogStart = Lighting.FogStart,
 			FogColor = Lighting.FogColor,
@@ -41,9 +44,14 @@ return function()
 			Ambient = Lighting.Ambient,
 			Brightness = Lighting.Brightness,
 			OutdoorAmbient = Lighting.OutdoorAmbient,
-			ClockTime = Lighting.ClockTime
+			ClockTime = Lighting.ClockTime,
 		}
 	end
 
-	return CONFIG, getgenv().B0XazDefaultLighting
+	local configCopy = {}
+	for key, value in pairs(SETTINGS.CONFIG) do
+		configCopy[key] = value
+	end
+
+	return configCopy, globalEnv.B0XazDefaultLighting
 end
