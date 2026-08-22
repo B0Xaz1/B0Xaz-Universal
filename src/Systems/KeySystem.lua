@@ -14,12 +14,11 @@ return function(Context)
 
 	-- Paste your Platoboost GATEWAY link here (Settings > Monetization / Gateway)
 	-- Example: https://gateway.platoboost.com/a/xxxxx
-	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/YOUR_GATEWAY_ID"
+	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/30171"
 
 	-- Optional exact overrides (always checked after Platoboost says valid)
 	local EXACT_TIER_OVERRIDES = {
-		-- ["FULL-myfriend1"] = 3,
-		-- ["NORM-tester"] = 2,
+		--["FULL-myfriend1"] = 3,
 	}
 
 	local TIER_NAMES = {
