@@ -518,58 +518,28 @@ return function(Context)
 
 	-- ======== Key Manager ========
 	local keySec = cfgTab:AddSection("Key Manager")
-
-	local tierStr = KeySystem.GetTierName(KeySystem.CurrentTier)
-	local tierColor = (KeySystem.CurrentTier == 3) and Theme.Accent
-		or ((KeySystem.CurrentTier == 2) and Theme.Warning or Theme.TextDim)
-
-	local keyStatusBtn = keySec:AddButton("Current Tier: " .. tierStr, function()
-		UI:Notify("Key", "Current tier: " .. KeySystem.GetTierName(), nil, Theme.Accent)
-	end)
-	if keyStatusBtn then keyStatusBtn.TextColor3 = tierColor end
-
-	local currentMaskBtn = keySec:AddButton("Current Key: " .. KeySystem.GetMaskedKey(), function()
-		local k = KeySystem.CurrentKey
-		if k and k ~= "" then
-			pcall(function() setclipboard(k) end)
-			UI:Notify("Key", "Copied full key to clipboard", nil, Theme.Success)
-		else
-			UI:Notify("Key", "No key active", nil, Theme.Danger)
+	keySec:AddButton("Current Tier: " .. KeySystem.GetTierName(), function() end)
+	keySec:AddButton("Current Key: " .. KeySystem.GetMaskedKey(), function()
+		if KeySystem.CurrentKey ~= "" then
+			pcall(function() setclipboard(KeySystem.CurrentKey) end)
+			UI:Notify("Key", "Copied", nil, Theme.Success)
 		end
 	end)
 
-	local newKeyInput = ""
-	keySec:AddTextbox("Enter New Key", "", function(v)
-		newKeyInput = v or ""
-	end, "B0XAZ-XXXX-XXXXXX")
-
+	local pending = ""
+	keySec:AddTextbox("Enter New Key", "", function(v) pending = v end, "Paste key...")
 	keySec:AddButton("Apply New Key", function()
-		if not newKeyInput or newKeyInput == "" then
-			UI:Notify("Key", "Enter a key first", nil, Theme.Danger); return
-		end
-		local ok, tier, msg = KeySystem.ApplyKey(newKeyInput)
-		if ok then
-			if currentMaskBtn then currentMaskBtn.Text = "Current Key: " .. KeySystem.GetMaskedKey() end
-			UI:Notify("Key Applied", "Restart script for tier change to fully apply.", 6, Theme.Success)
-		else
-			UI:Notify("Key Error", msg or "Invalid key", nil, Theme.Danger)
-		end
+		local ok, tier, msg = KeySystem.ApplyKey(pending)
+		UI:Notify(ok and "Key OK" or "Key Error", msg or "", nil, ok and Theme.Success or Theme.Danger)
+		if ok then UI:Notify("Restart", "Re-execute script for tier UI refresh", 5, Theme.Warning) end
 	end)
-
-	keySec:AddButton("Copy Current Key", function()
-		local k = KeySystem.CurrentKey
-		if k and k ~= "" then
-			pcall(function() setclipboard(k) end)
-			UI:Notify("Key", "Copied to clipboard", nil, Theme.Success)
-		else
-			UI:Notify("Key", "No key to copy", nil, Theme.Danger)
-		end
+	keySec:AddButton("Copy Get-Key Link", function()
+		local ok, msg = KeySystem.CopyGetKeyLink()
+		UI:Notify("Get Key", msg, nil, ok and Theme.Success or Theme.Danger)
 	end)
-
 	keySec:AddButton("Clear Key (Logout)", function()
 		KeySystem.ClearKey()
-		if currentMaskBtn then currentMaskBtn.Text = "Current Key: None" end
-		UI:Notify("Key", "Logged out. Restart script.", 5, Theme.Warning)
+		UI:Notify("Logged out", "Restart script", nil, Theme.Warning)
 	end)
 
 	-- ======== Config Manager ========
