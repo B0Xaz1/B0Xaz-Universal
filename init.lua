@@ -24,11 +24,12 @@ local SETTINGS = {
 	DEFAULTS = {
 		BASE_URL = "https://raw.githubusercontent.com/B0Xaz/Universal/main/",
 		LOAD_TIMEOUT = 10,
-		MODULE_RETRY_LIMIT = 2,
 	},
 }
 
 local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
 	local startTime = os.clock()
@@ -221,21 +222,26 @@ local function startApplication()
 	end
 end
 
-local isVerified, _, verifyMsg = false, 0, ""
+local isVerified, verifyMsg = false, ""
 if keySystem and keySystem.LoadAndVerify then
-	local success, verified, tier, msg = pcall(keySystem.LoadAndVerify)
+	local success, verified, _, msg = pcall(keySystem.LoadAndVerify)
 	if success then
 		isVerified = verified
-		verifyMsg = msg
+		verifyMsg = msg or ""
 	end
 end
 
 if isVerified then
 	startApplication()
 else
+	local promptCreated = false
 	if uiEngine and uiEngine.CreateKeyPrompt then
-		uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
-	else
+		local success = pcall(function()
+			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
+		end)
+		promptCreated = success
+	end
+	if not promptCreated then
 		startApplication()
 	end
 end
