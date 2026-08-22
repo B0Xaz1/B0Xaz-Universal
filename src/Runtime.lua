@@ -34,9 +34,16 @@ return function(Context)
     local _fpsDisplay = 0
 
     ----------------------------------------------------------------
-    -- Rock-Solid Matrix Stretch Res (Works at all pitch/yaw angles)
+    -- Post-Camera RenderPriority Matrix Stretch Res (All Angles)
     ----------------------------------------------------------------
-    local function applyMatrixStretchRes()
+    pcall(function() RS:UnbindFromRenderStep("B0XazStretchRes") end)
+
+    RS:BindToRenderStep("B0XazStretchRes", Enum.RenderPriority.Camera.Value + 1, function()
+        if not isSessionAlive() then
+            pcall(function() RS:UnbindFromRenderStep("B0XazStretchRes") end)
+            return
+        end
+
         local cfg = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
         if not cfg or not cfg.Enabled then return end
 
@@ -48,19 +55,16 @@ return function(Context)
         local cf = Camera.CFrame
         local pos = cf.Position
 
-        -- Extract normalized unit vectors to prevent compounding scale & NaN matrix collapse
+        -- Extract pure unit vectors to prevent scale feedback loops
         local right = cf.RightVector.Unit
         local up = cf.UpVector.Unit
-        local look = cf.LookVector.Unit
 
-        -- Direct raw component matrix construction (bypasses CFrame.fromMatrix auto-normalization)
-        Camera.CFrame = CFrame.new(
-            pos.X, pos.Y, pos.Z,
-            right.X * xFactor, up.X * yFactor, -look.X,
-            right.Y * xFactor, up.Y * yFactor, -look.Y,
-            right.Z * xFactor, up.Z * yFactor, -look.Z
-        )
-    end
+        -- Reconstruct clean orthonormal orientation
+        local cleanCF = CFrame.fromMatrix(pos, right, up)
+
+        -- Apply camera-local stretch matrix AFTER CameraScript completes
+        Camera.CFrame = cleanCF * CFrame.new(0, 0, 0, xFactor, 0, 0, 0, yFactor, 0, 0, 0, 1)
+    end)
 
     ----------------------------------------------------------------
     -- Hitboxes
@@ -148,9 +152,6 @@ return function(Context)
             if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
                 Camera.FieldOfView = FeatureConfig.Camera.FOV
             end
-
-            -- Apply Matrix Stretch Res AFTER FOV updates
-            applyMatrixStretchRes()
 
             if AimbotSystem then
                 if type(AimbotSystem.UpdateAim) == "function" then
