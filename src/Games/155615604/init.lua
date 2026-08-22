@@ -1,4 +1,4 @@
--- src/Games/155615604/init.lua (Prison Life Safe & Verified Module)
+-- src/Games/155615604/init.lua (Prison Life Specialized Module)
 return function(Context)
 	local Workspace = game:GetService("Workspace")
 	local Players = game:GetService("Players")
@@ -29,26 +29,36 @@ return function(Context)
 		FakeMacroKey = Enum.KeyCode.V,
 		FakeMacroMode = "Toggle",
 		FakeMacroDelay = 0.03,
-		AntiTaser = false,
-		AntiArrest = false,
+		AntiRestrict = false,
 	}
 	for k, v in pairs(defaults) do
 		if FeatureConfig.Game[k] == nil then FeatureConfig.Game[k] = v end
 	end
 
 	local DOOR_FOLDERS = {"Doors", "glass", "CellDoors", "Prison_Fences", "Prison_Gate"}
-	local PRISON_PL_GUNS = {"Remington 870", "M9", "AK-47", "Taser", "M4A1"}
+	local PRISON_PL_GUNS = {"Remington 870", "M9", "AK-47", "Taser", "M4A1", "MP5"}
 
-	-- Teleport Coordinates for Prison Life
+	-- Full Teleport Coordinates from Shank UI
 	local PL_LOCATIONS = {
-		["Yard"] = CFrame.new(779, 98, 2465),
-		["Armory / Guard Room"] = CFrame.new(837, 100, 2270),
-		["Criminal Base"] = CFrame.new(-975, 110, 2055),
-		["Cell Block"] = CFrame.new(918, 100, 2445),
-		["Cafeteria"] = CFrame.new(935, 100, 2300),
-		["Roof"] = CFrame.new(825, 119, 2330),
-		["Sewers Exit"] = CFrame.new(917, 78, 2246),
-		["Police Spawn"] = CFrame.new(615, 99, 2480),
+		{"Prison Cells", CFrame.new(920, 98, 2436)},
+		{"Cafeteria", CFrame.new(920, 98, 2290)},
+		{"Prison Yard", CFrame.new(779, 98, 2463)},
+		{"Criminal Base", CFrame.new(-943, 95, 2058)},
+		{"Police Armory", CFrame.new(831, 98, 2284)},
+		{"Parking Lot", CFrame.new(745, 98, 2148)},
+		{"Roof", CFrame.new(845, 130, 2235)},
+		{"Secret Room", CFrame.new(674, 98, 2384)},
+		{"Tunnels", CFrame.new(918, 80, 2284)},
+		{"Outside of Prison", CFrame.new(451.67, 98.04, 2216.34)},
+		{"Kitchen", CFrame.new(906.64, 99.99, 2237.67)},
+		{"Break Room", CFrame.new(800.09, 99.99, 2266.72)},
+	}
+
+	-- Dispenser positions for Touch-Teleport acquiring
+	local GUN_SPAWNS = {
+		["MP5"] = Vector3.new(813.72, 100.74, 2229.37),
+		["Remington 870"] = Vector3.new(820.27, 100.74, 2229.31),
+		["AK-47"] = Vector3.new(-932, 100.74, 2039.5),
 	}
 
 	local _cache = getgenv().B0XazDoorCache or {}
@@ -66,9 +76,41 @@ return function(Context)
 	local macroThread = nil
 	local currentToolIndex = 1
 	local isKeyPressed = false
+	local isGrabbingGun = false
 
 	-- Remotes
 	local TeamEvent = Workspace:FindFirstChild("Remote") and Workspace.Remote:FindFirstChild("TeamEvent")
+
+	----------------------------------------------------------------
+	-- GUN TELEPORT ENGINE (Touch-Teleport Return)
+	----------------------------------------------------------------
+	local function grabGun(gunName, targetPos)
+		if isGrabbingGun then return end
+		local root = Utils.GetRootPart()
+		if not root then
+			if Context.UI then Context.UI:Notify("Gun Grabber", "Character root not found", nil, Theme.Danger) end
+			return
+		end
+
+		isGrabbingGun = true
+		local originalPos = root.CFrame
+
+		if Context.UI then
+			Context.UI:Notify("Gun Grabber", "Acquiring " .. gunName .. "...", 1.5, Theme.Accent)
+		end
+
+		root.CFrame = CFrame.new(targetPos)
+		task.wait(1.3)
+
+		local currentRoot = Utils.GetRootPart()
+		if currentRoot then
+			currentRoot.CFrame = originalPos
+			if Context.UI then
+				Context.UI:Notify("Gun Grabber", gunName .. " acquired!", 2, Theme.Success)
+			end
+		end
+		isGrabbingGun = false
+	end
 
 	----------------------------------------------------------------
 	-- TEAM SWITCHER & AUTO-CRIMINAL
@@ -85,14 +127,28 @@ return function(Context)
 		local myRoot = Utils.GetRootPart()
 		if not myRoot then return end
 		local oldPos = myRoot.CFrame
-		myRoot.CFrame = PL_LOCATIONS["Criminal Base"]
+		myRoot.CFrame = CFrame.new(-943, 95, 2058)
 		task.wait(0.3)
-		myRoot.CFrame = oldPos
+		local currentRoot = Utils.GetRootPart()
+		if currentRoot then
+			currentRoot.CFrame = oldPos
+		end
 	end
 
 	----------------------------------------------------------------
-	-- DOORS ENGINE
+	-- DOORS & VENDING MACHINES ENGINE
 	----------------------------------------------------------------
+	local function isInsideVendingModel(obj)
+		local cur = obj
+		while cur and cur ~= Workspace do
+			if cur:IsA("Model") and cur.Name == "Model" and cur.Parent and cur.Parent.Name == "vending machine" then
+				return true
+			end
+			cur = cur.Parent
+		end
+		return false
+	end
+
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
 			if name:lower() == folderName:lower() then return true end
@@ -102,6 +158,7 @@ return function(Context)
 
 	local function isDoorPart(part)
 		if not part or not part:IsA("BasePart") then return false end
+		if isInsideVendingModel(part) then return true end
 		local current = part.Parent
 		while current and current ~= Workspace do
 			if isDoorFolder(current.Name) then return true end
@@ -148,12 +205,16 @@ return function(Context)
 
 	local function scanAllDoors()
 		for _, folderName in ipairs(DOOR_FOLDERS) do
-			for _, obj in ipairs(Workspace:GetChildren()) do
-				if obj.Name:lower() == folderName:lower() then
-					for _, desc in ipairs(obj:GetDescendants()) do
-						if desc:IsA("BasePart") then processPart(desc) end
-					end
+			local folder = Workspace:FindFirstChild(folderName)
+			if folder then
+				for _, desc in ipairs(folder:GetDescendants()) do
+					if desc:IsA("BasePart") then processPart(desc) end
 				end
+			end
+		end
+		for _, obj in ipairs(Workspace:GetDescendants()) do
+			if obj:IsA("BasePart") and isInsideVendingModel(obj) then
+				processPart(obj)
 			end
 		end
 	end
@@ -184,7 +245,7 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- GUN MODS ENGINE
+	-- GUN MODIFICATIONS ENGINE
 	----------------------------------------------------------------
 	local function getGunContainers()
 		local list = {}
@@ -353,7 +414,7 @@ return function(Context)
 	end
 
 	----------------------------------------------------------------
-	-- CONNECTIONS / RUNTIME
+	-- CONNECTIONS / RUNTIME HOOKS
 	----------------------------------------------------------------
 	if Connections and Connections.Add then
 		if FeatureConfig.Game.DoorPhase then
@@ -361,23 +422,27 @@ return function(Context)
 		end
 
 		Connections.Add(RS.Heartbeat:Connect(function()
-			-- Anti-Taser Defense
-			if FeatureConfig.Game.AntiTaser and LocalPlayer.Character then
-				local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			-- Anti-Restrict / Anti-Taser / Anti-Cuffs Engine
+			if FeatureConfig.Game.AntiRestrict then
+				local hum = Utils.GetHumanoid()
 				if hum then
-					pcall(function()
-						hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-						hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-						if hum.PlatformStand then hum.PlatformStand = false end
-					end)
+					if hum.WalkSpeed < 16 and not FeatureConfig.Movement.FlyEnabled then
+						hum.WalkSpeed = FeatureConfig.Movement.Speed or 16
+					end
+					if hum.JumpPower < 50 then
+						hum.JumpPower = FeatureConfig.Movement.JumpPower or 50
+					end
+					if hum.PlatformStand then hum.PlatformStand = false end
 				end
-			end
 
-			-- Anti-Arrest Defense (breaks handcuffs)
-			if FeatureConfig.Game.AntiArrest and LocalPlayer.Character then
-				local cuffs = LocalPlayer.Character:FindFirstChild("Handcuffs")
-				if cuffs then
-					pcall(function() cuffs:Destroy() end)
+				local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+				if pGui then
+					for _, guiName in ipairs({"Taser", "Flashbang", "Cuffs"}) do
+						local gui = pGui:FindFirstChild(guiName)
+						if gui and gui.Enabled then
+							gui.Enabled = false
+						end
+					end
 				end
 			end
 		end))
@@ -432,7 +497,19 @@ return function(Context)
 	-- UI BUILDER FOR PRISON LIFE
 	----------------------------------------------------------------
 	function Game.BuildUI(tab)
-		-- Section 1: Combat Modifications
+		-- Section 1: Gun Grabbers (Touch-Teleport)
+		local gunGrabSec = tab:AddSection("Gun Grabbers (Warp-Return)")
+		gunGrabSec:AddButton("Grab MP5", function()
+			grabGun("MP5", GUN_SPAWNS["MP5"])
+		end)
+		gunGrabSec:AddButton("Grab Remington 870", function()
+			grabGun("Remington 870", GUN_SPAWNS["Remington 870"])
+		end)
+		gunGrabSec:AddButton("Grab AK-47", function()
+			grabGun("AK-47", GUN_SPAWNS["AK-47"])
+		end)
+
+		-- Section 2: Combat Modifications
 		local combat = tab:AddSection("Combat Modifications")
 		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
 			FeatureConfig.Game.NoSpread = v
@@ -455,7 +532,7 @@ return function(Context)
 			if Context and Context.UI then Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent) end
 		end)
 
-		-- Section 2: Fake Macro
+		-- Section 3: Fake Macro
 		local macroSec = tab:AddSection("Fake Macro (Gun Spam)")
 		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
 			FeatureConfig.Game.FakeMacro = v
@@ -475,13 +552,13 @@ return function(Context)
 			FeatureConfig.Game.FakeMacroDelay = v / 1000
 		end, " ms")
 
-		-- Section 3: Doors & Fences
-		local doors = tab:AddSection("Doors & Fences")
-		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Through Doors & Fences", FeatureConfig.Game.DoorPhase, function(v)
+		-- Section 4: Doors & Vending Machines
+		local doors = tab:AddSection("Doors & Obstacles")
+		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Doors, Fences & Vending", FeatureConfig.Game.DoorPhase, function(v)
 			FeatureConfig.Game.DoorPhase = v
 			if v then scanAllDoors() else restoreAllDoors() end
 		end)
-		UIRegistry.Game_DoorGlow = doors:AddToggle("Door Glow Effect", FeatureConfig.Game.DoorGlow, function(v)
+		UIRegistry.Game_DoorGlow = doors:AddToggle("Obstacle Glow Effect", FeatureConfig.Game.DoorGlow, function(v)
 			FeatureConfig.Game.DoorGlow = v
 			if FeatureConfig.Game.DoorPhase then scanAllDoors() end
 		end)
@@ -489,16 +566,13 @@ return function(Context)
 			FeatureConfig.Game.PhaseTransparency = v / 100
 		end, "%")
 		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
-			Game.SetGlowColor(c)
+			FeatureConfig.Game.GlowColor = c
 		end)
 
-		-- Section 4: Defenses & Team Control
+		-- Section 5: Defenses & Team Control
 		local defSec = tab:AddSection("Defenses & Team")
-		UIRegistry.Game_AntiTaser = defSec:AddToggle("Anti-Taser (No Ragdoll)", FeatureConfig.Game.AntiTaser, function(v)
-			FeatureConfig.Game.AntiTaser = v
-		end)
-		UIRegistry.Game_AntiArrest = defSec:AddToggle("Anti-Arrest (Break Cuffs)", FeatureConfig.Game.AntiArrest, function(v)
-			FeatureConfig.Game.AntiArrest = v
+		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser, Flashbang & Cuffs", FeatureConfig.Game.AntiRestrict, function(v)
+			FeatureConfig.Game.AntiRestrict = v
 		end)
 		defSec:AddButton("Instant Become Criminal", function()
 			Game.BecomeCriminal()
@@ -508,9 +582,10 @@ return function(Context)
 		defSec:AddButton("Join Guards Team", function() Game.SetTeam("Bright blue") end)
 		defSec:AddButton("Join Neutral Team", function() Game.SetTeam("Medium stone grey") end)
 
-		-- Section 5: Map Teleports
+		-- Section 6: Map Teleports
 		local tpSec = tab:AddSection("Map Teleports")
-		for name, cf in pairs(PL_LOCATIONS) do
+		for _, loc in ipairs(PL_LOCATIONS) do
+			local name, cf = loc[1], loc[2]
 			tpSec:AddButton(name, function()
 				local r = Utils.GetRootPart()
 				if r then
