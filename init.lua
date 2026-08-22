@@ -60,6 +60,9 @@ if type(Context.UIEngine.CreateKeyPrompt) ~= "function" then
 	error("[B0Xaz Loader] UI.lua is missing CreateKeyPrompt — push latest UI.lua to GitHub")
 end
 
+Context.KeySystem = import("src/Systems/KeySystem.lua")(Context)
+Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
+
 local function BootScript()
 	print("[B0Xaz] Booting tier:", Context.KeySystem.CurrentTier, Context.KeySystem.GetTierName())
 
@@ -104,11 +107,8 @@ local function BootScript()
 end
 
 local hasKey, tier, msg = Context.KeySystem.LoadAndVerify()
-print("[B0Xaz] Saved key check:", hasKey, tier, msg)
-
 if hasKey then
 	BootScript()
 else
-	-- Show blocking prompt (no main menu until success)
 	Context.UIEngine:CreateKeyPrompt(Context.KeySystem, Context.Theme, BootScript, msg)
 end
