@@ -34,39 +34,6 @@ return function(Context)
     local _fpsDisplay = 0
 
     ----------------------------------------------------------------
-    -- Post-Camera RenderPriority Matrix Stretch Res (All Angles)
-    ----------------------------------------------------------------
-    pcall(function() RS:UnbindFromRenderStep("B0XazStretchRes") end)
-
-    RS:BindToRenderStep("B0XazStretchRes", Enum.RenderPriority.Camera.Value + 1, function()
-        if not isSessionAlive() then
-            pcall(function() RS:UnbindFromRenderStep("B0XazStretchRes") end)
-            return
-        end
-
-        local cfg = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
-        if not cfg or not cfg.Enabled then return end
-
-        local xFactor = tonumber(cfg.X) or 1.333
-        local yFactor = tonumber(cfg.Y) or 1.0
-
-        if xFactor == 1 and yFactor == 1 then return end
-
-        local cf = Camera.CFrame
-        local pos = cf.Position
-
-        -- Extract pure unit vectors to prevent scale feedback loops
-        local right = cf.RightVector.Unit
-        local up = cf.UpVector.Unit
-
-        -- Reconstruct clean orthonormal orientation
-        local cleanCF = CFrame.fromMatrix(pos, right, up)
-
-        -- Apply camera-local stretch matrix AFTER CameraScript completes
-        Camera.CFrame = cleanCF * CFrame.new(0, 0, 0, xFactor, 0, 0, 0, yFactor, 0, 0, 0, 1)
-    end)
-
-    ----------------------------------------------------------------
     -- Hitboxes
     ----------------------------------------------------------------
     local function applyHitboxes()
