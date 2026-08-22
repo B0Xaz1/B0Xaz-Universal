@@ -77,6 +77,7 @@ return function(Context)
 	local currentToolIndex = 1
 	local isKeyPressed = false
 	local isGrabbingGun = false
+	local isSwitchingCriminal = false
 
 	----------------------------------------------------------------
 	-- GUN TELEPORT ENGINE (Touch-Teleport Return)
@@ -107,6 +108,43 @@ return function(Context)
 			end
 		end
 		isGrabbingGun = false
+	end
+
+	----------------------------------------------------------------
+	-- BECOME CRIMINAL ROUTINES
+	----------------------------------------------------------------
+	function Game.BecomeCriminalInside()
+		if isSwitchingCriminal then return end
+		local root = Utils.GetRootPart()
+		if not root then return end
+
+		isSwitchingCriminal = true
+		local originalPos = root.CFrame
+
+		if Context.UI then
+			Context.UI:Notify("Prison Life", "Becoming Criminal (Returning inside in 3.5s)...", 3.5, Theme.Accent)
+		end
+
+		root.CFrame = CFrame.new(-943, 95, 2058)
+		task.wait(3.5)
+
+		local currentRoot = Utils.GetRootPart()
+		if currentRoot then
+			currentRoot.CFrame = originalPos
+			if Context.UI then
+				Context.UI:Notify("Prison Life", "Returned Inside as Criminal!", 2, Theme.Success)
+			end
+		end
+		isSwitchingCriminal = false
+	end
+
+	function Game.BecomeCriminalOutside()
+		local root = Utils.GetRootPart()
+		if not root then return end
+		root.CFrame = CFrame.new(-943, 95, 2058)
+		if Context.UI then
+			Context.UI:Notify("Prison Life", "Warped Outside to Criminal Base!", 2, Theme.Success)
+		end
 	end
 
 	----------------------------------------------------------------
@@ -396,7 +434,7 @@ return function(Context)
 		end
 
 		Connections.Add(RS.Heartbeat:Connect(function()
-			-- Anti-Restrict / Anti-Taser / Anti-Cuffs Engine
+			-- Anti-Taser / Anti-Restrict Engine
 			if FeatureConfig.Game.AntiRestrict then
 				local hum = Utils.GetHumanoid()
 				if hum then
@@ -545,8 +583,14 @@ return function(Context)
 
 		-- Section 5: Defenses
 		local defSec = tab:AddSection("Defenses")
-		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser, Flashbang & Cuffs", FeatureConfig.Game.AntiRestrict, function(v)
+		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser", FeatureConfig.Game.AntiRestrict, function(v)
 			FeatureConfig.Game.AntiRestrict = v
+		end)
+		defSec:AddButton("Become Criminal (Inside)", function()
+			Game.BecomeCriminalInside()
+		end)
+		defSec:AddButton("Become Criminal (Outside)", function()
+			Game.BecomeCriminalOutside()
 		end)
 
 		-- Section 6: Map Teleports
