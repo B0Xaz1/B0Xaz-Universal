@@ -478,7 +478,7 @@ return function(Context)
 		local function stroke(color, thick)
 			return create("UIStroke", {
 				Color = color or Theme.Border,
-				Thickness = thick or 1,
+				Thickness = thick or 0.1,
 				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 			})
 		end
