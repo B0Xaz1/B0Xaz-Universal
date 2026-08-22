@@ -1,4 +1,3 @@
--- src/Games/155615604/init.lua (Prison Life)
 return function(Context)
 	local Workspace = game:GetService("Workspace")
 	local Players = game:GetService("Players")
@@ -11,55 +10,31 @@ return function(Context)
 	local Connections = Context and Context.Connections or {}
 	local UIRegistry = Context and Context.UIRegistry or {}
 
-	-- Safe Defaults initialization for Game specific settings
 	if not FeatureConfig.Game then FeatureConfig.Game = {} end
-	if FeatureConfig.Game.DoorPhase == nil then FeatureConfig.Game.DoorPhase = false end
-	if FeatureConfig.Game.DoorGlow == nil then FeatureConfig.Game.DoorGlow = true end
-	if FeatureConfig.Game.GlowColor == nil then FeatureConfig.Game.GlowColor = Color3.fromRGB(0, 200, 220) end
-	if FeatureConfig.Game.PhaseTransparency == nil then FeatureConfig.Game.PhaseTransparency = 0.65 end
-	if FeatureConfig.Game.NoSpread == nil then FeatureConfig.Game.NoSpread = false end
-	if FeatureConfig.Game.FastFire == nil then FeatureConfig.Game.FastFire = false end
-	if FeatureConfig.Game.ForceAuto == nil then FeatureConfig.Game.ForceAuto = false end
-	if FeatureConfig.Game.ForceRange == nil then FeatureConfig.Game.ForceRange = false end
-	if FeatureConfig.Game.FireRateValue == nil then FeatureConfig.Game.FireRateValue = 0.001 end
-	if FeatureConfig.Game.RangeValue == nil then FeatureConfig.Game.RangeValue = 10000 end
-
-	-- Fake Macro Settings Defaults
-	if FeatureConfig.Game.FakeMacro == nil then FeatureConfig.Game.FakeMacro = false end
-	if FeatureConfig.Game.FakeMacroKey == nil then FeatureConfig.Game.FakeMacroKey = Enum.KeyCode.V end
-	if FeatureConfig.Game.FakeMacroMode == nil then FeatureConfig.Game.FakeMacroMode = "Toggle" end
-	if FeatureConfig.Game.FakeMacroDelay == nil then FeatureConfig.Game.FakeMacroDelay = 0.03 end
-
-	local DOOR_FOLDERS = {
-		"Doors",
-		"glass",
-		"CellDoors",
-		"Prison_Fences",
-		"Prison_Gate",
+	local defaults = {
+		DoorPhase = false, DoorGlow = true, GlowColor = Color3.fromRGB(0, 200, 220),
+		PhaseTransparency = 0.65, NoSpread = false, FastFire = false,
+		ForceAuto = false, ForceRange = false, FireRateValue = 0.001, RangeValue = 10000,
+		FakeMacro = false, FakeMacroKey = Enum.KeyCode.V,
+		FakeMacroMode = "Toggle", FakeMacroDelay = 0.03
 	}
+	for k, v in pairs(defaults) do
+		if FeatureConfig.Game[k] == nil then FeatureConfig.Game[k] = v end
+	end
 
-	-- Known Roblox Prison Life Weapon Names
-	local PRISON_PL_GUNS = {
-		"Remington 870",
-		"M9",
-		"AK-47",
-		"Taser",
-		"M4A1"
-	}
+	local DOOR_FOLDERS = {"Doors", "glass", "CellDoors", "Prison_Fences", "Prison_Gate"}
+	local PRISON_PL_GUNS = {"Remington 870", "M9", "AK-47", "Taser", "M4A1"}
 
 	local _cache = getgenv().B0XazDoorCache or {}
 	getgenv().B0XazDoorCache = _cache
-
 	local _doorPartsSet = getgenv().B0XazDoorParts or {}
 	getgenv().B0XazDoorParts = _doorPartsSet
-
 	local _gunCache = getgenv().B0XazGunCache or {}
 	getgenv().B0XazGunCache = _gunCache
 
 	local Game = { Name = "Prison Life" }
 	local ATTRS = { "SpreadRadius", "FireRate", "AutoFire", "Range" }
 
-	-- Macro Runtime State Variables
 	local macroLoopActive = false
 	local macroThread = nil
 	local currentToolIndex = 1
@@ -67,9 +42,7 @@ return function(Context)
 
 	local function isDoorFolder(folderName)
 		for _, name in ipairs(DOOR_FOLDERS) do
-			if name:lower() == folderName:lower() then
-				return true
-			end
+			if name:lower() == folderName:lower() then return true end
 		end
 		return false
 	end
@@ -78,9 +51,7 @@ return function(Context)
 		if not part or not part:IsA("BasePart") then return false end
 		local current = part.Parent
 		while current and current ~= Workspace do
-			if isDoorFolder(current.Name) then
-				return true
-			end
+			if isDoorFolder(current.Name) then return true end
 			current = current.Parent
 		end
 		return false
@@ -101,9 +72,7 @@ return function(Context)
 	end
 
 	local function restoreAllDoors()
-		for part, _ in pairs(_cache) do
-			restorePart(part)
-		end
+		for part, _ in pairs(_cache) do restorePart(part) end
 		table.clear(_cache)
 		table.clear(_doorPartsSet)
 	end
@@ -129,9 +98,7 @@ return function(Context)
 			for _, obj in ipairs(Workspace:GetChildren()) do
 				if obj.Name:lower() == folderName:lower() then
 					for _, desc in ipairs(obj:GetDescendants()) do
-						if desc:IsA("BasePart") then
-							processPart(desc)
-						end
+						if desc:IsA("BasePart") then processPart(desc) end
 					end
 				end
 			end
@@ -147,30 +114,22 @@ return function(Context)
 		end
 		if not FeatureConfig.Game.DoorPhase then return end
 
-		if part.CanCollide then
-			part.CanCollide = false
-		end
+		pcall(function()
+			if part.CanCollide then part.CanCollide = false end
 
-		local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
-		if math.abs(part.Transparency - targetTrans) > 0.01 then
-			part.Transparency = targetTrans
-		end
+			local targetTrans = FeatureConfig.Game.PhaseTransparency or 0.65
+			if math.abs(part.Transparency - targetTrans) > 0.01 then
+				part.Transparency = targetTrans
+			end
 
-		if FeatureConfig.Game.DoorGlow then
-			if part.Material ~= Enum.Material.Neon then
-				part.Material = Enum.Material.Neon
+			if FeatureConfig.Game.DoorGlow then
+				if part.Material ~= Enum.Material.Neon then part.Material = Enum.Material.Neon end
+				if part.Color ~= FeatureConfig.Game.GlowColor then part.Color = FeatureConfig.Game.GlowColor end
+			else
+				if part.Material ~= c.Material then part.Material = c.Material end
+				if part.Color ~= c.Color then part.Color = c.Color end
 			end
-			if part.Color ~= FeatureConfig.Game.GlowColor then
-				part.Color = FeatureConfig.Game.GlowColor
-			end
-		else
-			if part.Material ~= c.Material then
-				part.Material = c.Material
-			end
-			if part.Color ~= c.Color then
-				part.Color = c.Color
-			end
-		end
+		end)
 	end
 
 	local function getGunContainers()
@@ -188,67 +147,44 @@ return function(Context)
 		local entry = {}
 		for _, name in ipairs(ATTRS) do
 			local v = inst:GetAttribute(name)
-			if v ~= nil then
-				entry[name] = v
-			end
+			if v ~= nil then entry[name] = v end
 		end
 		_gunCache[inst] = entry
 	end
 
 	local function setAttr(inst, name, value)
-		pcall(function()
-			inst:SetAttribute(name, value)
-		end)
+		pcall(function() inst:SetAttribute(name, value) end)
 	end
 
 	local function applyGunModsTo(inst)
 		if not inst or not inst.Parent then return end
-
 		local function touch(obj)
 			cacheGunAttrs(obj)
-
-			if FeatureConfig.Game.NoSpread and obj:GetAttribute("SpreadRadius") ~= nil then
-				if obj:GetAttribute("SpreadRadius") ~= 0 then
-					setAttr(obj, "SpreadRadius", 0)
-				end
+			if FeatureConfig.Game.NoSpread and obj:GetAttribute("SpreadRadius") ~= nil and obj:GetAttribute("SpreadRadius") ~= 0 then
+				setAttr(obj, "SpreadRadius", 0)
 			end
-
 			if FeatureConfig.Game.FastFire and obj:GetAttribute("FireRate") ~= nil then
 				local fr = FeatureConfig.Game.FireRateValue or 0.001
-				if obj:GetAttribute("FireRate") ~= fr then
-					setAttr(obj, "FireRate", fr)
-				end
+				if obj:GetAttribute("FireRate") ~= fr then setAttr(obj, "FireRate", fr) end
 			end
-
-			if FeatureConfig.Game.ForceAuto and obj:GetAttribute("AutoFire") ~= nil then
-				if obj:GetAttribute("AutoFire") ~= true then
-					setAttr(obj, "AutoFire", true)
-				end
+			if FeatureConfig.Game.ForceAuto and obj:GetAttribute("AutoFire") ~= nil and obj:GetAttribute("AutoFire") ~= true then
+				setAttr(obj, "AutoFire", true)
 			end
-
 			if FeatureConfig.Game.ForceRange and obj:GetAttribute("Range") ~= nil then
 				local rng = FeatureConfig.Game.RangeValue or 10000
-				if obj:GetAttribute("Range") ~= rng then
-					setAttr(obj, "Range", rng)
-				end
+				if obj:GetAttribute("Range") ~= rng then setAttr(obj, "Range", rng) end
 			end
 		end
 
 		if inst:IsA("Tool") then
 			touch(inst)
 			for _, d in ipairs(inst:GetDescendants()) do
-				if d:GetAttribute("SpreadRadius") ~= nil
-					or d:GetAttribute("FireRate") ~= nil
-					or d:GetAttribute("AutoFire") ~= nil
-					or d:GetAttribute("Range") ~= nil then
+				if d:GetAttribute("SpreadRadius") ~= nil or d:GetAttribute("FireRate") ~= nil or d:GetAttribute("AutoFire") ~= nil or d:GetAttribute("Range") ~= nil then
 					touch(d)
 				end
 			end
 		else
-			if inst:GetAttribute("SpreadRadius") ~= nil
-				or inst:GetAttribute("FireRate") ~= nil
-				or inst:GetAttribute("AutoFire") ~= nil
-				or inst:GetAttribute("Range") ~= nil then
+			if inst:GetAttribute("SpreadRadius") ~= nil or inst:GetAttribute("FireRate") ~= nil or inst:GetAttribute("AutoFire") ~= nil or inst:GetAttribute("Range") ~= nil then
 				touch(inst)
 			end
 		end
@@ -257,9 +193,7 @@ return function(Context)
 	local function scanGuns()
 		for _, container in ipairs(getGunContainers()) do
 			for _, child in ipairs(container:GetChildren()) do
-				if child:IsA("Tool") then
-					applyGunModsTo(child)
-				end
+				if child:IsA("Tool") then applyGunModsTo(child) end
 			end
 		end
 	end
@@ -268,9 +202,7 @@ return function(Context)
 		for inst, entry in pairs(_gunCache) do
 			if inst and inst.Parent and type(entry) == "table" then
 				for name, original in pairs(entry) do
-					pcall(function()
-						inst:SetAttribute(name, original)
-					end)
+					pcall(function() inst:SetAttribute(name, original) end)
 				end
 			end
 			_gunCache[inst] = nil
@@ -279,10 +211,8 @@ return function(Context)
 	end
 
 	local function anyGunModEnabled()
-		return FeatureConfig.Game.NoSpread
-			or FeatureConfig.Game.FastFire
-			or FeatureConfig.Game.ForceAuto
-			or FeatureConfig.Game.ForceRange
+		return FeatureConfig.Game.NoSpread or FeatureConfig.Game.FastFire
+			or FeatureConfig.Game.ForceAuto or FeatureConfig.Game.ForceRange
 	end
 
 	local function enforceGuns()
@@ -290,16 +220,12 @@ return function(Context)
 		scanGuns()
 	end
 
-	----------------------------------------------------------------
-	-- FAKE MACRO SYSTEM LOGIC
-	----------------------------------------------------------------
 	local function runFakeMacroStep()
 		local char = LocalPlayer.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
 		if not hum or hum.Health <= 0 or not bp then return end
 
-		-- Collect all valid weapons inside inventory and character
 		local guns = {}
 		for _, tool in ipairs(bp:GetChildren()) do
 			if tool:IsA("Tool") and table.find(PRISON_PL_GUNS, tool.Name) then
@@ -315,13 +241,11 @@ return function(Context)
 		if #guns < 2 then return end
 
 		currentToolIndex = currentToolIndex + 1
-		if currentToolIndex > #guns then
-			currentToolIndex = 1
-		end
+		if currentToolIndex > #guns then currentToolIndex = 1 end
 
 		local targetTool = guns[currentToolIndex]
 		if targetTool and targetTool.Parent ~= char then
-			hum:EquipTool(targetTool)
+			pcall(function() hum:EquipTool(targetTool) end)
 		end
 	end
 
@@ -330,7 +254,7 @@ return function(Context)
 		macroLoopActive = true
 		macroThread = task.spawn(function()
 			while macroLoopActive do
-				runFakeMacroStep()
+				pcall(runFakeMacroStep)
 				task.wait(FeatureConfig.Game.FakeMacroDelay or 0.03)
 			end
 		end)
@@ -347,7 +271,6 @@ return function(Context)
 	local function handleFakeMacroInput(input, isBegan)
 		if not FeatureConfig.Game.FakeMacro then return end
 		local macroKey = FeatureConfig.Game.FakeMacroKey
-
 		if not macroKey then return end
 
 		local matched = false
@@ -358,17 +281,12 @@ return function(Context)
 				matched = (input.UserInputType == macroKey)
 			end
 		end
-
 		if not matched then return end
 
 		if FeatureConfig.Game.FakeMacroMode == "Toggle" then
 			if isBegan then
 				isKeyPressed = not isKeyPressed
-				if isKeyPressed then
-					startFakeMacro()
-				else
-					stopFakeMacro()
-				end
+				if isKeyPressed then startFakeMacro() else stopFakeMacro() end
 			end
 		elseif FeatureConfig.Game.FakeMacroMode == "Hold" then
 			if isBegan then
@@ -381,26 +299,21 @@ return function(Context)
 		end
 	end
 
-	----------------------------------------------------------------
-	-- CONNECTIONS / HOOKS
-	----------------------------------------------------------------
 	if Connections and Connections.Add then
+		if FeatureConfig.Game.DoorPhase then
+			task.spawn(scanAllDoors)
+		end
+
 		Connections.Add(RS.Stepped:Connect(function()
 			if FeatureConfig.Game.DoorPhase then
-				for part, _ in pairs(_doorPartsSet) do
-					enforcePart(part)
-				end
+				for part, _ in pairs(_doorPartsSet) do enforcePart(part) end
 			end
-			if anyGunModEnabled() then
-				enforceGuns()
-			end
+			if anyGunModEnabled() then enforceGuns() end
 		end))
 
 		Connections.Add(Workspace.DescendantAdded:Connect(function(desc)
 			if FeatureConfig.Game.DoorPhase and desc:IsA("BasePart") then
-				task.defer(function()
-					processPart(desc)
-				end)
+				task.defer(function() processPart(desc) end)
 			end
 		end))
 
@@ -408,9 +321,7 @@ return function(Context)
 			if not container then return end
 			Connections.Add(container.ChildAdded:Connect(function(child)
 				if anyGunModEnabled() and child:IsA("Tool") then
-					task.defer(function()
-						applyGunModsTo(child)
-					end)
+					task.defer(function() applyGunModsTo(child) end)
 				end
 			end))
 		end
@@ -441,157 +352,78 @@ return function(Context)
 
 	function Game.SetDoorPhase(enabled)
 		FeatureConfig.Game.DoorPhase = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			scanAllDoors()
-		else
-			restoreAllDoors()
-		end
+		if FeatureConfig.Game.DoorPhase then scanAllDoors() else restoreAllDoors() end
 	end
 
 	function Game.SetDoorGlow(enabled)
 		FeatureConfig.Game.DoorGlow = enabled and true or false
-		if FeatureConfig.Game.DoorPhase then
-			scanAllDoors()
-		end
+		if FeatureConfig.Game.DoorPhase then scanAllDoors() end
 	end
 
-	function Game.SetGlowColor(color)
-		FeatureConfig.Game.GlowColor = color
-	end
+	function Game.SetGlowColor(color) FeatureConfig.Game.GlowColor = color end
 
 	local function afterGunToggle()
-		if anyGunModEnabled() then
-			scanGuns()
-		else
-			restoreGuns()
-		end
+		if anyGunModEnabled() then scanGuns() else restoreGuns() end
 	end
 
-	function Game.SetNoSpread(enabled)
-		FeatureConfig.Game.NoSpread = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetFastFire(enabled)
-		FeatureConfig.Game.FastFire = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetForceAuto(enabled)
-		FeatureConfig.Game.ForceAuto = enabled and true or false
-		afterGunToggle()
-	end
-
-	function Game.SetForceRange(enabled)
-		FeatureConfig.Game.ForceRange = enabled and true or false
-		afterGunToggle()
-	end
+	function Game.SetNoSpread(enabled) FeatureConfig.Game.NoSpread = enabled and true or false; afterGunToggle() end
+	function Game.SetFastFire(enabled) FeatureConfig.Game.FastFire = enabled and true or false; afterGunToggle() end
+	function Game.SetForceAuto(enabled) FeatureConfig.Game.ForceAuto = enabled and true or false; afterGunToggle() end
+	function Game.SetForceRange(enabled) FeatureConfig.Game.ForceRange = enabled and true or false; afterGunToggle() end
 
 	function Game.BuildUI(tab)
 		local doors = tab:AddSection("Doors & Fences")
-
 		UIRegistry.Game_DoorPhase = doors:AddToggle("Phase Through Doors", FeatureConfig.Game.DoorPhase, function(v)
 			Game.SetDoorPhase(v)
 			if Context and Context.UI then
 				Context.UI:Notify("Prison Life", v and "Door phase enabled" or "Door phase disabled", nil, Theme.Success)
 			end
 		end)
-
-		UIRegistry.Game_DoorGlow = doors:AddToggle("Door Glow (Neon)", FeatureConfig.Game.DoorGlow, function(v)
-			Game.SetDoorGlow(v)
-		end)
-
-		UIRegistry.Game_PhaseTransparency = doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v)
-			FeatureConfig.Game.PhaseTransparency = v / 100
-		end, "%")
-
-		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c)
-			Game.SetGlowColor(c)
-		end)
-
+		UIRegistry.Game_DoorGlow = doors:AddToggle("Door Glow (Neon)", FeatureConfig.Game.DoorGlow, function(v) Game.SetDoorGlow(v) end)
+		UIRegistry.Game_PhaseTransparency = doors:AddSlider("Door Transparency", math.floor((FeatureConfig.Game.PhaseTransparency or 0.65) * 100), 10, 95, function(v) FeatureConfig.Game.PhaseTransparency = v / 100 end, "%")
+		UIRegistry.Game_GlowColor = doors:AddColorPicker("Glow Color", FeatureConfig.Game.GlowColor, function(c) Game.SetGlowColor(c) end)
 		doors:AddButton("Refresh Door List", function()
 			if FeatureConfig.Game.DoorPhase then
 				scanAllDoors()
-				if Context and Context.UI then
-					Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme.Success)
-				end
+				if Context and Context.UI then Context.UI:Notify("Prison Life", "Doors refreshed", nil, Theme.Success) end
 			end
 		end)
 
 		local combat = tab:AddSection("Combat Modifications")
-
-		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v)
-			Game.SetNoSpread(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Spread removed" or "Spread restored", nil, Theme.Success)
-			end
-		end)
-
-		UIRegistry.Game_FastFire = combat:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v)
-			Game.SetFastFire(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Fast fire enabled" or "Fire rate restored", nil, Theme.Success)
-			end
-		end)
-
-		UIRegistry.Game_ForceAuto = combat:AddToggle("Force AutoFire", FeatureConfig.Game.ForceAuto, function(v)
-			Game.SetForceAuto(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Auto-fire enabled" or "Auto-fire restored", nil, Theme.Success)
-			end
-		end)
-
-		UIRegistry.Game_ForceRange = combat:AddToggle("Force Range (10k)", FeatureConfig.Game.ForceRange, function(v)
-			Game.SetForceRange(v)
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", v and "Range extended" or "Range restored", nil, Theme.Success)
-			end
-		end)
-
+		UIRegistry.Game_NoSpread = combat:AddToggle("No Spread", FeatureConfig.Game.NoSpread, function(v) Game.SetNoSpread(v) end)
+		UIRegistry.Game_FastFire = combat:AddToggle("Fast Fire", FeatureConfig.Game.FastFire, function(v) Game.SetFastFire(v) end)
+		UIRegistry.Game_ForceAuto = combat:AddToggle("Force AutoFire", FeatureConfig.Game.ForceAuto, function(v) Game.SetForceAuto(v) end)
+		UIRegistry.Game_ForceRange = combat:AddToggle("Force Range (10k)", FeatureConfig.Game.ForceRange, function(v) Game.SetForceRange(v) end)
 		combat:AddButton("Force Apply Gun Mods", function()
 			scanGuns()
-			if Context and Context.UI then
-				Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent)
-			end
+			if Context and Context.UI then Context.UI:Notify("Prison Life", "Gun mods enforced", nil, Theme.Accent) end
 		end)
 
 		local macroSec = tab:AddSection("Fake Macro (Gun Spam)")
-
 		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
 			FeatureConfig.Game.FakeMacro = v
-			if not v then stopFakeMacro() end
+			if not v then stopFakeMacro(); isKeyPressed = false end
 		end)
-
 		UIRegistry.Game_FakeMacroKey = macroSec:AddKeybind("Macro Activation Key", FeatureConfig.Game.FakeMacroKey, function(k)
 			FeatureConfig.Game.FakeMacroKey = k
 			stopFakeMacro()
 			isKeyPressed = false
 		end)
-
 		UIRegistry.Game_FakeMacroMode = macroSec:AddDropdown("Activation Mode", {"Toggle", "Hold"}, function(v)
 			FeatureConfig.Game.FakeMacroMode = v
 			stopFakeMacro()
 			isKeyPressed = false
 		end, FeatureConfig.Game.FakeMacroMode)
-
 		UIRegistry.Game_FakeMacroDelay = macroSec:AddSlider("Macro Speed Delay", math.floor((FeatureConfig.Game.FakeMacroDelay or 0.03) * 1000), 10, 200, function(v)
 			FeatureConfig.Game.FakeMacroDelay = v / 1000
-			if macroLoopActive then
-				stopFakeMacro()
-				startFakeMacro()
-			end
 		end, " ms")
 	end
 
 	function Game.Update(dt)
 		if FeatureConfig.Game.DoorPhase then
-			for part, _ in pairs(_doorPartsSet) do
-				enforcePart(part)
-			end
+			for part, _ in pairs(_doorPartsSet) do enforcePart(part) end
 		end
-		if anyGunModEnabled() then
-			enforceGuns()
-		end
+		if anyGunModEnabled() then enforceGuns() end
 	end
 
 	function Game.Destroy()
