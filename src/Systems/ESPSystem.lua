@@ -11,16 +11,23 @@ return function(Context)
     local DrawingManager = Context.DrawingManager
     local Connections = Context.Connections
 
-    local DrawingESP = getgenv().B0XazDrawingESP or {}
+    -- Always start from a clean global table for this session
+    local DrawingESP = {}
     getgenv().B0XazDrawingESP = DrawingESP
 
-    local Highlights = getgenv().B0XazHighlights or {}
+    local Highlights = {}
     getgenv().B0XazHighlights = Highlights
 
     local CharacterCache = {}
     local ESPSystem = {}
+    local SessionId = getgenv().B0XazSessionId or 0
+
+    local function isSessionAlive()
+        return getgenv().B0XazSessionId == SessionId
+    end
 
     local function cacheCharacterParts(player, char)
+        if not isSessionAlive() then return end
         if not char then
             CharacterCache[player] = nil
             return
@@ -83,8 +90,33 @@ return function(Context)
         CharacterCache[player] = nil
     end
 
+    local function destroyESPData(data)
+        if type(data) ~= "table" then return end
+        DrawingManager.SafeRemove(data.Box)
+        DrawingManager.SafeRemove(data.Name)
+        DrawingManager.SafeRemove(data.Health)
+        DrawingManager.SafeRemove(data.HealthBG)
+        DrawingManager.SafeRemove(data.Distance)
+        DrawingManager.SafeRemove(data.HeadDot)
+        DrawingManager.SafeRemove(data.LookLine)
+        DrawingManager.SafeRemove(data.Tracer)
+        if type(data.Skeleton) == "table" then
+            for _, line in ipairs(data.Skeleton) do
+                DrawingManager.SafeRemove(line)
+            end
+        end
+    end
+
     function ESPSystem.CreatePlayerESP(player)
-        if player == LocalPlayer or DrawingESP[player] or not DrawingManager.Available then return end
+        if not isSessionAlive() then return end
+        if player == LocalPlayer or not DrawingManager.Available then return end
+
+        -- If leftovers exist for this player, destroy first (re-exec / re-hook safe)
+        if DrawingESP[player] then
+            destroyESPData(DrawingESP[player])
+            DrawingESP[player] = nil
+        end
+
         local col = FeatureConfig.ESP.Color
 
         local skeletonLines = {}
@@ -93,7 +125,7 @@ return function(Context)
             if l then table.insert(skeletonLines, l) end
         end
 
-        local data = {
+        DrawingESP[player] = {
             Box = DrawingManager.NewSquare({Thickness = 2, Color = col}),
             Name = DrawingManager.NewText({Size = CONFIG.ESP_TEXT_SIZE_NAME or 13, Color = col}),
             Health = DrawingManager.NewSquare({Filled = true}),
@@ -104,26 +136,12 @@ return function(Context)
             Tracer = DrawingManager.NewLine({Thickness = CONFIG.ESP_TRACER_THICKNESS or 1.5, Color = col}),
             Skeleton = skeletonLines
         }
-
-        DrawingESP[player] = data
     end
 
     function ESPSystem.RemovePlayerESP(player)
         local d = DrawingESP[player]
         if d then
-            DrawingManager.SafeRemove(d.Box)
-            DrawingManager.SafeRemove(d.Name)
-            DrawingManager.SafeRemove(d.Health)
-            DrawingManager.SafeRemove(d.HealthBG)
-            DrawingManager.SafeRemove(d.Distance)
-            DrawingManager.SafeRemove(d.HeadDot)
-            DrawingManager.SafeRemove(d.LookLine)
-            DrawingManager.SafeRemove(d.Tracer)
-            if d.Skeleton then
-                for _, line in ipairs(d.Skeleton) do
-                    DrawingManager.SafeRemove(line)
-                end
-            end
+            destroyESPData(d)
             DrawingESP[player] = nil
         end
         ESPSystem.RemoveHighlight(player)
@@ -131,6 +149,7 @@ return function(Context)
     end
 
     function ESPSystem.AddHighlight(player)
+        if not isSessionAlive() then return end
         if Highlights[player] or not player.Character then return end
         local h = Instance.new("Highlight")
         h.Name = "B0XazChams"
@@ -151,27 +170,29 @@ return function(Context)
 
     local function hidePlayerDrawings(d)
         if not d then return end
-        if d.Box and d.Box.Visible then d.Box.Visible = false end
-        if d.Name and d.Name.Visible then d.Name.Visible = false end
-        if d.Health and d.Health.Visible then d.Health.Visible = false end
-        if d.HealthBG and d.HealthBG.Visible then d.HealthBG.Visible = false end
-        if d.Distance and d.Distance.Visible then d.Distance.Visible = false end
-        if d.HeadDot and d.HeadDot.Visible then d.HeadDot.Visible = false end
-        if d.LookLine and d.LookLine.Visible then d.LookLine.Visible = false end
-        if d.Tracer and d.Tracer.Visible then d.Tracer.Visible = false end
+        pcall(function() if d.Box then d.Box.Visible = false end end)
+        pcall(function() if d.Name then d.Name.Visible = false; d.Name.Text = "" end end)
+        pcall(function() if d.Health then d.Health.Visible = false end end)
+        pcall(function() if d.HealthBG then d.HealthBG.Visible = false end end)
+        pcall(function() if d.Distance then d.Distance.Visible = false; d.Distance.Text = "" end end)
+        pcall(function() if d.HeadDot then d.HeadDot.Visible = false end end)
+        pcall(function() if d.LookLine then d.LookLine.Visible = false end end)
+        pcall(function() if d.Tracer then d.Tracer.Visible = false end end)
         if d.Skeleton then
             for i = 1, #d.Skeleton do
-                if d.Skeleton[i].Visible then d.Skeleton[i].Visible = false end
+                pcall(function() if d.Skeleton[i] then d.Skeleton[i].Visible = false end end)
             end
         end
     end
 
     local function hookPlayer(p)
+        if not isSessionAlive() then return end
         if p == LocalPlayer then return end
         ESPSystem.CreatePlayerESP(p)
         if p.Character then cacheCharacterParts(p, p.Character) end
 
         Connections.Add(p.CharacterAdded:Connect(function(c)
+            if not isSessionAlive() then return end
             task.wait(0.1)
             cacheCharacterParts(p, c)
             if FeatureConfig.Chams.Enabled then
@@ -181,23 +202,43 @@ return function(Context)
         end))
 
         Connections.Add(p.CharacterRemoving:Connect(function()
+            if not isSessionAlive() then return end
             uncacheCharacter(p)
             ESPSystem.RemoveHighlight(p)
             if DrawingESP[p] then hidePlayerDrawings(DrawingESP[p]) end
         end))
     end
 
+    function ESPSystem.DestroyAll()
+        for player, _ in pairs(DrawingESP) do
+            ESPSystem.RemovePlayerESP(player)
+        end
+        table.clear(DrawingESP)
+        table.clear(CharacterCache)
+        table.clear(Highlights)
+    end
+
     function ESPSystem.InitializeAll()
+        if not isSessionAlive() then return end
+        -- Wipe anything left before hooking
+        ESPSystem.DestroyAll()
+
         for _, p in ipairs(Players:GetPlayers()) do
             hookPlayer(p)
         end
-        Connections.Add(Players.PlayerAdded:Connect(hookPlayer))
+        Connections.Add(Players.PlayerAdded:Connect(function(p)
+            if not isSessionAlive() then return end
+            hookPlayer(p)
+        end))
         Connections.Add(Players.PlayerRemoving:Connect(function(p)
+            if not isSessionAlive() then return end
             ESPSystem.RemovePlayerESP(p)
         end))
     end
 
     function ESPSystem.Update()
+        if not isSessionAlive() then return end
+
         local espCfg = FeatureConfig.ESP
         local chamsCfg = FeatureConfig.Chams
 
@@ -227,6 +268,8 @@ return function(Context)
         local screenBottom = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 
         for player, data in pairs(DrawingESP) do
+            if not isSessionAlive() then return end
+
             local cached = CharacterCache[player]
             if not cached or not cached.Root or not cached.Head or not cached.Hum or cached.Hum.Health <= 0 then
                 hidePlayerDrawings(data)
@@ -296,6 +339,7 @@ return function(Context)
                 data.Name.Visible = true
             elseif data.Name then
                 data.Name.Visible = false
+                data.Name.Text = ""
             end
 
             if espCfg.Health and data.Health and data.HealthBG then
@@ -316,7 +360,7 @@ return function(Context)
                 data.Health.Visible = true
             elseif data.Health then
                 data.Health.Visible = false
-                data.HealthBG.Visible = false
+                if data.HealthBG then data.HealthBG.Visible = false end
             end
 
             if espCfg.Distance and data.Distance then
@@ -326,6 +370,7 @@ return function(Context)
                 data.Distance.Visible = true
             elseif data.Distance then
                 data.Distance.Visible = false
+                data.Distance.Text = ""
             end
 
             if espCfg.HeadDot and data.HeadDot then
