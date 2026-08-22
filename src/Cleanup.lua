@@ -13,19 +13,20 @@ return function()
 	end
 
 	if type(g.B0XazConnections) == "table" then
-		for _, conn in ipairs(g.B0XazConnections) do
+		for i = #g.B0XazConnections, 1, -1 do
 			pcall(function()
-				if conn then
-					if conn.Disconnect then conn:Disconnect() end
-				end
+				local conn = g.B0XazConnections[i]
+				if conn and conn.Disconnect then conn:Disconnect() end
 			end)
+			g.B0XazConnections[i] = nil
 		end
 	end
 	g.B0XazConnections = {}
 
 	if type(g.B0XazThreads) == "table" then
-		for _, th in ipairs(g.B0XazThreads) do
-			pcall(function() task.cancel(th) end)
+		for i = #g.B0XazThreads, 1, -1 do
+			pcall(function() task.cancel(g.B0XazThreads[i]) end)
+			g.B0XazThreads[i] = nil
 		end
 	end
 	g.B0XazThreads = {}
@@ -35,8 +36,9 @@ return function()
 		pcall(function() d.Visible = false end)
 		pcall(function()
 			if type(d) == "table" then
-				for _, sub in pairs(d) do
+				for k, sub in pairs(d) do
 					nukeDrawing(sub)
+					d[k] = nil
 				end
 			elseif d.Remove then
 				d:Remove()
@@ -53,36 +55,41 @@ return function()
 	g.B0XazAllDrawings = {}
 
 	if type(g.B0XazDrawings) == "table" then
-		for _, d in pairs(g.B0XazDrawings) do
+		for k, d in pairs(g.B0XazDrawings) do
 			nukeDrawing(d)
+			g.B0XazDrawings[k] = nil
 		end
 	end
 	g.B0XazDrawings = {}
 
 	if type(g.B0XazDrawingESP) == "table" then
-		for _, espData in pairs(g.B0XazDrawingESP) do
+		for k, espData in pairs(g.B0XazDrawingESP) do
 			nukeDrawing(espData)
+			g.B0XazDrawingESP[k] = nil
 		end
 	end
 	g.B0XazDrawingESP = {}
 
 	if type(g.B0XazTracerLines) == "table" then
-		for _, line in ipairs(g.B0XazTracerLines) do
-			nukeDrawing(line)
+		for i = #g.B0XazTracerLines, 1, -1 do
+			nukeDrawing(g.B0XazTracerLines[i])
+			g.B0XazTracerLines[i] = nil
 		end
 	end
 	g.B0XazTracerLines = {}
 
 	if type(g.B0XazSkeletonLines) == "table" then
-		for _, lines in pairs(g.B0XazSkeletonLines) do
+		for k, lines in pairs(g.B0XazSkeletonLines) do
 			nukeDrawing(lines)
+			g.B0XazSkeletonLines[k] = nil
 		end
 	end
 	g.B0XazSkeletonLines = {}
 
 	if type(g.B0XazHighlights) == "table" then
-		for _, h in pairs(g.B0XazHighlights) do
-			pcall(function() h:Destroy() end)
+		for k, h in pairs(g.B0XazHighlights) do
+			pcall(function() if h then h:Destroy() end end)
+			g.B0XazHighlights[k] = nil
 		end
 	end
 	g.B0XazHighlights = {}
@@ -121,8 +128,8 @@ return function()
 					part.Material = c.Material
 				end)
 			end
+			g.B0XazDoorCache[part] = nil
 		end
-		table.clear(g.B0XazDoorCache)
 	end
 	g.B0XazDoorCache = {}
 	g.B0XazDoorParts = {}
@@ -141,7 +148,7 @@ return function()
 	for _, parent in ipairs(guiParents) do
 		pcall(function()
 			for _, gui in ipairs(parent:GetChildren()) do
-				if gui:IsA("ScreenGui") and (gui.Name == "B0XazUI" or gui.Name == "B0XazStretchRes" or tostring(gui.Name):find("B0Xaz")) then
+				if gui:IsA("ScreenGui") and (gui.Name == "B0XazUI" or gui.Name == "B0XazAuth" or gui.Name == "B0XazStretchRes" or tostring(gui.Name):find("B0Xaz")) then
 					pcall(function() gui:Destroy() end)
 				end
 			end
