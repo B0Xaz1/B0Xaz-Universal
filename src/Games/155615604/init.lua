@@ -1,3 +1,4 @@
+-- // src/Games/155615604.lua (Prison Life Module)
 local SETTINGS = {
 	DEFAULTS = {
 		DoorPhase = false,
@@ -640,9 +641,9 @@ return function(Context)
 		createStroke(getThemeColor("BorderDim"), 1).Parent = contentBody
 
 		createInstance("TextLabel", {
-			Text = "[!] WARNING: Features in this section send heavy, high-rate melee payloads directly to server remotes.\n\n"
-				.. "[!] Using Punch Aura or Super Multi-Punch WILL trigger automatic server log bans on Prison Life.\n\n"
-				.. "[!] Please wait 3s, then HOLD the button for 2s to unlock.",
+			Text = "[!] WARNING: Features in this section send heavy payloads to server remotes.\n\n"
+				.. "[!] Using Punch Aura or Super Punch WILL trigger server logs on Prison Life.\n\n"
+				.. "[!] Please wait 3s, then HOLD button for 2s to unlock.",
 			Font = Enum.Font.Code,
 			TextSize = 10,
 			TextColor3 = getThemeColor("TextDim"),
@@ -705,12 +706,8 @@ return function(Context)
 		})
 		createStroke(getThemeColor("Border"), 1).Parent = cancelBtn
 
-		cancelBtn.MouseEnter:Connect(function()
-			cancelBtn.BackgroundColor3 = getThemeColor("ElemHover")
-		end)
-		cancelBtn.MouseLeave:Connect(function()
-			cancelBtn.BackgroundColor3 = getThemeColor("Elem")
-		end)
+		cancelBtn.MouseEnter:Connect(function() cancelBtn.BackgroundColor3 = getThemeColor("ElemHover") end)
+		cancelBtn.MouseLeave:Connect(function() cancelBtn.BackgroundColor3 = getThemeColor("Elem") end)
 		cancelBtn.MouseButton1Click:Connect(function()
 			dim:Destroy()
 			if onCancel then onCancel() end
@@ -741,10 +738,7 @@ return function(Context)
 			if canInteract and dim and dim.Parent then
 				holdBtn.Text = "[ HOLD 2.0s TO ACKNOWLEDGE & UNLOCK ]"
 			end
-			if holdConn then
-				holdConn:Disconnect()
-				holdConn = nil
-			end
+			if holdConn then holdConn:Disconnect() holdConn = nil end
 		end
 
 		local function startHolding()
@@ -836,9 +830,7 @@ return function(Context)
 
 		Connections.Add(Workspace.DescendantAdded:Connect(function(descendant)
 			if FeatureConfig.Game.DoorPhase and descendant:IsA("BasePart") then
-				task.defer(function()
-					processPart(descendant)
-				end)
+				task.defer(function() processPart(descendant) end)
 			end
 		end))
 
@@ -846,32 +838,22 @@ return function(Context)
 			if not container then return end
 			Connections.Add(container.ChildAdded:Connect(function(child)
 				if anyGunModEnabled() and child:IsA("Tool") then
-					task.defer(function()
-						applyGunModsTo(child)
-					end)
+					task.defer(function() applyGunModsTo(child) end)
 				end
 			end))
 		end
 
-		if LocalPlayer:FindFirstChild("Backpack") then
-			hookContainer(LocalPlayer.Backpack)
-		end
-		if LocalPlayer.Character then
-			hookContainer(LocalPlayer.Character)
-		end
+		if LocalPlayer:FindFirstChild("Backpack") then hookContainer(LocalPlayer.Backpack) end
+		if LocalPlayer.Character then hookContainer(LocalPlayer.Character) end
 
 		Connections.Add(LocalPlayer.CharacterAdded:Connect(function(char)
 			hookContainer(char)
 			task.wait(0.5)
-			if anyGunModEnabled() then
-				scanGuns()
-			end
+			if anyGunModEnabled() then scanGuns() end
 		end))
 
 		Connections.Add(LocalPlayer.ChildAdded:Connect(function(child)
-			if child.Name == "Backpack" then
-				hookContainer(child)
-			end
+			if child.Name == "Backpack" then hookContainer(child) end
 		end))
 
 		Connections.Add(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -908,14 +890,10 @@ return function(Context)
 
 		local function updateSubTabs(active)
 			for _, sec in ipairs(normalSections) do
-				if sec and sec.Frame then
-					sec.Frame.Visible = (active == "Normal")
-				end
+				if sec and sec.Frame then sec.Frame.Visible = (active == "Normal") end
 			end
 			for _, sec in ipairs(bannableSections) do
-				if sec and sec.Frame then
-					sec.Frame.Visible = (active == "Bannable")
-				end
+				if sec and sec.Frame then sec.Frame.Visible = (active == "Bannable") end
 			end
 		end
 
@@ -929,34 +907,20 @@ return function(Context)
 				showBannableWarningModal(
 					function()
 						updateSubTabs("Bannable")
-						notify(
-							"CRITICAL WARNING",
-							"Any functions in this tab will get your account banned from Prison Life",
-							6,
-							getThemeColor("Danger")
-						)
+						notify("CRITICAL WARNING", "Features in this tab trigger Prison Life bans!", 6, getThemeColor("Danger"))
 					end,
-					function()
-						updateSubTabs("Normal")
-					end
+					function() updateSubTabs("Normal") end
 				)
 			else
 				updateSubTabs("Bannable")
-				notify(
-					"CRITICAL WARNING",
-					"Any functions in this tab will get your account banned from Prison Life",
-					5,
-					getThemeColor("Danger")
-				)
+				notify("CRITICAL WARNING", "Features in this tab trigger Prison Life bans!", 5, getThemeColor("Danger"))
 			end
 		end)
 
 		local gunGrabSec = tab:AddSection("Gun Grabbers (Warp-Return)")
 		table.insert(normalSections, gunGrabSec)
 		for gunName, spawnPos in pairs(SETTINGS.GUN_SPAWNS) do
-			gunGrabSec:AddButton("Grab " .. gunName, function()
-				grabGun(gunName, spawnPos)
-			end)
+			gunGrabSec:AddButton("Grab " .. gunName, function() grabGun(gunName, spawnPos) end)
 		end
 
 		local combatSec = tab:AddSection("Combat Modifications")
@@ -986,20 +950,15 @@ return function(Context)
 		table.insert(normalSections, macroSec)
 		UIRegistry.Game_FakeMacro = macroSec:AddToggle("Enable Fake Macro", FeatureConfig.Game.FakeMacro, function(v)
 			FeatureConfig.Game.FakeMacro = v
-			if not v then
-				stopFakeMacro()
-				isKeyPressed = false
-			end
+			if not v then stopFakeMacro() isKeyPressed = false end
 		end)
 		UIRegistry.Game_FakeMacroKey = macroSec:AddKeybind("Macro Activation Key", FeatureConfig.Game.FakeMacroKey, function(k)
 			FeatureConfig.Game.FakeMacroKey = k
-			stopFakeMacro()
-			isKeyPressed = false
+			stopFakeMacro() isKeyPressed = false
 		end)
 		UIRegistry.Game_FakeMacroMode = macroSec:AddDropdown("Activation Mode", { "Toggle", "Hold" }, function(v)
 			FeatureConfig.Game.FakeMacroMode = v
-			stopFakeMacro()
-			isKeyPressed = false
+			stopFakeMacro() isKeyPressed = false
 		end, FeatureConfig.Game.FakeMacroMode)
 		UIRegistry.Game_FakeMacroDelay = macroSec:AddSlider(
 			"Macro Delay",
@@ -1041,12 +1000,8 @@ return function(Context)
 		UIRegistry.Game_AntiRestrict = defSec:AddToggle("Anti-Taser", FeatureConfig.Game.AntiRestrict, function(v)
 			FeatureConfig.Game.AntiRestrict = v
 		end)
-		defSec:AddButton("Become Criminal (Inside)", function()
-			Game.BecomeCriminalInside()
-		end)
-		defSec:AddButton("Become Criminal (Outside)", function()
-			Game.BecomeCriminalOutside()
-		end)
+		defSec:AddButton("Become Criminal (Inside)", function() Game.BecomeCriminalInside() end)
+		defSec:AddButton("Become Criminal (Outside)", function() Game.BecomeCriminalOutside() end)
 
 		local tpSec = tab:AddSection("Map Teleports")
 		table.insert(normalSections, tpSec)
@@ -1103,13 +1058,9 @@ return function(Context)
 
 	function Game.Update(dt)
 		if FeatureConfig.Game.DoorPhase then
-			for part in pairs(doorPartsSet) do
-				enforcePart(part)
-			end
+			for part in pairs(doorPartsSet) do enforcePart(part) end
 		end
-		if anyGunModEnabled() then
-			enforceGuns()
-		end
+		if anyGunModEnabled() then enforceGuns() end
 	end
 
 	function Game.Destroy()
