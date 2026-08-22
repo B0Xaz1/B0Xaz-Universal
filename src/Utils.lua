@@ -44,7 +44,7 @@ return function(CONFIG)
         local origin = Camera.CFrame.Position
         local direction = part.Position - origin
         local params = RaycastParams.new()
-        
+
         local filter = {Camera}
         if LocalPlayer.Character then table.insert(filter, LocalPlayer.Character) end
         params.FilterDescendantsInstances = filter
