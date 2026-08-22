@@ -23,7 +23,8 @@ local SETTINGS = {
 	},
 	DEFAULTS = {
 		BASE_URL = "https://raw.githubusercontent.com/B0Xaz/Universal/main/",
-		LOAD_TIMEOUT = 10,
+		LOAD_TIMEOUT = 5,
+		RETRY_ATTEMPTS = 2,
 	},
 }
 
@@ -34,7 +35,7 @@ local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
 	local startTime = os.clock()
 	while not Players.LocalPlayer and (os.clock() - startTime) < SETTINGS.DEFAULTS.LOAD_TIMEOUT do
-		task.wait()
+		task.wait(0.1)
 	end
 	LocalPlayer = Players.LocalPlayer
 end
@@ -46,14 +47,9 @@ if not game:IsLoaded() then
 end
 
 local globalEnv = getgenv and getgenv() or _G
-
 local moduleCache = {}
-local function import(path)
-	if moduleCache[path] then
-		return moduleCache[path]
-	end
 
-	local sourceCode = nil
+local function fetchSource(path)
 	local pathVariants = {
 		path,
 		path:gsub("^src/", ""),
@@ -62,40 +58,54 @@ local function import(path)
 
 	if readfile and isfile then
 		for _, variant in ipairs(pathVariants) do
-			local success, isFileExist = pcall(isfile, variant)
-			if success and isFileExist then
+			local isExistSuccess, isExist = pcall(isfile, variant)
+			if isExistSuccess and isExist then
 				local readSuccess, content = pcall(readfile, variant)
 				if readSuccess and content and #content > 0 then
-					sourceCode = content
-					break
+					return content
 				end
 			end
 		end
 	end
 
-	if not sourceCode and game.HttpGet then
+	if game.HttpGet then
 		local baseUrl = globalEnv.B0XazBaseURL or SETTINGS.DEFAULTS.BASE_URL
 		local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
 		local fullUrl = baseUrl .. cleanPath
-		local success, response = pcall(function()
-			return game:HttpGet(fullUrl)
-		end)
-		if success and response and #response > 0 then
-			sourceCode = response
+		for _ = 1, SETTINGS.DEFAULTS.RETRY_ATTEMPTS do
+			local success, response = pcall(function()
+				return game:HttpGet(fullUrl)
+			end)
+			if success and response and #response > 0 then
+				return response
+			end
+			task.wait(0.2)
 		end
 	end
 
+	return nil
+end
+
+local function import(path)
+	if moduleCache[path] ~= nil then
+		return moduleCache[path]
+	end
+
+	local sourceCode = fetchSource(path)
 	if not sourceCode then
+		moduleCache[path] = false
 		return nil
 	end
 
-	local loaderFn = loadstring(sourceCode, path)
+	local loaderFn, compileErr = loadstring(sourceCode, path)
 	if not loaderFn then
+		moduleCache[path] = false
 		return nil
 	end
 
 	local runSuccess, moduleResult = pcall(loaderFn)
 	if not runSuccess then
+		moduleCache[path] = false
 		return nil
 	end
 
@@ -121,7 +131,7 @@ end
 local utilsFn = import(SETTINGS.PATHS.UTILS)
 local utils = type(utilsFn) == "function" and utilsFn(configData) or {}
 
-if utils.WaitForGameLoad then
+if type(utils.WaitForGameLoad) == "function" then
 	pcall(utils.WaitForGameLoad, SETTINGS.DEFAULTS.LOAD_TIMEOUT)
 end
 
@@ -195,19 +205,19 @@ context.GameLoader = gameLoader
 globalEnv.B0XazContext = context
 
 local function startApplication()
-	if gameLoader and gameLoader.Load then
+	if gameLoader and type(gameLoader.Load) == "function" then
 		pcall(gameLoader.Load)
 	end
 
-	if espSystem and espSystem.InitializeAll then
+	if espSystem and type(espSystem.InitializeAll) == "function" then
 		pcall(espSystem.InitializeAll)
 	end
 
-	if configSystem and configSystem.LoadAutoload then
+	if configSystem and type(configSystem.LoadAutoload) == "function" then
 		pcall(configSystem.LoadAutoload)
 	end
 
-	if configSystem and configSystem.StartAutosaveLoop then
+	if configSystem and type(configSystem.StartAutosaveLoop) == "function" then
 		pcall(configSystem.StartAutosaveLoop)
 	end
 
@@ -223,7 +233,7 @@ local function startApplication()
 end
 
 local isVerified, verifyMsg = false, ""
-if keySystem and keySystem.LoadAndVerify then
+if keySystem and type(keySystem.LoadAndVerify) == "function" then
 	local success, verified, _, msg = pcall(keySystem.LoadAndVerify)
 	if success then
 		isVerified = verified
@@ -235,7 +245,7 @@ if isVerified then
 	startApplication()
 else
 	local promptCreated = false
-	if uiEngine and uiEngine.CreateKeyPrompt then
+	if uiEngine and type(uiEngine.CreateKeyPrompt) == "function" then
 		local success = pcall(function()
 			uiEngine.CreateKeyPrompt(nil, keySystem, activeTheme, startApplication, verifyMsg)
 		end)
