@@ -1,3 +1,4 @@
+-- // src/Systems/ConfigSystem.lua
 local SETTINGS = {
 	AUTOLOAD_FILE = "_autoload",
 	DEFAULT_CONFIG_NAME = "Default",
@@ -43,7 +44,7 @@ return function(Context)
 	local HttpService = game:GetService("HttpService")
 
 	local FeatureConfig = (Context and Context.FeatureConfig) or {}
-	local CONFIG = (Context and Context.CONFIG) or { FOLDER = "Configs", EXT = ".json" }
+	local CONFIG = (Context and Context.CONFIG) or { FOLDER = "B0XazUniversal", EXT = ".json" }
 	local Utils = (Context and Context.Utils) or {}
 	local UIRegistry = (Context and Context.UIRegistry) or {}
 	local Theme = (Context and Context.Theme) or {}
@@ -69,12 +70,16 @@ return function(Context)
 	end
 
 	local function getConfigPath(name)
-		return string.format("%s/%s%s", CONFIG.FOLDER or "", name, CONFIG.EXT or "")
+		local folder = CONFIG.FOLDER or "B0XazUniversal"
+		local ext = CONFIG.EXT or ".json"
+		return string.format("%s/%s%s", folder, name, ext)
 	end
 
 	local function safeColorToTable(color)
 		if typeof(color) == "Color3" and Utils.ColorToTable then
 			return Utils.ColorToTable(color)
+		elseif typeof(color) == "Color3" then
+			return { r = color.R, g = color.G, b = color.B }
 		end
 		return color
 	end
@@ -82,6 +87,8 @@ return function(Context)
 	local function safeTableToColor(data)
 		if type(data) == "table" and Utils.TableToColor then
 			return Utils.TableToColor(data)
+		elseif type(data) == "table" and data.r and data.g and data.b then
+			return Color3.new(data.r, data.g, data.b)
 		end
 		return data
 	end
@@ -510,12 +517,14 @@ return function(Context)
 
 	function ConfigSystem.GetSavedNames()
 		local customNames = {}
-		local fileList = (Utils.ListFiles and Utils.ListFiles(CONFIG.FOLDER)) or {}
-		local extLen = #(CONFIG.EXT or "")
+		local folder = CONFIG.FOLDER or "B0XazUniversal"
+		local fileList = (Utils.ListFiles and Utils.ListFiles(folder)) or {}
+		local ext = CONFIG.EXT or ".json"
+		local extLen = #ext
 
 		for _, path in ipairs(fileList) do
 			local fileName = path:match("[/\\]?([^/\\]+)$") or path
-			if fileName:sub(-extLen) == CONFIG.EXT then
+			if fileName:sub(-extLen) == ext then
 				local baseName = fileName:sub(1, -extLen - 1)
 				if baseName ~= ConfigSystem.AutoloadFile and baseName:lower() ~= SETTINGS.DEFAULT_CONFIG_NAME:lower() then
 					table.insert(customNames, baseName)
@@ -590,7 +599,9 @@ return function(Context)
 			return false, SETTINGS.ERRORS.DELETE_AUTOLOAD
 		end
 		return pcall(function()
-			delfile(getConfigPath(name))
+			if delfile then
+				delfile(getConfigPath(name))
+			end
 		end)
 	end
 
