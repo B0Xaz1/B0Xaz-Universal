@@ -1,3 +1,4 @@
+-- // src/Keys/Full.lua
 local SETTINGS = {
 	KEYS = {
 		"Main Access",
