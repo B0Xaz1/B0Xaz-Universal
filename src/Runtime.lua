@@ -5,7 +5,6 @@ return function(Context)
     local Players = game:GetService("Players")
     local Lighting = game:GetService("Lighting")
     local Workspace = game:GetService("Workspace")
-    local CoreGui = game:GetService("CoreGui")
 
     local LocalPlayer = Players.LocalPlayer
     local Camera = Workspace.CurrentCamera
@@ -35,118 +34,29 @@ return function(Context)
     local _fpsDisplay = 0
 
     ----------------------------------------------------------------
-    -- Stretch Res overlay bars
+    -- Matrix Stretch Res
     ----------------------------------------------------------------
-    local stretchGui = nil
-    local leftBar, rightBar = nil, nil
-
-    local function destroyStretchBars()
-        if stretchGui then
-            pcall(function() stretchGui:Destroy() end)
-        end
-        stretchGui = nil
-        leftBar = nil
-        rightBar = nil
-    end
-
-    local function ensureStretchBars()
-        if stretchGui and stretchGui.Parent then return end
-
-        destroyStretchBars()
-
-        local parent = nil
-        pcall(function()
-            if gethui then parent = gethui() end
-        end)
-        if not parent then
-            pcall(function() parent = CoreGui end)
-        end
-        if not parent and LocalPlayer then
-            parent = LocalPlayer:FindFirstChild("PlayerGui")
-        end
-        if not parent then return end
-
-        stretchGui = Instance.new("ScreenGui")
-        stretchGui.Name = "B0XazStretchRes"
-        stretchGui.IgnoreGuiInset = true
-        stretchGui.ResetOnSpawn = false
-        stretchGui.DisplayOrder = 50
-        stretchGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        stretchGui.Parent = parent
-
-        leftBar = Instance.new("Frame")
-        leftBar.Name = "LeftBar"
-        leftBar.BorderSizePixel = 0
-        leftBar.BackgroundColor3 = Color3.new(0, 0, 0)
-        leftBar.BackgroundTransparency = 0.15
-        leftBar.Size = UDim2.new(0, 0, 1, 0)
-        leftBar.Position = UDim2.new(0, 0, 0, 0)
-        leftBar.Parent = stretchGui
-
-        rightBar = Instance.new("Frame")
-        rightBar.Name = "RightBar"
-        rightBar.BorderSizePixel = 0
-        rightBar.BackgroundColor3 = Color3.new(0, 0, 0)
-        rightBar.BackgroundTransparency = 0.15
-        rightBar.Size = UDim2.new(0, 0, 1, 0)
-        rightBar.Position = UDim2.new(1, 0, 0, 0)
-        rightBar.AnchorPoint = Vector2.new(1, 0)
-        rightBar.Parent = stretchGui
-    end
-
-    local function updateStretchRes()
+    local function applyMatrixStretchRes()
         local cfg = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
-        if not cfg or not cfg.Enabled then
-            destroyStretchBars()
-            return
-        end
+        if not cfg or not cfg.Enabled then return end
 
-        local amount = tonumber(cfg.Amount) or 1.25
-        amount = math.clamp(amount, 1, 2)
+        local xFactor = tonumber(cfg.X) or 1.333
+        local yFactor = tonumber(cfg.Y) or 1.0
 
-        -- Base FOV * stretch amount (clamped to Roblox limits)
-        local baseFov = tonumber(cfg.FOV) or 100
-        local finalFov = math.clamp(baseFov * (0.85 + (amount - 1) * 0.65), 70, 120)
-        Camera.FieldOfView = finalFov
+        local currentCF = Camera.CFrame
+        local pos = currentCF.Position
 
-        if cfg.Bars then
-            ensureStretchBars()
-            if leftBar and rightBar and stretchGui then
-                local vp = Camera.ViewportSize
-                if vp.X > 0 and vp.Y > 0 then
-                    -- Simulate a tighter aspect (more bars = stronger 4:3 feel)
-                    -- amount 1.0 => ~16:9 (almost no bars), amount 2.0 => stronger side bars
-                    local targetAspect = 16 / 9
-                    if amount >= 1.15 then
-                        targetAspect = 4 / 3
-                    end
-                    if amount >= 1.55 then
-                        targetAspect = 5 / 4
-                    end
+        -- Extract and normalize unit vectors to eliminate scale compounding
+        local right = currentCF.RightVector.Unit
+        local up = currentCF.UpVector.Unit
+        local look = currentCF.LookVector.Unit
 
-                    local currentAspect = vp.X / vp.Y
-                    local barWidth = 0
-                    if currentAspect > targetAspect then
-                        local targetWidth = vp.Y * targetAspect
-                        barWidth = math.max(0, (vp.X - targetWidth) * 0.5)
-                    end
+        -- Reconstruct unscaled rotation CFrame
+        local cleanCF = CFrame.fromMatrix(pos, right, up, -look)
 
-                    local opacity = math.clamp(tonumber(cfg.BarOpacity) or 0.85, 0.3, 1)
-                    local transparency = 1 - opacity
-
-                    leftBar.BackgroundTransparency = transparency
-                    rightBar.BackgroundTransparency = transparency
-                    leftBar.Size = UDim2.new(0, barWidth, 1, 0)
-                    rightBar.Size = UDim2.new(0, barWidth, 1, 0)
-                    stretchGui.Enabled = barWidth > 1
-                end
-            end
-        else
-            destroyStretchBars()
-        end
+        -- Multiply by 3D projection scale matrix
+        Camera.CFrame = cleanCF * CFrame.new(0, 0, 0, xFactor, 0, 0, 0, yFactor, 0, 0, 0, 1)
     end
-
-    Context.DestroyStretchRes = destroyStretchBars
 
     ----------------------------------------------------------------
     -- Hitboxes
@@ -231,16 +141,12 @@ return function(Context)
         Connections.Add(RS.RenderStepped:Connect(function(dt)
             if not isSessionAlive() then return end
 
-            -- Stretch Res takes priority over normal Camera FOV when enabled
-            local stretchCfg = FeatureConfig.Extras and FeatureConfig.Extras.StretchRes
-            if stretchCfg and stretchCfg.Enabled then
-                updateStretchRes()
-            else
-                destroyStretchBars()
-                if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
-                    Camera.FieldOfView = FeatureConfig.Camera.FOV
-                end
+            if FeatureConfig.Camera and FeatureConfig.Camera.FOV then
+                Camera.FieldOfView = FeatureConfig.Camera.FOV
             end
+
+            -- Matrix stretch res transformation
+            applyMatrixStretchRes()
 
             if AimbotSystem then
                 if type(AimbotSystem.UpdateAim) == "function" then
