@@ -1,22 +1,30 @@
--- init.lua
 local GITHUB_USER = "B0Xaz1"
 local GITHUB_REPO = "B0Xaz-Universal"
 local GITHUB_BRANCH = "main"
 
-local BASE_URL = string.format("https://raw.githubusercontent.com/%s/%s/%s/", GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH)
+local BASE_URL = string.format(
+	"https://raw.githubusercontent.com/%s/%s/%s/",
+	GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH
+)
 getgenv().B0XazScriptURL = BASE_URL .. "init.lua"
-
 getgenv().B0XazContext = {}
 local Context = getgenv().B0XazContext
 
 local function import(path)
 	local url = BASE_URL .. path .. "?t=" .. tostring(tick())
-	local ok, source = pcall(function() return game:HttpGet(url) end)
-	if not ok or not source or #source == 0 or source:sub(1, 3) == "404" or source:find("404: Not Found") or source:find("<!DOCTYPE html>") then
-		error("[B0Xaz Loader] 404 File Not Found: " .. path .. "\nCheck URL: " .. url)
+	local ok, source = pcall(function()
+		return game:HttpGet(url)
+	end)
+	if not ok or not source or #source == 0
+		or source:sub(1, 3) == "404"
+		or source:find("404: Not Found")
+		or source:find("<!DOCTYPE html>") then
+		error("[B0Xaz Loader] 404 File Not Found: " .. path .. "\n" .. url)
 	end
 	local chunk, err = loadstring(source, path)
-	if not chunk then error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err)) end
+	if not chunk then
+		error("[B0Xaz Loader] Syntax Error in " .. path .. " : " .. tostring(err))
+	end
 	return chunk()
 end
 
@@ -32,19 +40,29 @@ Context.Utils = import("src/Utils.lua")(CONFIG)
 Context.DrawingManager = import("src/DrawingManager.lua")()
 
 local ctxData = import("src/Context.lua")(CONFIG, DefaultLighting, Context.Utils, Context.DrawingManager)
-for k, v in pairs(ctxData) do Context[k] = v end
+for k, v in pairs(ctxData) do
+	Context[k] = v
+end
 
 local activeTheme, themeMgr = import("src/UI/Theme.lua")()
 Context.Theme = activeTheme
 Context.ThemeManager = themeMgr
 
--- Load KeySystem First
+-- Key system BEFORE UI
 Context.KeySystem = import("src/Systems/KeySystem.lua")(Context)
+print("[B0Xaz] KeySystem loaded")
 
 Context.UIEngine = import("src/UI/UI.lua")(Context, Context.Theme)
-if not Context.UIEngine then error("[B0Xaz Loader] src/UI/UI.lua failed to return the UI engine!") end
+if not Context.UIEngine then
+	error("[B0Xaz Loader] UI engine failed to load")
+end
+if type(Context.UIEngine.CreateKeyPrompt) ~= "function" then
+	error("[B0Xaz Loader] UI.lua is missing CreateKeyPrompt — push latest UI.lua to GitHub")
+end
 
 local function BootScript()
+	print("[B0Xaz] Booting tier:", Context.KeySystem.CurrentTier, Context.KeySystem.GetTierName())
+
 	Context.FlingSystem = import("src/Systems/FlingSystem.lua")(Context)
 	Context.FlySystem = import("src/Systems/FlySystem.lua")(Context)
 	Context.MovementSystem = import("src/Systems/MovementSystem.lua")(Context)
@@ -58,7 +76,12 @@ local function BootScript()
 	Context.GameLoader = import("src/Games/Loader.lua")(Context, import)
 	Context.GameModule = Context.GameLoader.Load()
 
+	-- BuildUI MUST call UIEngine.new internally
 	import("src/UI/BuildUI.lua")(Context)
+
+	if not Context.UI then
+		error("[B0Xaz Loader] BuildUI did not set Context.UI — check BuildUI.lua")
+	end
 
 	pcall(function()
 		if Context.ConfigSystem then
@@ -72,14 +95,20 @@ local function BootScript()
 	Context.ESPSystem.InitializeAll()
 	import("src/Runtime.lua")(Context)
 
-	local gameName = Context.GameLoader.GetDisplayName()
-	Context.UI:Notify("B0Xaz Universal", "Access Granted: " .. Context.KeySystem.GetTierName(), 5, Context.Theme.Success)
+	Context.UI:Notify(
+		"B0Xaz Universal",
+		"Access: " .. Context.KeySystem.GetTierName(),
+		5,
+		Context.Theme.Success
+	)
 end
 
--- Validate Key before booting
 local hasKey, tier, msg = Context.KeySystem.LoadAndVerify()
+print("[B0Xaz] Saved key check:", hasKey, tier, msg)
+
 if hasKey then
 	BootScript()
 else
+	-- Show blocking prompt (no main menu until success)
 	Context.UIEngine:CreateKeyPrompt(Context.KeySystem, Context.Theme, BootScript, msg)
 end
