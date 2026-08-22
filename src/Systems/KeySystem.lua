@@ -6,17 +6,20 @@ return function(Context)
 	local Utils = Context.Utils
 	local CONFIG = Context.CONFIG
 
-	-- ================================================================
-	-- PLATOBOOST CONFIGURATION (Free Plan - 1 Service)
-	-- Replace with your single Service ID and Gateway Link from Platoboost
-	-- ================================================================
+	----------------------------------------------------------------
+	-- PLATOBOOST (Free plan = 1 service)
+	----------------------------------------------------------------
+	-- Service ID from Platoboost top-right: (ID: 30171)
 	KeySystem.SERVICE_ID = "30171"
-	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/YOUR_LINK_ID"
 
-	-- Optional: Manual exact key overrides if you don't want to use prefixes
+	-- Paste your Platoboost GATEWAY link here (Settings > Monetization / Gateway)
+	-- Example: https://gateway.platoboost.com/a/xxxxx
+	KeySystem.GET_KEY_URL = "https://gateway.platoboost.com/a/YOUR_GATEWAY_ID"
+
+	-- Optional exact overrides (always checked after Platoboost says valid)
 	local EXACT_TIER_OVERRIDES = {
-		["MY-CUSTOM-FULL-KEY-123"] = 3,
-		["MY-CUSTOM-NORM-KEY-456"] = 2,
+		-- ["FULL-myfriend1"] = 3,
+		-- ["NORM-tester"] = 2,
 	}
 
 	local TIER_NAMES = {
@@ -28,25 +31,117 @@ return function(Context)
 
 	KeySystem.CurrentTier = 0
 	KeySystem.CurrentKey = ""
-	local KEY_FILE = tostring(CONFIG.FOLDER) .. "/_key.json"
+
+	local KEY_FILE = tostring(CONFIG.FOLDER or "B0XazUniversal") .. "/_key.json"
 
 	local function trim(s)
 		return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 	end
 
-	local function platoboostVerify(serviceId, key)
-		local url = string.format("https://api.platoboost.com/public/whitelist/v2/verify?service=%s&key=%s", serviceId, key)
-		local success, response = pcall(function()
-			return game:HttpGet(url)
+	local function getHWID()
+		local hwid = ""
+		pcall(function()
+			hwid = game:GetService("RbxAnalyticsService"):GetClientId()
 		end)
+		if type(hwid) ~= "string" or hwid == "" then
+			local lp = Players.LocalPlayer
+			hwid = lp and tostring(lp.UserId) or "unknown"
+		end
+		return hwid
+	end
 
-		if success and response then
-			local ok, data = pcall(function() return HttpService:JSONDecode(response) end)
-			if ok and type(data) == "table" then
-				return data.success == true, data.message or ""
+	local function httpGet(url)
+		local requestFn = (syn and syn.request)
+			or (http and http.request)
+			or http_request
+			or request
+			or (fluxus and fluxus.request)
+
+		if requestFn then
+			local ok, res = pcall(function()
+				return requestFn({
+					Url = url,
+					Method = "GET",
+					Headers = {
+						["User-Agent"] = "B0Xaz-Universal",
+						["Content-Type"] = "application/json",
+					},
+				})
+			end)
+			if ok and res then
+				local body = res.Body or res.body
+				local code = res.StatusCode or res.status_code or 200
+				if code == 200 and body then
+					return body
+				end
 			end
 		end
-		return false, "Network error reaching Platoboost."
+
+		local ok2, body2 = pcall(function()
+			return game:HttpGet(url)
+		end)
+		if ok2 then
+			return body2
+		end
+		return nil
+	end
+
+	local function platoboostVerify(serviceId, key)
+		local url = string.format(
+			"https://api.platoboost.com/public/whitelist/v2/verify?service=%s&key=%s",
+			HttpService:UrlEncode(tostring(serviceId)),
+			HttpService:UrlEncode(tostring(key))
+		)
+
+		local body = httpGet(url)
+		if not body then
+			return false, "Could not reach Platoboost API."
+		end
+
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(body)
+		end)
+		if not ok or type(data) ~= "table" then
+			return false, "Invalid Platoboost response."
+		end
+
+		if data.success == true then
+			return true, data.message or "OK"
+		end
+
+		return false, data.message or data.error or "Invalid or expired key."
+	end
+
+	local function resolveTier(key)
+		local upper = key:upper()
+
+		if EXACT_TIER_OVERRIDES[key] then
+			return EXACT_TIER_OVERRIDES[key]
+		end
+		if EXACT_TIER_OVERRIDES[upper] then
+			return EXACT_TIER_OVERRIDES[upper]
+		end
+
+		-- Full Access
+		if upper:sub(1, 5) == "FULL-"
+			or upper:sub(1, 5) == "FULL_"
+			or upper:find("B0XAZ%-FULL", 1, false)
+			or upper:find("FULLACCESS", 1, true)
+		then
+			return 3
+		end
+
+		-- Normal
+		if upper:sub(1, 5) == "NORM-"
+			or upper:sub(1, 5) == "NORM_"
+			or upper:find("B0XAZ%-NORM", 1, false)
+			or upper:find("NORMAL", 1, true)
+		then
+			return 2
+		end
+
+		-- Standard Platoboost link keys = Entry
+		return 1
 	end
 
 	function KeySystem.GetTierName(tier)
@@ -58,93 +153,118 @@ return function(Context)
 		return (tonumber(KeySystem.CurrentTier) or 0) >= req
 	end
 
-	-- ================================================================
-	-- Validate Key via Platoboost + Determine Tier Level
-	-- ================================================================
 	function KeySystem.Validate(key)
 		key = trim(key)
 		if key == "" then
 			return false, 0, "Key cannot be empty."
 		end
 
-		if KeySystem.SERVICE_ID == "YOUR_PLATOBOOST_SERVICE_ID" or KeySystem.SERVICE_ID == "" then
-			return false, 0, "Developer setup required: Service ID not set."
+		if not KeySystem.SERVICE_ID or KeySystem.SERVICE_ID == "" then
+			return false, 0, "Service ID is not configured."
 		end
 
-		-- 1. Check validity with Platoboost API
-		local isValid, pbMsg = platoboostVerify(KeySystem.SERVICE_ID, key)
-		if not isValid then
-			return false, 0, (pbMsg ~= "" and pbMsg or "Invalid or expired Platoboost key.")
+		local ok, msg = platoboostVerify(KeySystem.SERVICE_ID, key)
+		if not ok then
+			return false, 0, msg or "Invalid or expired key."
 		end
 
-		-- 2. Platoboost confirmed key is valid! Now determine tier:
-		local uppercaseKey = key:upper()
-		local tier = 1 -- Default for standard link completion keys
-
-		-- Exact override check
-		if EXACT_TIER_OVERRIDES[key] or EXACT_TIER_OVERRIDES[uppercaseKey] then
-			tier = EXACT_TIER_OVERRIDES[key] or EXACT_TIER_OVERRIDES[uppercaseKey]
-		-- Prefix checks for Tier 3 (Full)
-		elseif uppercaseKey:sub(1, 5) == "FULL-" 
-			or uppercaseKey:sub(1, 5) == "FULL_" 
-			or uppercaseKey:find("B0XAZ-FULL") 
-			or uppercaseKey:find("FULLACCESS") then
-			tier = 3
-		-- Prefix checks for Tier 2 (Normal)
-		elseif uppercaseKey:sub(1, 5) == "NORM-" 
-			or uppercaseKey:sub(1, 5) == "NORM_" 
-			or uppercaseKey:find("B0XAZ-NORM") 
-			or uppercaseKey:find("NORMAL") then
-			tier = 2
-		end
-
-		return true, tier, "Authenticated: " .. TIER_NAMES[tier], key
+		local tier = resolveTier(key)
+		return true, tier, "Authenticated: " .. KeySystem.GetTierName(tier), key
 	end
 
 	function KeySystem.SaveKey(key)
 		key = trim(key)
-		local data = { Key = key, SavedAt = os.time() }
-		local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
-		if ok then Utils.WriteFile(KEY_FILE, encoded) end
+		local data = {
+			Key = key,
+			HWID = getHWID(),
+			SavedAt = os.time(),
+		}
+		local ok, encoded = pcall(function()
+			return HttpService:JSONEncode(data)
+		end)
+		if not ok then
+			return false, "Failed to encode key."
+		end
+		return Utils.WriteFile(KEY_FILE, encoded)
 	end
 
 	function KeySystem.ApplyKey(key)
 		local ok, tier, msg, canonical = KeySystem.Validate(key)
-		if not ok then return false, 0, msg end
-		KeySystem.CurrentKey = canonical or key
+		if not ok then
+			return false, 0, msg
+		end
+
+		KeySystem.CurrentKey = canonical or trim(key)
 		KeySystem.CurrentTier = tier
 		KeySystem.SaveKey(KeySystem.CurrentKey)
 		return true, tier, msg
 	end
 
 	function KeySystem.LoadAndVerify()
-		Utils.MakeFolder(CONFIG.FOLDER)
-		local content = Utils.ReadFile(KEY_FILE)
-		if not content or content == "" then return false, 0, "" end
+		if Utils.MakeFolder then
+			Utils.MakeFolder(CONFIG.FOLDER)
+		end
 
-		local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
-		if ok and type(data) == "table" and data.Key then
-			local valid, tier, msg, canonical = KeySystem.Validate(data.Key)
-			if valid then
-				KeySystem.CurrentKey = canonical or data.Key
-				KeySystem.CurrentTier = tier
-				return true, tier, msg
+		local content = Utils.ReadFile(KEY_FILE)
+		if not content or content == "" then
+			return false, 0, ""
+		end
+
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(content)
+		end)
+		if not ok or type(data) ~= "table" or not data.Key then
+			return false, 0, "Corrupted saved key file."
+		end
+
+		-- Optional local HWID check (Platoboost also binds keys server-side)
+		if data.HWID and data.HWID ~= "" then
+			local current = getHWID()
+			if tostring(data.HWID) ~= tostring(current) then
+				return false, 0, "HWID mismatch. This key was saved on another device."
 			end
 		end
-		return false, 0, "Saved key is no longer valid."
+
+		local valid, tier, msg, canonical = KeySystem.Validate(data.Key)
+		if not valid then
+			return false, 0, msg or "Saved key is no longer valid."
+		end
+
+		KeySystem.CurrentKey = canonical or trim(data.Key)
+		KeySystem.CurrentTier = tier
+		return true, tier, msg or "Authentication Successful."
 	end
 
 	function KeySystem.ClearKey()
 		KeySystem.CurrentKey = ""
 		KeySystem.CurrentTier = 0
-		pcall(function() if isfile(KEY_FILE) then delfile(KEY_FILE) end end)
+		pcall(function()
+			if isfile and isfile(KEY_FILE) then
+				delfile(KEY_FILE)
+			end
+		end)
 	end
 
 	function KeySystem.GetMaskedKey()
 		local k = KeySystem.CurrentKey
-		if not k or k == "" then return "None" end
-		if #k <= 10 then return "****" end
-		return k:sub(1, 4) .. "****" .. k:sub(-4)
+		if not k or k == "" then
+			return "None"
+		end
+		if #k <= 10 then
+			return string.rep("*", math.max(4, #k))
+		end
+		return k:sub(1, 4) .. string.rep("*", 6) .. k:sub(-4)
+	end
+
+	function KeySystem.CopyGetKeyLink()
+		local link = KeySystem.GET_KEY_URL or ""
+		if link == "" or link:find("YOUR_GATEWAY") then
+			return false, "Get-key link not configured yet."
+		end
+		local ok = pcall(function()
+			setclipboard(link)
+		end)
+		return ok, ok and "Link copied." or "Clipboard unavailable."
 	end
 
 	return KeySystem
