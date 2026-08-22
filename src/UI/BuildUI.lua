@@ -754,6 +754,9 @@ return function(Context)
 	----------------------------------------------------------------
 	-- TAB: Themes (Live Theming & Player Theme Creation)
 	----------------------------------------------------------------
+	----------------------------------------------------------------
+	-- TAB: Themes (Live Color Picker Registry Update)
+	----------------------------------------------------------------
 	local themeTab = UI:AddTab("Themes")
 
 	local themePresetsSec = themeTab:AddSection("Theme Presets")
@@ -771,14 +774,20 @@ return function(Context)
 		presetNames = { "Default Cyan" }
 	end
 
-	local customColorPickers = {}
-
 	local function updateCustomPickers(newColors)
-		for key, cp in pairs(customColorPickers) do
-			if newColors[key] then
-				cp.Set(newColors[key])
+		local function syncCP(key, val)
+			if UIRegistry[key] and UIRegistry[key].Set then
+				UIRegistry[key].Set(val, true)
 			end
 		end
+		syncCP("Theme_Accent", newColors.Accent or Theme.Accent)
+		syncCP("Theme_Bg", newColors.Bg or Theme.Bg)
+		syncCP("Theme_Panel", newColors.Panel or Theme.Panel)
+		syncCP("Theme_Elem", newColors.Elem or Theme.Elem)
+		syncCP("Theme_Side", newColors.Side or Theme.Side)
+		syncCP("Theme_Text", newColors.Text or Theme.Text)
+		syncCP("Theme_Border", newColors.Border or Theme.Border)
+		syncCP("Theme_ToggleOn", newColors.ToggleOn or Theme.ToggleOn)
 	end
 
 	themePresetsSec:AddDropdown("Choose Preset", presetNames, function(v)
@@ -791,35 +800,35 @@ return function(Context)
 		end
 	end, ThemeManager and ThemeManager.ActivePreset or "Default Cyan")
 
-	customColorPickers.Accent = themeCustomSec:AddColorPicker("Accent Color", Theme.Accent, function(c)
+	UIRegistry.Theme_Accent = themeCustomSec:AddColorPicker("Accent Color", Theme.Accent, function(c)
 		UI:UpdateThemeKey("Accent", c)
 	end)
 
-	customColorPickers.Bg = themeCustomSec:AddColorPicker("Main Background", Theme.Bg, function(c)
+	UIRegistry.Theme_Bg = themeCustomSec:AddColorPicker("Main Background", Theme.Bg, function(c)
 		UI:UpdateThemeKey("Bg", c)
 	end)
 
-	customColorPickers.Panel = themeCustomSec:AddColorPicker("Panel Background", Theme.Panel, function(c)
+	UIRegistry.Theme_Panel = themeCustomSec:AddColorPicker("Panel Background", Theme.Panel, function(c)
 		UI:UpdateThemeKey("Panel", c)
 	end)
 
-	customColorPickers.Elem = themeCustomSec:AddColorPicker("Element / Button", Theme.Elem, function(c)
+	UIRegistry.Theme_Elem = themeCustomSec:AddColorPicker("Element / Button", Theme.Elem, function(c)
 		UI:UpdateThemeKey("Elem", c)
 	end)
 
-	customColorPickers.Side = themeCustomSec:AddColorPicker("Header / Sidebar", Theme.Side, function(c)
+	UIRegistry.Theme_Side = themeCustomSec:AddColorPicker("Header / Sidebar", Theme.Side, function(c)
 		UI:UpdateThemeKey("Side", c)
 	end)
 
-	customColorPickers.Text = themeCustomSec:AddColorPicker("Text Primary", Theme.Text, function(c)
+	UIRegistry.Theme_Text = themeCustomSec:AddColorPicker("Text Primary", Theme.Text, function(c)
 		UI:UpdateThemeKey("Text", c)
 	end)
 
-	customColorPickers.Border = themeCustomSec:AddColorPicker("Border Outline", Theme.Border, function(c)
+	UIRegistry.Theme_Border = themeCustomSec:AddColorPicker("Border Outline", Theme.Border, function(c)
 		UI:UpdateThemeKey("Border", c)
 	end)
 
-	customColorPickers.ToggleOn = themeCustomSec:AddColorPicker("Toggle Active", Theme.ToggleOn, function(c)
+	UIRegistry.Theme_ToggleOn = themeCustomSec:AddColorPicker("Toggle Active", Theme.ToggleOn, function(c)
 		UI:UpdateThemeKey("ToggleOn", c)
 	end)
 
