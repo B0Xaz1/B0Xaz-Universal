@@ -30,6 +30,7 @@ print("[B0Xaz] Loading modules...")
 
 -- 1. Full Session Cleanup
 import("src/Cleanup.lua")()
+getgenv().B0XazSessionId = getgenv().B0XazSessionId or 1
 
 -- 2. Base Configurations & Utils
 local CONFIG, DefaultLighting = import("src/Config.lua")()
