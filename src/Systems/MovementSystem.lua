@@ -9,8 +9,7 @@ return function(Context)
 
     function MovementSystem.UpdateBhop()
         if not FeatureConfig.Movement or not FeatureConfig.Movement.Bhop then return end
-        
-        -- Require spacebar hold on desktop or active jump trigger
+
         if not UIS:IsKeyDown(Enum.KeyCode.Space) and not UIS.TouchEnabled then return end
 
         local hum = Utils.GetHumanoid()
