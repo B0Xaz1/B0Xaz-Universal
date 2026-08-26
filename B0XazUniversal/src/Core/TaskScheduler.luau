@@ -1,8 +1,6 @@
 --!strict
 -- ══════════════════════════════════════════════════════════════════════════════
 -- B0XazUniversal - Multi-Phase Lifecycle Task Scheduler
--- Eliminates high-frequency pcall allocations, consolidates scattered frame
--- connections into prioritized execution pipelines (PreSim, Heartbeat, Render).
 -- ══════════════════════════════════════════════════════════════════════════════
 
 local RunService = game:GetService("RunService")
@@ -35,7 +33,6 @@ local function sortJobs(a: TaskJob, b: TaskJob): boolean
 end
 
 function TaskScheduler:_bindEnginePipelines()
-	-- 1. Pre-Simulation (Stepped)
 	local steppedConn = RunService.Stepped:Connect(function(_, dt: number)
 		for _, job in ipairs(self._preSimJobs) do
 			if job.Enabled then
@@ -46,7 +43,6 @@ function TaskScheduler:_bindEnginePipelines()
 	end)
 	self._disposer:Add(steppedConn)
 
-	-- 2. Post-Simulation (Heartbeat)
 	local heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
 		for _, job in ipairs(self._heartbeatJobs) do
 			if job.Enabled then
@@ -57,7 +53,6 @@ function TaskScheduler:_bindEnginePipelines()
 	end)
 	self._disposer:Add(heartbeatConn)
 
-	-- 3. Render Pipeline (RenderStepped)
 	local renderConn = RunService.RenderStepped:Connect(function(dt: number)
 		for _, job in ipairs(self._renderJobs) do
 			if job.Enabled then
@@ -68,7 +63,6 @@ function TaskScheduler:_bindEnginePipelines()
 	end)
 	self._disposer:Add(renderConn)
 
-	-- 4. High-Priority Camera Override Binding
 	local CAMERA_BIND_KEY = "B0XazCameraOverride"
 	pcall(function() RunService:UnbindFromRenderStep(CAMERA_BIND_KEY) end)
 
@@ -114,4 +108,7 @@ function TaskScheduler:RegisterCamera(name: string, priority: number, callback: 
 	return job
 end
 
-return TaskScheduler
+-- Factory Wrapper
+return function(disposer: any)
+	return TaskScheduler.new(disposer)
+end
