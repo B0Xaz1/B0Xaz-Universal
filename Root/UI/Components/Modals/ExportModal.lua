@@ -10,6 +10,7 @@ ExportModal.__index = ExportModal
 
 function ExportModal.Show(jsonString, themeEngine)
 	local safeParent = DOM.GetSafeParent()
+	local theme = themeEngine.Current
 
 	local gui = DOM.Create("ScreenGui", {
 		Name = DOM.RandomName(),
@@ -28,24 +29,26 @@ function ExportModal.Show(jsonString, themeEngine)
 	})
 
 	local card = DOM.Create("Frame", {
-		Size = UDim2.fromOffset(440, 300),
-		Position = UDim2.new(0.5, -220, 0.5, -150),
-		BackgroundColor3 = themeEngine.Current.Bg,
+		Size = UDim2.fromOffset(440, 320),
+		Position = UDim2.new(0.5, -220, 0.5, -160),
+		BackgroundColor3 = theme.Bg,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		Parent = backdrop,
 	}, {
-		DOM.CreateStroke(themeEngine.Current.Border, 1),
+		DOM.CreateCorner(12),
+		DOM.CreateStroke(theme.Border, 1),
 	})
 
 	DOM.Create("TextLabel", {
 		Text = "Configuration JSON Data",
-		Font = Enum.Font.Code,
+		Font = Enum.Font.GothamBold,
 		TextSize = 13,
-		TextColor3 = themeEngine.Current.Text,
+		TextColor3 = theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(12, 10),
-		Size = UDim2.new(1, -50, 0, 20),
+		Position = UDim2.fromOffset(14, 12),
+		Size = UDim2.new(1, -44, 0, 20),
 		Parent = card,
 	})
 
@@ -54,24 +57,25 @@ function ExportModal.Show(jsonString, themeEngine)
 		Position = UDim2.new(1, -28, 0, 10),
 		BackgroundTransparency = 1,
 		Text = "x",
-		Font = Enum.Font.Code,
-		TextSize = 13,
-		TextColor3 = themeEngine.Current.TextDim,
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextColor3 = theme.TextDim,
 		Parent = card,
 	})
 	closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
 	local scroll = DOM.Create("ScrollingFrame", {
-		Size = UDim2.new(1, -24, 0, 200),
-		Position = UDim2.fromOffset(12, 40),
-		BackgroundColor3 = themeEngine.Current.Panel,
+		Size = UDim2.new(1, -28, 0, 220),
+		Position = UDim2.fromOffset(14, 40),
+		BackgroundColor3 = theme.Panel,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = themeEngine.Current.Accent,
+		ScrollBarImageColor3 = theme.Accent,
 		AutomaticCanvasSize = Enum.AutomaticSize.XY,
 		Parent = card,
 	}, {
-		DOM.CreateStroke(themeEngine.Current.BorderDim, 1),
+		DOM.CreateCorner(8),
+		DOM.CreateStroke(theme.BorderDim, 1),
 		DOM.CreatePadding(6),
 	})
 
@@ -81,7 +85,7 @@ function ExportModal.Show(jsonString, themeEngine)
 		Font = Enum.Font.Code,
 		TextSize = 11,
 		Text = jsonString or "",
-		TextColor3 = themeEngine.Current.Text,
+		TextColor3 = theme.Text,
 		ClearTextOnFocus = false,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -90,15 +94,17 @@ function ExportModal.Show(jsonString, themeEngine)
 	})
 
 	local copyBtn = DOM.Create("TextButton", {
-		Size = UDim2.new(1, -24, 0, 30),
-		Position = UDim2.new(0, 12, 1, -40),
-		BackgroundColor3 = themeEngine.Current.Accent,
+		Size = UDim2.new(1, -28, 0, 28),
+		Position = UDim2.new(0, 14, 1, -34),
+		BackgroundColor3 = theme.Accent,
 		BorderSizePixel = 0,
 		Text = "Copy to Clipboard",
-		Font = Enum.Font.Code,
+		Font = Enum.Font.Gotham,
 		TextSize = 11,
 		TextColor3 = Color3.new(0, 0, 0),
 		Parent = card,
+	}, {
+		DOM.CreateCorner(8),
 	})
 
 	copyBtn.MouseButton1Click:Connect(function()
