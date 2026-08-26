@@ -1,10 +1,9 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (B0Xaz1/Rewrite Executor Bootstrapper)
+-- Init.lua (Smart Auto-Path Resolver Bootstrapper)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
 
--- Correct Base URL pointing to B0Xaz1/Rewrite
 local branch = env.B0XazRef or "main"
 local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/")
 
@@ -33,41 +32,76 @@ local function isValidLua(source)
 	return true
 end
 
--- Virtual Module Loader
-local function import(path)
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^src/", "")
-	if moduleCache[cleanPath] then
-		return moduleCache[cleanPath]
+-- Generate all potential path variations to solve capitalization or src/ differences
+local function getCandidatePaths(relativePath)
+	local clean = relativePath:gsub("^%./", ""):gsub("^/", "")
+	local candidates = {}
+
+	-- 1. Exact relative path
+	table.insert(candidates, clean)
+
+	-- 2. Strip or Add 'src/'
+	if clean:sub(1, 4) == "src/" then
+		table.insert(candidates, clean:sub(5))
+	else
+		table.insert(candidates, "src/" .. clean)
 	end
 
-	local targetUrl = baseUrl .. cleanPath
-	print("[B0Xaz] Fetching: " .. targetUrl)
+	-- 3. Lowercase path
+	table.insert(candidates, clean:lower())
+	if clean:sub(1, 4) == "src/" then
+		table.insert(candidates, clean:sub(5):lower())
+	else
+		table.insert(candidates, ("src/" .. clean):lower())
+	end
 
+	-- 4. Direct filename (root level)
+	local filename = clean:match("[^/]+$")
+	if filename then
+		table.insert(candidates, filename)
+	end
+
+	return candidates
+end
+
+-- Virtual Module Loader with Multi-Path Searching
+local function import(path)
+	if moduleCache[path] then
+		return moduleCache[path]
+	end
+
+	local candidates = getCandidatePaths(path)
 	local source = nil
-	for attempt = 1, 3 do
+	local matchedPath = nil
+
+	for _, candidate in ipairs(candidates) do
+		local targetUrl = baseUrl .. candidate
 		local ok, result = pcall(httpGet, targetUrl)
 		if ok and isValidLua(result) then
 			source = result
+			matchedPath = candidate
 			break
 		end
-		task.wait(0.1)
+		task.wait(0.02)
 	end
 
 	if not source then
-		error("[B0Xaz Loader] 404 File Not Found on GitHub: '" .. cleanPath .. "'\nURL: " .. targetUrl)
+		error("[B0Xaz Loader] Could not find '" .. path .. "' anywhere on GitHub. Make sure the file is uploaded to B0Xaz1/Rewrite!")
 	end
 
-	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
+	print("[B0Xaz] Loaded module: " .. matchedPath)
+
+	local chunk, compileErr = loadstring(source, "@" .. matchedPath)
 	if not chunk then
-		error("[B0Xaz Loader] Syntax Error in '" .. cleanPath .. "': " .. tostring(compileErr))
+		error("[B0Xaz Loader] Syntax Error in '" .. matchedPath .. "': " .. tostring(compileErr))
 	end
 
 	local ok, module = pcall(chunk)
 	if not ok then
-		error("[B0Xaz Loader] Runtime Error in '" .. cleanPath .. "': " .. tostring(module))
+		error("[B0Xaz Loader] Runtime Error in '" .. matchedPath .. "': " .. tostring(module))
 	end
 
-	moduleCache[cleanPath] = module
+	moduleCache[path] = module
 	return module
 end
 
