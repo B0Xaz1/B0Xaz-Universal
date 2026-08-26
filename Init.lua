@@ -164,6 +164,12 @@ container:Register("GameLoader", GameLoader.new())
 local theme = container:Register("ThemeEngine", ThemeEngine.new())
 container:Register("UIManager", UIManager.new())
 
+-- Load the saved profile BEFORE the UI is built. Widgets read their initial
+-- state from config at construction time; loading after InitAll() left every
+-- toggle/slider showing factory defaults while the saved values were live.
+pcall(config.Init, config, container)
+pcall(config.LoadProfile, config, "_autoload")
+
 container:InitAll()
 container:StartAll()
 
@@ -171,7 +177,6 @@ local auth = container:Get("AuthService")
 local authenticated, _, _ = auth:LoadAndVerify()
 
 local function launch()
-	config:LoadProfile("_autoload")
 	config:StartAutosave(2.0)
 	print("[B0Xaz] ✓ Universal Hub Online.")
 end
