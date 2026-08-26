@@ -1,6 +1,6 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- UI/Components/Button.lua
--- Executor-safe action button component
+-- Executor-safe action button component (flat, bordered)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local DOM = require(script.Parent.Parent.DOM)
@@ -15,18 +15,17 @@ function Button.new(parent, text, callback, themeEngine, domModule)
 	self._callback = callback
 
 	self.Frame = dom.Create("TextButton", {
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 28),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = text or "Button",
-		Font = Enum.Font.Gotham,
+		Font = Enum.Font.Code,
 		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		AutoButtonColor = false,
 		Parent = parent,
 	}, {
 		dom.CreateStroke(self._theme.Current.BorderDim, 1),
-		dom.CreateCorner(6),
 	})
 
 	self._theme:Bind(self.Frame, "BackgroundColor3", "Elem")
