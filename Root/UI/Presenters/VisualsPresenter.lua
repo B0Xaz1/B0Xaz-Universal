@@ -7,6 +7,7 @@ local Toggle = require(script.Parent.Parent.Components.Toggle)
 local Slider = require(script.Parent.Parent.Components.Slider)
 local Dropdown = require(script.Parent.Parent.Components.Dropdown)
 local ColorPicker = require(script.Parent.Parent.Components.ColorPicker)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local VisualsPresenter = {}
 
@@ -15,6 +16,7 @@ function VisualsPresenter.Build(tab, container, themeEngine)
 	local page = tab.Page
 
 	-- 2D ESP Overlays
+	Section.new(page, "2D ESP", themeEngine)
 	Toggle.new(page, "Master ESP Switch", config:Get("ESP.Enabled"), function(v)
 		config:Set("ESP.Enabled", v)
 	end, themeEngine)
@@ -44,6 +46,7 @@ function VisualsPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- 3D Chams / Highlights
+	Section.new(page, "Chams", themeEngine)
 	Toggle.new(page, "Enable Player Chams", config:Get("Chams.Enabled"), function(v)
 		config:Set("Chams.Enabled", v)
 	end, themeEngine)
@@ -57,6 +60,7 @@ function VisualsPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- World Lighting & FX
+	Section.new(page, "World & FX", themeEngine)
 	Toggle.new(page, "Fullbright Mode", config:Get("Visuals.Fullbright"), function(v)
 		config:Set("Visuals.Fullbright", v)
 	end, themeEngine)
