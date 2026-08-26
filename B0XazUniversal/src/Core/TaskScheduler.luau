@@ -47,7 +47,13 @@ local function makePipelineRunner(scheduler: any, jobs: { TaskJob }, label: stri
 end
 
 function TaskScheduler:_bindEnginePipelines()
-	local steppedConn = RunService.Stepped:Connect(makePipelineRunner(self, self._preSimJobs, "PreSim"))
+	-- Stepped fires with (time, step) while every other pipeline signal
+	-- passes the frame delta directly, so the PreSim runner is wrapped to
+	-- forward only the step argument.
+	local preSimRunner = makePipelineRunner(self, self._preSimJobs, "PreSim")
+	local steppedConn = RunService.Stepped:Connect(function(_, dt: number)
+		preSimRunner(dt)
+	end)
 	self._disposer:Add(steppedConn)
 
 	local heartbeatConn = RunService.Heartbeat:Connect(makePipelineRunner(self, self._heartbeatJobs, "Heartbeat"))
