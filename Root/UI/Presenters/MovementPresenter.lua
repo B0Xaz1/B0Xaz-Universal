@@ -7,6 +7,7 @@ local Toggle = require(script.Parent.Parent.Components.Toggle)
 local Slider = require(script.Parent.Parent.Components.Slider)
 local Keybind = require(script.Parent.Parent.Components.Keybind)
 local Button = require(script.Parent.Parent.Components.Button)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local MovementPresenter = {}
 
@@ -16,6 +17,7 @@ function MovementPresenter.Build(tab, container, themeEngine)
 	local page = tab.Page
 
 	-- Speed & Jump Modifiers
+	Section.new(page, "Speed & Jump", themeEngine)
 	Slider.new(page, "Walk Speed", config:Get("Movement.Speed"), 16, 300, function(v)
 		config:Set("Movement.Speed", v)
 	end, " ws", themeEngine)
@@ -41,6 +43,7 @@ function MovementPresenter.Build(tab, container, themeEngine)
 	end, " sps", themeEngine)
 
 	-- Flight Physics Controls
+	Section.new(page, "Flight", themeEngine)
 	Toggle.new(page, "Enable 6-DOF Flight", config:Get("Movement.FlyEnabled"), function(v)
 		if v then locomotion:StartFly() else locomotion:StopFly() end
 	end, themeEngine)
