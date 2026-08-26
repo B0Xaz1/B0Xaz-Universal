@@ -48,18 +48,44 @@ return function(services: any)
 		EventBus:Publish("PlayerCharacterRemoving", player, character)
 	end
 
-	-- Entries whose character started destroying are dropped eagerly so
-	-- consumers never hold a reference into a half-destroyed model.
+	-- Validates that tracked character parts are still connected to the
+	-- data model and belong to the player's active character. If a model was
+	-- removed, the entry is evicted. If missing or out of sync, it attempts
+	-- an immediate fast-path resolution from player.Character so callers
+	-- never miss a valid character.
 	function PlayerTracker:GetPlayerAssets(player: Player?): PlayerAssets?
 		if not player then return nil end
 		local assets = self._registry[player]
 		if assets then
-			if assets.Character.Destroyed or assets.Humanoid.Destroyed or assets.RootPart.Destroyed then
+			if assets.Character.Parent == nil
+				or assets.Humanoid.Parent == nil
+				or assets.RootPart.Parent == nil
+				or player.Character ~= assets.Character then
 				self._registry[player] = nil
-				return nil
+				assets = nil
+			else
+				return assets
 			end
-			return assets
 		end
+
+		local char = player.Character
+		if char and char.Parent ~= nil then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local head = char:FindFirstChild("Head") :: BasePart?
+			if hum and root and head and hum.Parent ~= nil and root.Parent ~= nil and head.Parent ~= nil then
+				local newAssets: PlayerAssets = {
+					Player = player,
+					Character = char,
+					Humanoid = hum,
+					RootPart = root,
+					Head = head,
+				}
+				self._registry[player] = newAssets
+				return newAssets
+			end
+		end
+
 		return nil
 	end
 
@@ -143,7 +169,7 @@ return function(services: any)
 		local cam = Workspace.CurrentCamera
 		if cam then
 			local saved = self._originalCameraSubject
-			if saved and not saved.Destroyed then
+			if saved and saved.Parent ~= nil then
 				cam.CameraSubject = saved
 			else
 				-- The original subject may be gone (respawned); fall back to

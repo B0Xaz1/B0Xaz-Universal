@@ -7,6 +7,7 @@ export type TaskJob = {
 	Priority: number,
 	Callback: (dt: number) -> (),
 	Enabled: boolean,
+	_failures: number?,
 }
 
 local TaskScheduler = {}
@@ -30,16 +31,25 @@ local function sortJobs(a: TaskJob, b: TaskJob): boolean
 	return a.Priority < b.Priority
 end
 
--- Each pipeline wraps every job call in pcall. A job that throws is
--- permanently disabled instead of spamming an error every frame.
+-- Each pipeline wraps every job call in pcall. To protect performance
+-- against infinite error loops, a job is disabled only after consecutive
+-- failures, while any successful execution resets its failure count.
 local function makePipelineRunner(scheduler: any, jobs: { TaskJob }, label: string)
 	return function(dt: number)
 		for _, job in ipairs(jobs) do
 			if job.Enabled then
 				local ok, err = pcall(job.Callback, dt)
 				if not ok then
-					job.Enabled = false
-					warn("[Scheduler " .. label .. " Error] " .. job.Name .. ": " .. tostring(err))
+					local fails = (job._failures or 0) + 1
+					job._failures = fails
+					if fails >= 5 then
+						job.Enabled = false
+						warn(string.format("[Scheduler %s Error] %s permanently disabled after %d consecutive failures: %s", label, job.Name, fails, tostring(err)))
+					else
+						warn(string.format("[Scheduler %s Error] %s (strike %d/5): %s", label, job.Name, fails, tostring(err)))
+					end
+				else
+					job._failures = 0
 				end
 			end
 		end
