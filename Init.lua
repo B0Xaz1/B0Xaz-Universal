@@ -1,29 +1,24 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (Smart Auto-Path Resolver Bootstrapper)
+-- Init.lua (Final Path Fix - Searching in 'Root/' folder)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
-
 local branch = env.B0XazRef or "main"
 local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/")
 
 local moduleCache = {}
 
--- Safe HttpGet with Cache-Busting
 local function httpGet(url)
-	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999))
-	if game and game.HttpGet then
-		return game:HttpGet(cacheBustUrl)
-	end
+	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(os.time())
+	if game and game.HttpGet then return game:HttpGet(cacheBustUrl) end
 	local req = request or http_request or (syn and syn.request)
 	if req then
 		local res = req({ Url = cacheBustUrl, Method = "GET" })
 		return res and (res.Body or res.body)
 	end
-	error("No HttpGet capability found.")
+	error("No HttpGet capability.")
 end
 
--- Validate Lua source code string
 local function isValidLua(source)
 	if type(source) ~= "string" or #source < 10 then return false end
 	local lower = source:sub(1, 150):lower()
@@ -32,43 +27,20 @@ local function isValidLua(source)
 	return true
 end
 
--- Generate all potential path variations to solve capitalization or src/ differences
 local function getCandidatePaths(relativePath)
 	local clean = relativePath:gsub("^%./", ""):gsub("^/", "")
-	local candidates = {}
-
-	-- 1. Exact relative path
-	table.insert(candidates, clean)
-
-	-- 2. Strip or Add 'src/'
-	if clean:sub(1, 4) == "src/" then
-		table.insert(candidates, clean:sub(5))
-	else
-		table.insert(candidates, "src/" .. clean)
-	end
-
-	-- 3. Lowercase path
-	table.insert(candidates, clean:lower())
-	if clean:sub(1, 4) == "src/" then
-		table.insert(candidates, clean:sub(5):lower())
-	else
-		table.insert(candidates, ("src/" .. clean):lower())
-	end
-
-	-- 4. Direct filename (root level)
-	local filename = clean:match("[^/]+$")
-	if filename then
-		table.insert(candidates, filename)
-	end
-
-	return candidates
+	-- We add "Root/" because your screenshot shows everything is inside that folder
+	return {
+		"Root/" .. clean, 
+		clean,
+		"src/" .. clean,
+		"Root/" .. clean:lower(),
+		clean:lower()
+	}
 end
 
--- Virtual Module Loader with Multi-Path Searching
 local function import(path)
-	if moduleCache[path] then
-		return moduleCache[path]
-	end
+	if moduleCache[path] then return moduleCache[path] end
 
 	local candidates = getCandidatePaths(path)
 	local source = nil
@@ -82,52 +54,43 @@ local function import(path)
 			matchedPath = candidate
 			break
 		end
-		task.wait(0.02)
 	end
 
 	if not source then
-		error("[B0Xaz Loader] Could not find '" .. path .. "' anywhere on GitHub. Make sure the file is uploaded to B0Xaz1/Rewrite!")
+		error("[B0Xaz] 404: Could not find '" .. path .. "' in Root/ or base folder. Check GitHub!")
 	end
 
-	print("[B0Xaz] Loaded module: " .. matchedPath)
+	print("[B0Xaz] Success: " .. matchedPath)
+	local chunk, err = loadstring(source, "@" .. matchedPath)
+	if not chunk then error(err) end
+	local ok, mod = pcall(chunk)
+	if not ok then error(mod) end
 
-	local chunk, compileErr = loadstring(source, "@" .. matchedPath)
-	if not chunk then
-		error("[B0Xaz Loader] Syntax Error in '" .. matchedPath .. "': " .. tostring(compileErr))
-	end
-
-	local ok, module = pcall(chunk)
-	if not ok then
-		error("[B0Xaz Loader] Runtime Error in '" .. matchedPath .. "': " .. tostring(module))
-	end
-
-	moduleCache[path] = module
-	return module
+	moduleCache[path] = mod
+	return mod
 end
 
--- Wait for game environment readiness
+-- Start Logic
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
-if not Players.LocalPlayer then
-	while not Players.LocalPlayer do task.wait(0.1) end
-end
+if not Players.LocalPlayer then while not Players.LocalPlayer do task.wait(0.1) end end
 
-print("[B0Xaz] Loading Framework from B0Xaz1/Rewrite...")
+print("[B0Xaz] Loading Universal Suite...")
 
--- 1. Core Framework
+-- 1. Core
 local Janitor = import("Core/Janitor.lua")
 local Signal = import("Core/Signal.lua")
 local Container = import("Core/Container.lua")
 local Scheduler = import("Core/Scheduler.lua")
 
--- 2. Shared Utilities
+-- 2. Shared
 local Constants = import("Shared/Constants.lua")
 local Crypto = import("Shared/Crypto.lua")
 local MathUtil = import("Shared/MathUtil.lua")
 local SpatialUtil = import("Shared/SpatialUtil.lua")
 local HttpUtil = import("Shared/HttpUtil.lua")
 
--- 3. Domain Services
+-- 3. Services
 local AuthService = import("Services/AuthService.lua")
 local ConfigService = import("Services/ConfigService.lua")
 local EntityService = import("Services/EntityService.lua")
@@ -141,20 +104,15 @@ local EnvironmentService = import("Services/EnvironmentService.lua")
 local ServerService = import("Services/ServerService.lua")
 local GameLoader = import("Games/GameLoader.lua")
 
--- 4. UI Framework
+-- 4. UI
 local ThemeEngine = import("UI/ThemeEngine.lua")
 local UIManager = import("UI/UIManager.lua")
 local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
--- Clean up existing session
-if env.B0XazActiveJanitor then
-	pcall(function() env.B0XazActiveJanitor:Destroy() end)
-end
-
+if env.B0XazActiveJanitor then pcall(function() env.B0XazActiveJanitor:Destroy() end) end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
 
--- Setup Container
 local container = Container.new()
 container:Register("Janitor", masterJanitor)
 container:Register("Signal", Signal)
@@ -170,42 +128,33 @@ scheduler:Init()
 masterJanitor:Add(scheduler)
 container:Register("Scheduler", scheduler)
 
--- Register Services
-local auth = container:Register("AuthService", AuthService.new())
+container:Register("AuthService", AuthService.new())
 local config = container:Register("ConfigService", ConfigService.new())
-local entity = container:Register("EntityService", EntityService.new())
-local input = container:Register("InputService", InputService.new())
-local locomotion = container:Register("LocomotionService", LocomotionService.new())
-local combat = container:Register("CombatService", CombatService.new())
-local fling = container:Register("FlingService", FlingService.new())
-local visuals = container:Register("VisualsService", VisualsService.new())
-local overlay = container:Register("OverlayService", OverlayService.new())
-local environment = container:Register("EnvironmentService", EnvironmentService.new())
-local server = container:Register("ServerService", ServerService.new())
-local games = container:Register("GameLoader", GameLoader.new())
-
+container:Register("EntityService", EntityService.new())
+container:Register("InputService", InputService.new())
+container:Register("LocomotionService", LocomotionService.new())
+container:Register("CombatService", CombatService.new())
+container:Register("FlingService", FlingService.new())
+container:Register("VisualsService", VisualsService.new())
+container:Register("OverlayService", OverlayService.new())
+container:Register("EnvironmentService", EnvironmentService.new())
+container:Register("ServerService", ServerService.new())
+container:Register("GameLoader", GameLoader.new())
 local theme = container:Register("ThemeEngine", ThemeEngine.new())
-local ui = container:Register("UIManager", UIManager.new())
+container:Register("UIManager", UIManager.new())
 
--- Application Launcher
 local function startApp()
-	print("[B0Xaz] Initializing services...")
 	container:InitAll()
 	container:StartAll()
-
-	config:LoadProfile(Constants.AUTOLOAD_FILE or "_autoload")
+	config:LoadProfile("_autoload")
 	config:StartAutosave(2.0)
-
-	print("[B0Xaz] ✓ Suite fully operational.")
 end
 
--- Key Authentication Check
-local authenticated, _, _ = auth:LoadAndVerify()
+local auth = container:Get("AuthService")
+local authenticated = auth:LoadAndVerify()
 
 if authenticated then
 	startApp()
 else
-	AuthModal.Show(auth, theme, function()
-		startApp()
-	end)
+	AuthModal.Show(auth, theme, startApp)
 end
