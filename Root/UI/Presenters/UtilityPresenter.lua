@@ -5,6 +5,7 @@
 
 local Toggle = require(script.Parent.Parent.Components.Toggle)
 local Button = require(script.Parent.Parent.Components.Button)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local UtilityPresenter = {}
 
@@ -15,6 +16,7 @@ function UtilityPresenter.Build(tab, container, themeEngine)
 	local page = tab.Page
 
 	-- Graphics & Performance Optimizers
+	Section.new(page, "Performance", themeEngine)
 	Toggle.new(page, "Remove Textures & Decals", config:Get("Performance.NoTextures"), function(v)
 		environment:SetNoTextures(v)
 	end, themeEngine)
@@ -28,6 +30,7 @@ function UtilityPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- Framerate Limits
+	Section.new(page, "Framerate", themeEngine)
 	Button.new(page, "Unlock Target Framerate Cap (999)", function()
 		if setfpscap then pcall(setfpscap, 999) end
 	end, themeEngine)
@@ -37,6 +40,7 @@ function UtilityPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- Server Tools
+	Section.new(page, "Server", themeEngine)
 	Toggle.new(page, "Enable Anti-AFK Idle Simulation", config:Get("Settings.AntiAfk"), function(v)
 		server:SetAntiAfk(v)
 	end, themeEngine)
