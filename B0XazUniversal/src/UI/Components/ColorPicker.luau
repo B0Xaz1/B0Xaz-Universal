@@ -21,6 +21,7 @@ local PRESET_PALETTE = {
 return function(services: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local UIEngine = services:Get("UIEngine")
 	local DOM = services:Get("DOM")
 
@@ -138,6 +139,20 @@ return function(services: any)
 			return currentColor
 		end
 
+		if isPath then
+			local function syncFromState()
+				local hydratedColor = StateStore:Get(defaultOrPath)
+				if typeof(hydratedColor) == "Color3" then
+					handle:Set(hydratedColor, true)
+					if callback then task.spawn(callback, hydratedColor) end
+				end
+			end
+			StateStore:Observe(defaultOrPath, function(newValue)
+				if typeof(newValue) == "Color3" then handle:Set(newValue, true) end
+			end)
+			EventBus:Subscribe("StateHydrated", syncFromState)
+		end
+		
 		for _, col in ipairs(PRESET_PALETTE) do
 			local cell = DOM.Create("TextButton", {
 				Text = "",

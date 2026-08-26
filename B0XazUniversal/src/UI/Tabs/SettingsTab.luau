@@ -8,19 +8,20 @@
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local ConfigService = services:Get("ConfigService")
 	local KeyService = services:Get("KeyService")
 	local UIEngine = services:Get("UIEngine")
 	local Require = services:Get("Require")
 	local DOM = services:Get("DOM")
 
-	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau")
-	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau")
-	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau")
-	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau")
-	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau")
-	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau")
-	local ConfigShareModal = Require("B0XazUniversal/src/UI/Modals/ConfigShareModal.luau")
+	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau", services)
+	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau", services)
+	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau", services)
+	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau", services)
+	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau", services)
+	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
+	local ConfigShareModal = Require("B0XazUniversal/src/UI/Modals/ConfigShareModal.luau", services)
 
 	local function createSection(parent: Instance, title: string): Frame
 		local secFrame = DOM.Create("Frame", {
@@ -137,19 +138,25 @@ return function(services: any, tab: any)
 	-- Right Column: Themes, UI Scale & License Management
 	-- ─────────────────────────────────────────────────────────────────────────
 	local uiSec = createSection(tab.RightCol, "UI Preferences")
-	Slider.new(uiSec, "UI Scale Factor", 50, 150, math.floor((StateStore:Get("Settings.UIScale") or 1.0) * 100), 5, "%", function(scaleVal)
+	local uiScaleSlider = Slider.new(uiSec, "UI Scale Factor", 50, 150, math.floor((StateStore:Get("Settings.UIScale") or 1.0) * 100), 5, "%", function(scaleVal)
 		local factor = scaleVal / 100
 		StateStore:Set("Settings.UIScale", factor)
 		if UIEngine.ScaleObject then UIEngine.ScaleObject.Scale = factor end
 	end)
+	EventBus:Subscribe("StateHydrated", function()
+		local factor = tonumber(StateStore:Get("Settings.UIScale")) or 1.0
+		if UIEngine.ScaleObject then UIEngine.ScaleObject.Scale = factor end
+		uiScaleSlider:Set(math.floor(factor * 100), true)
+	end)
 	Keybind.new(uiSec, "Menu Toggle Hotkey", "Settings.MenuKeybind")
+	Keybind.new(uiSec, "Quick Unload Hotkey", "Settings.UnloadKeybind")
 
 	local themeSec = createSection(tab.RightCol, "Themes & Styling")
 	local presetList = {}
 	for name in pairs(ThemeEngine.Presets) do table.insert(presetList, name) end
 	table.sort(presetList)
 
-	Dropdown.new(themeSec, "Color Preset", presetList, ThemeEngine.ActivePresetName, function(preset)
+	Dropdown.new(themeSec, "Color Preset", presetList, "Theme.ActivePreset", function(preset)
 		ThemeEngine:SetPreset(preset)
 		UIEngine:Notify("Themes", "Applied theme: " .. preset, 1.5, ThemeEngine:GetToken("Success"))
 	end)
@@ -172,6 +179,12 @@ return function(services: any, tab: any)
 		UIEngine:Notify("License", "Cleared saved license key.", 2, ThemeEngine:GetToken("Warning"))
 		if (getgenv and getgenv()).B0XazRelaunch then
 			(getgenv and getgenv()).B0XazRelaunch()
+		end
+	end)
+	Components.CreateButton(keySec, "Unload Suite & Clear Output", function()
+		local globalEnv = (getgenv and getgenv()) or _G
+		if typeof(globalEnv.B0XazUnload) == "function" then
+			globalEnv.B0XazUnload()
 		end
 	end)
 end

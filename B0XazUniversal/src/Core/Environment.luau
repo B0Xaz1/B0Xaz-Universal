@@ -14,6 +14,10 @@ return function(disposer: any)
 	local Environment = {}
 	local ROOT_FOLDER: string = "B0XazUniversal"
 
+	local function debug(message: string)
+		print("[B0Xaz][Environment] " .. message)
+	end
+
 	-- ─────────────────────────────────────────────────────────────────────────
 	-- Platform Capability Detection (Resolved once at boot)
 	-- ─────────────────────────────────────────────────────────────────────────
@@ -31,11 +35,22 @@ return function(disposer: any)
 		or (syn and typeof(syn.queue_on_teleport) == "function")
 		or (fluxus and typeof(fluxus.queue_on_teleport) == "function")
 
+	debug(string.format(
+		"Capabilities readfile=%s isfile=%s writefile=%s request=%s",
+		tostring(hasReadFile),
+		tostring(hasIsFile),
+		tostring(hasWriteFile),
+		tostring(typeof(request) == "function" or typeof(http_request) == "function")
+	))
+
 	-- Ensure root directories exist
 	if hasMakeFolder then
+		debug("Creating filesystem folders")
 		pcall(makefolder, ROOT_FOLDER)
 		pcall(makefolder, ROOT_FOLDER .. "/Configs")
 		pcall(makefolder, ROOT_FOLDER .. "/Themes")
+	else
+		debug("makefolder unavailable; filesystem persistence may be disabled")
 	end
 
 	-- ─────────────────────────────────────────────────────────────────────────
@@ -85,29 +100,49 @@ return function(disposer: any)
 	-- ─────────────────────────────────────────────────────────────────────────
 	function Environment.GetDeviceId(): string
 		local deviceFile = ROOT_FOLDER .. "/_device.json"
-		if hasReadFile and hasIsFile and hasIsFile(deviceFile) then
-			local content = readfile(deviceFile)
-			if content and content ~= "" then
-				local ok, data = pcall(HttpService.JSONDecode, HttpService, content)
-				if ok and typeof(data) == "table" and typeof(data.Id) == "string" and #data.Id >= 16 then
+		debug("GetDeviceId: checking " .. deviceFile)
+
+		local deviceFileExists = false
+		if hasReadFile and hasIsFile then
+			local existsOk, exists = pcall(isfile, deviceFile)
+			deviceFileExists = existsOk and exists == true
+			debug(string.format("GetDeviceId: isfile check ok=%s exists=%s", tostring(existsOk), tostring(deviceFileExists)))
+		else
+			debug("GetDeviceId: readfile/isfile unavailable")
+		end
+
+		if deviceFileExists then
+			local readOk, content = pcall(readfile, deviceFile)
+			if readOk and typeof(content) == "string" and content ~= "" then
+				local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, content)
+				if decodeOk and typeof(data) == "table" and typeof(data.Id) == "string" and #data.Id >= 16 then
+					debug("GetDeviceId: using saved device id")
 					return data.Id
 				end
+				debug("GetDeviceId: saved device file was invalid")
+			else
+				debug("GetDeviceId: could not read saved device file")
 			end
 		end
 
 		local rbxClientId: string? = nil
-		pcall(function()
+		local analyticsOk = pcall(function()
 			local analytics = game:GetService("RbxAnalyticsService")
 			rbxClientId = analytics:GetClientId()
 		end)
 
-		if rbxClientId and #rbxClientId >= 16 then
+		if analyticsOk and rbxClientId and #rbxClientId >= 16 then
+			debug("GetDeviceId: using Roblox analytics id")
 			return rbxClientId
 		end
+		debug("GetDeviceId: using generated id")
 
 		local generatedId = HttpService:GenerateGUID(false)
 		if hasWriteFile then
-			pcall(writefile, deviceFile, HttpService:JSONEncode({ Id = generatedId, CreatedAt = os.time() }))
+			local writeOk = pcall(writefile, deviceFile, HttpService:JSONEncode({ Id = generatedId, CreatedAt = os.time() }))
+			debug("GetDeviceId: saved generated id=" .. tostring(writeOk))
+		else
+			debug("GetDeviceId: writefile unavailable; generated id will not persist")
 		end
 		return generatedId
 	end

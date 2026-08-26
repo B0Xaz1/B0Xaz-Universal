@@ -15,6 +15,7 @@ export type DropdownHandle = {
 return function(services: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local UIEngine = services:Get("UIEngine")
 	local DOM = services:Get("DOM")
 
@@ -182,6 +183,20 @@ return function(services: any)
 			return selectedOption
 		end
 
+		if isPath then
+			local function syncFromState()
+				local hydratedOption = tostring(StateStore:Get(defaultOrPath) or currentOptions[1] or "None")
+				if table.find(currentOptions, hydratedOption) then
+					handle:Set(hydratedOption, true)
+					if callback then task.spawn(callback, hydratedOption) end
+				end
+			end
+			StateStore:Observe(defaultOrPath, function(newValue)
+				if typeof(newValue) == "string" then handle:Set(newValue, true) end
+			end)
+			EventBus:Subscribe("StateHydrated", syncFromState)
+		end
+		
 		function handle:Refresh(newOptions: { string }, preserveSelection: boolean?)
 			currentOptions = table.clone(newOptions)
 			if not preserveSelection or not table.find(currentOptions, selectedOption) then

@@ -23,6 +23,12 @@ return function(services: any)
 		_flingOffset = 0.1,
 	}
 
+	local originalHumanoid: Humanoid? = nil
+	local originalWalkSpeed: number? = nil
+	local originalUseJumpPower: boolean? = nil
+	local originalJumpPower: number? = nil
+	local originalJumpHeight: number? = nil
+
 	-- ─────────────────────────────────────────────────────────────────────────
 	-- Physics Updates (Heartbeat & Pre-Simulation)
 	-- ─────────────────────────────────────────────────────────────────────────
@@ -34,6 +40,13 @@ return function(services: any)
 
 		local hum = myAssets.Humanoid
 		local root = myAssets.RootPart
+		if originalHumanoid == nil then
+			originalHumanoid = hum
+			originalWalkSpeed = hum.WalkSpeed
+			originalUseJumpPower = hum.UseJumpPower
+			originalJumpPower = hum.JumpPower
+			originalJumpHeight = hum.JumpHeight
+		end
 		local movSettings = StateStore:Get("Movement")
 		if not movSettings then return end
 
@@ -59,9 +72,24 @@ return function(services: any)
 		-- 3. CFrame Velocity Displacement
 		if movSettings.CFrameSpeed and not movSettings.FlyEnabled then
 			local moveDir = hum.MoveDirection
+			-- Fall back to keyboard direction when an executor/game makes
+			-- Humanoid.MoveDirection unavailable or stale.
+			if moveDir.Magnitude <= 0.05 then
+				local cam = Workspace.CurrentCamera
+				if cam then
+					local look = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+					local right = Vector3.new(cam.CFrame.RightVector.X, 0, cam.CFrame.RightVector.Z)
+					if look.Magnitude > 0 then look = look.Unit end
+					if right.Magnitude > 0 then right = right.Unit end
+					if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += look end
+					if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= look end
+					if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= right end
+					if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += right end
+				end
+			end
 			if moveDir.Magnitude > 0.05 then
-				local speedVal = math.clamp(movSettings.CFrameSpeedValue or 50, 1, 300)
-				root.CFrame += (moveDir * speedVal * dt)
+				local speedVal = math.clamp(tonumber(movSettings.CFrameSpeedValue) or 50, 1, 300)
+				root.CFrame = root.CFrame + (moveDir.Unit * speedVal * dt)
 			end
 		end
 
@@ -180,6 +208,16 @@ return function(services: any)
 			end
 		end)
 		Disposer:Add(inputConn)
+
+		Disposer:Add(function()
+			self:StopFling()
+			if originalHumanoid and originalHumanoid.Parent then
+				if originalWalkSpeed ~= nil then originalHumanoid.WalkSpeed = originalWalkSpeed end
+				if originalUseJumpPower ~= nil then originalHumanoid.UseJumpPower = originalUseJumpPower end
+				if originalJumpPower ~= nil then originalHumanoid.JumpPower = originalJumpPower end
+				if originalJumpHeight ~= nil then originalHumanoid.JumpHeight = originalJumpHeight end
+			end
+		end)
 	end
 
 	return LocomotionService

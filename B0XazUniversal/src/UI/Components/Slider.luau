@@ -16,6 +16,7 @@ export type SliderHandle = {
 return function(services: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local Disposer = services:Get("Disposer")
 	local DOM = services:Get("DOM")
 
@@ -131,6 +132,15 @@ return function(services: any)
 			return currentValue
 		end
 
+		if isPath then
+			StateStore:Observe(defaultOrPath, function(newValue)
+				applyValue(tonumber(newValue) or min, true)
+			end)
+			EventBus:Subscribe("StateHydrated", function()
+				applyValue(tonumber(StateStore:Get(defaultOrPath)) or min, true)
+				if callback then task.spawn(callback, currentValue) end
+			end)
+		end
 		-- Drag Interaction
 		local dragging = false
 

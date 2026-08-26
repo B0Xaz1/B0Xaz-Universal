@@ -33,6 +33,18 @@ local STATUS_COLORS = {
 	Warning = Color3.fromRGB(230, 175, 70),
 }
 
+local COLOR_PROPERTIES = {
+	"BackgroundColor3",
+	"TextColor3",
+	"PlaceholderColor3",
+	"BorderColor3",
+	"ImageColor3",
+	"ScrollBarImageColor3",
+	"Color",
+	"FillColor",
+	"OutlineColor",
+}
+
 local PRESETS: { [string]: ThemeTokens } = {
 	["Default Cyan"] = {
 		Bg = Color3.fromRGB(18, 18, 20),
@@ -146,6 +158,7 @@ return function(services: any)
 		ActivePresetName = "Default Cyan",
 		Current = {} :: ThemeTokens,
 		_bindings = {} :: { [Instance]: { [string]: string } },
+		_roots = {} :: { Instance },
 	}
 
 	-- Initialize Current Tokens
@@ -164,6 +177,57 @@ return function(services: any)
 		return self.Current[tokenName] or Color3.fromRGB(255, 255, 255)
 	end
 
+	function ThemeEngine:RegisterRoot(root: Instance)
+		for _, existingRoot in ipairs(self._roots) do
+			if existingRoot == root then return end
+		end
+		table.insert(self._roots, root)
+	end
+
+	local function copyTokens(): { [string]: Color3 }
+		local copy = {}
+		for tokenName, color in pairs(ThemeEngine.Current) do
+			copy[tokenName] = color
+		end
+		return copy
+	end
+
+	local function refreshInstanceColors(instance: Instance, previousTokens: { [string]: Color3 })
+		local target = instance :: any
+		for _, property in ipairs(COLOR_PROPERTIES) do
+			local readOk, currentColor = pcall(function()
+				return target[property]
+			end)
+			if readOk and typeof(currentColor) == "Color3" then
+				for tokenName, previousColor in pairs(previousTokens) do
+					if currentColor == previousColor then
+						local nextColor = ThemeEngine.Current[tokenName]
+						if nextColor then
+							pcall(function()
+								target[property] = nextColor
+							end)
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
+	function ThemeEngine:RefreshRootColors(previousTokens: { [string]: Color3 })
+		for rootIndex = #self._roots, 1, -1 do
+			local root = self._roots[rootIndex]
+			if not root or not root.Parent then
+				table.remove(self._roots, rootIndex)
+			else
+				refreshInstanceColors(root, previousTokens)
+				for _, instance in ipairs(root:GetDescendants()) do
+					refreshInstanceColors(instance, previousTokens)
+				end
+			end
+		end
+	end
+
 	function ThemeEngine:BindToken(instance: Instance, property: string, tokenName: string)
 		if not self._bindings[instance] then
 			self._bindings[instance] = {}
@@ -176,24 +240,28 @@ return function(services: any)
 		end
 
 		self._bindings[instance][property] = tokenName
-		(instance :: any)[property] = self:GetToken(tokenName)
+		local target = instance :: any
+		target[property] = self:GetToken(tokenName)
 	end
 
 	function ThemeEngine:SetPreset(presetName: string)
 		local preset = PRESETS[presetName]
 		if not preset then return end
 
+		local previousTokens = copyTokens()
 		self.ActivePresetName = presetName
 		for k, v in pairs(preset) do
 			self.Current[k] = v
 		end
 
 		self:UpdateAllBindings()
+		self:RefreshRootColors(previousTokens)
 		StateStore:Set("Theme.ActivePreset", presetName)
 		EventBus:Publish("ThemeUpdated", self.Current)
 	end
 
 	function ThemeEngine:UpdateToken(tokenName: string, color: Color3)
+		local previousTokens = copyTokens()
 		self.Current[tokenName] = color
 		if tokenName == "Accent" then
 			local dark, dim = self:DeriveAccentTones(color)
@@ -202,6 +270,7 @@ return function(services: any)
 		end
 
 		self:UpdateAllBindings()
+		self:RefreshRootColors(previousTokens)
 		EventBus:Publish("ThemeTokenChanged", tokenName, color)
 	end
 
@@ -211,7 +280,8 @@ return function(services: any)
 				for prop, token in pairs(propMap) do
 					local val = self.Current[token]
 					if val then
-						(instance :: any)[prop] = val
+						local target = instance :: any
+						target[prop] = val
 					end
 				end
 			else
@@ -219,6 +289,13 @@ return function(services: any)
 			end
 		end
 	end
+
+	EventBus:Subscribe("StateHydrated", function()
+		local presetName = StateStore:Get("Theme.ActivePreset")
+		if typeof(presetName) == "string" and presetName ~= ThemeEngine.ActivePresetName then
+			ThemeEngine:SetPreset(presetName)
+		end
+	end)
 
 	return ThemeEngine
 end

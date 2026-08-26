@@ -125,8 +125,9 @@ return function(services: any)
 			terrain.WaterReflectance = 0
 			terrain.WaterTransparency = 0
 		elseif self._terrainDefaults then
+			local terrainAny = terrain :: any
 			for prop, val in pairs(self._terrainDefaults) do
-				pcall(function() (terrain :: any)[prop] = val end)
+				pcall(function() terrainAny[prop] = val end)
 			end
 			self._terrainDefaults = nil
 		end
@@ -160,7 +161,10 @@ return function(services: any)
 
 	function OptimizerService:RestoreAll()
 		for obj, tex in pairs(self._textureCache) do
-			if obj and obj.Parent then (obj :: Decal).Texture = tex end
+			if obj and obj.Parent then
+				local decal = obj :: Decal
+				decal.Texture = tex
+			end
 		end
 		table.clear(self._textureCache)
 
@@ -175,7 +179,10 @@ return function(services: any)
 		table.clear(self._shadowCache)
 
 		for emitter, state in pairs(self._particleCache) do
-			if emitter and emitter.Parent then (emitter :: any).Enabled = state end
+			if emitter and emitter.Parent then
+				local particleEmitter = emitter :: any
+				particleEmitter.Enabled = state
+			end
 		end
 		table.clear(self._particleCache)
 
@@ -185,6 +192,10 @@ return function(services: any)
 	end
 
 	function OptimizerService:Initialize()
+		Disposer:Add(function()
+			self:RestoreAll()
+		end)
+
 		-- Reactive state listeners
 		EventBus:Subscribe("StateChanged:Performance.NoTextures", function(enabled)
 			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end
@@ -211,13 +222,17 @@ return function(services: any)
 			if not perf then return end
 
 			if perf.NoTextures and (d:IsA("Decal") or d:IsA("Texture")) then
-				(d :: Decal).Texture = ""
+				local decal = d :: Decal
+				decal.Texture = ""
 			elseif perf.LowMaterials and d:IsA("BasePart") and not d:IsA("Terrain") then
-				(d :: BasePart).Material = SMOOTH_PLASTIC
+				local part = d :: BasePart
+				part.Material = SMOOTH_PLASTIC
 			elseif perf.NoShadows and d:IsA("BasePart") then
-				(d :: BasePart).CastShadow = false
+				local part = d :: BasePart
+				part.CastShadow = false
 			elseif perf.NoParticles and PARTICLE_CLASSES[d.ClassName] then
-				(d :: any).Enabled = false
+				local emitter = d :: any
+				emitter.Enabled = false
 			end
 		end)
 		Disposer:Add(descConn)

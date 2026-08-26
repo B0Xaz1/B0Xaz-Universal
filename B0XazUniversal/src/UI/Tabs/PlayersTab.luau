@@ -15,8 +15,8 @@ return function(services: any, tab: any)
 	local Require = services:Get("Require")
 	local DOM = services:Get("DOM")
 
-	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau")
-	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau")
+	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau", services)
+	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
 	local function createSection(parent: Instance, title: string): Frame
 		local secFrame = DOM.Create("Frame", {

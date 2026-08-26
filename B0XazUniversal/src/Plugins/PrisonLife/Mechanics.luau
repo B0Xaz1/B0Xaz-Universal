@@ -25,12 +25,12 @@ return function(services: any)
 	local WorldPhase = Require("B0XazUniversal/src/Plugins/PrisonLife/WorldPhase.luau")(services, Manifest)
 	local WeaponMods = Require("B0XazUniversal/src/Plugins/PrisonLife/WeaponMods.luau")(services, Manifest)
 
-	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau")
-	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau")
-	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau")
-	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau")
-	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau")
-	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau")
+	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau", services)
+	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau", services)
+	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau", services)
+	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau", services)
+	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau", services)
+	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
 	local LocalPlayer = Players.LocalPlayer
 	local meleeRemote = ReplicatedStorage:FindFirstChild("meleeEvent")

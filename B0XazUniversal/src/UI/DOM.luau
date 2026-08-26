@@ -28,7 +28,8 @@ function DOM.Create(className: string, properties: InstanceProperties?, children
 			if prop == "Parent" then
 				targetParent = value
 			else
-				(instance :: any)[prop] = value
+				local target = instance :: any
+				target[prop] = value
 			end
 		end
 	end
