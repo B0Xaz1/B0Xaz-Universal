@@ -1,6 +1,6 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- UI/Components/Keybind.lua
--- Interactive key and mouse button binder component
+-- Interactive key and mouse button binder component (flat, bordered)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local UserInputService = game:GetService("UserInputService")
@@ -10,8 +10,8 @@ local Keybind = {}
 Keybind.__index = Keybind
 
 local function formatBind(bind)
-	if not bind then return "None" end
-	if typeof(bind) == "EnumItem" then return bind.Name end
+	if not bind then return "NONE" end
+	if typeof(bind) == "EnumItem" then return bind.Name:upper() end
 	return tostring(bind)
 end
 
@@ -24,23 +24,23 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 
 	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Keybind",
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
+		Font = Enum.Font.Code,
+		TextSize = 11,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -76, 1, 0),
+		Size = UDim2.new(1, -74, 1, 0),
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
 
 	self.Button = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(64, 20),
-		Position = UDim2.new(1, -64, 0.5, -10),
+		Size = UDim2.fromOffset(64, 18),
+		Position = UDim2.new(1, -64, 0.5, -9),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = "[" .. formatBind(self._bind) .. "]",
@@ -51,7 +51,6 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
-		DOM.CreateCorner(6),
 	})
 
 	themeEngine:Bind(labelView, "TextColor3", "Text")
@@ -74,7 +73,7 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 			elseif input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.MouseButton2
 				or input.UserInputType == Enum.UserInputType.MouseButton3 then
-				self:Set(input.UserInputType)
+					self:Set(input.UserInputType)
 			end
 			self._isBinding = false
 			conn:Disconnect()
