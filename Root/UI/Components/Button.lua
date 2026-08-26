@@ -15,7 +15,7 @@ function Button.new(parent, text, callback, themeEngine, domModule)
 	self._callback = callback
 
 	self.Frame = dom.Create("TextButton", {
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = text or "Button",
