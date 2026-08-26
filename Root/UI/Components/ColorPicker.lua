@@ -35,14 +35,14 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
 
 	self.Preview = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(20, 16),
-		Position = UDim2.new(1, -20, 0.5, -8),
+		Size = UDim2.fromOffset(22, 18),
+		Position = UDim2.new(1, -22, 0.5, -9),
 		BackgroundColor3 = self._color,
 		BorderSizePixel = 0,
 		Text = "",
