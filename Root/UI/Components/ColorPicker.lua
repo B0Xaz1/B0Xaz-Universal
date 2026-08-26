@@ -9,12 +9,12 @@ local ColorPicker = {}
 ColorPicker.__index = ColorPicker
 
 local QUICK_PALETTE = {
+	Color3.fromRGB(0, 220, 70),   -- Green
+	Color3.fromRGB(255, 255, 255), -- White
+	Color3.fromRGB(235, 50, 65),   -- Red
 	Color3.fromRGB(0, 200, 220),   -- Cyan
 	Color3.fromRGB(170, 70, 250),  -- Purple
-	Color3.fromRGB(235, 50, 65),   -- Red
-	Color3.fromRGB(0, 225, 120),   -- Green
 	Color3.fromRGB(255, 200, 50),  -- Yellow
-	Color3.fromRGB(255, 255, 255), -- White
 }
 
 function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
@@ -26,8 +26,8 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 
 	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Color",
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
+		Font = Enum.Font.Code,
+		TextSize = 11,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -35,14 +35,14 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
 
 	self.Preview = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(22, 18),
-		Position = UDim2.new(1, -22, 0.5, -9),
+		Size = UDim2.fromOffset(18, 18),
+		Position = UDim2.new(1, -24, 0.5, -9),
 		BackgroundColor3 = self._color,
 		BorderSizePixel = 0,
 		Text = "",
@@ -50,7 +50,6 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.Border, 1),
-		DOM.CreateCorner(4),
 	})
 
 	self.PaletteFrame = DOM.Create("Frame", {
@@ -62,7 +61,6 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 		ZIndex = 15,
 		Parent = self.Container,
 	}, {
-		DOM.CreateCorner(6),
 		DOM.CreateStroke(self._theme.Current.Border, 1),
 		DOM.Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -83,7 +81,6 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 			Parent = self.PaletteFrame,
 		}, {
 			DOM.CreateStroke(Color3.fromRGB(40, 40, 40), 1),
-			DOM.CreateCorner(3),
 		})
 
 		btn.MouseButton1Click:Connect(function()
