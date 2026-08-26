@@ -1,19 +1,24 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- UI/Components/Button.lua
--- Standard action button component with theme-aware hover states
+-- Executor-safe action button component
 -- ════════════════════════════════════════════════════════════════════════════
 
-local DOM = require(script.Parent.Parent.DOM)
+local DOM = setmetatable({}, {
+	__index = function(_, k)
+		return _G.B0XazDOM and _G.B0XazDOM[k]
+	end
+})
 
 local Button = {}
 Button.__index = Button
 
-function Button.new(parent, text, callback, themeEngine)
+function Button.new(parent, text, callback, themeEngine, domModule)
+	local dom = domModule or _G.B0XazDOM
 	local self = setmetatable({}, Button)
 	self._theme = themeEngine
 	self._callback = callback
 
-	self.Frame = DOM.Create("TextButton", {
+	self.Frame = dom.Create("TextButton", {
 		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
@@ -24,7 +29,7 @@ function Button.new(parent, text, callback, themeEngine)
 		AutoButtonColor = false,
 		Parent = parent,
 	}, {
-		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
+		dom.CreateStroke(self._theme.Current.BorderDim, 1),
 	})
 
 	self._theme:Bind(self.Frame, "BackgroundColor3", "Elem")
