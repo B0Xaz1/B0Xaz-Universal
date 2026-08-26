@@ -32,13 +32,20 @@ function EnvironmentService:Init(container)
 		ClockTime = Lighting.ClockTime,
 	}
 
-	-- Fullbright loop
+	-- Fullbright (edge-triggered): assert the values ONCE when the toggle
+	-- turns on. Writing them every frame fights the game's own lighting
+	-- scripts and makes the world strobe bright/dark after inject.
+	local lastFullbright = false
 	self._scheduler:AddTask("Physics", "Environment_Fullbright", function()
-		if self._config:Get("Visuals.Fullbright") then
-			Lighting.Ambient = Color3.new(1, 1, 1)
-			Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-			Lighting.Brightness = 2
-			Lighting.GlobalShadows = false
+		local enabled = self._config:Get("Visuals.Fullbright") == true
+		if enabled ~= lastFullbright then
+			lastFullbright = enabled
+			if enabled then
+				Lighting.Ambient = Color3.new(1, 1, 1)
+				Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+				Lighting.Brightness = 2
+				Lighting.GlobalShadows = false
+			end
 		end
 	end)
 end
