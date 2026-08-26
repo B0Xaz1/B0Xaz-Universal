@@ -4,6 +4,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 
 local DOM = require(script.Parent.Parent.DOM)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local GamePresenter = {}
 
@@ -11,20 +12,11 @@ function GamePresenter.Build(tab, container, themeEngine)
 	local gameLoader = container:Get("GameLoader")
 	local page = tab.Page
 
-	DOM.Create("TextLabel", {
-		Text = "Game Modification Hub",
-		Font = Enum.Font.Code,
-		TextSize = 13,
-		TextColor3 = themeEngine.Current.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 20),
-		Parent = page,
-	})
+	Section.new(page, "Game Modification Hub", themeEngine)
 
 	DOM.Create("TextLabel", {
 		Text = "Place Context: " .. tostring(game.PlaceId),
-		Font = Enum.Font.Code,
+		Font = Enum.Font.Gotham,
 		TextSize = 11,
 		TextColor3 = themeEngine.Current.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -40,7 +32,7 @@ function GamePresenter.Build(tab, container, themeEngine)
 			if not ok then
 				DOM.Create("TextLabel", {
 					Text = "Adapter UI Error: " .. tostring(err),
-					Font = Enum.Font.Code,
+					Font = Enum.Font.Gotham,
 					TextSize = 11,
 					TextColor3 = themeEngine.Current.Danger,
 					TextWrapped = true,
@@ -53,7 +45,7 @@ function GamePresenter.Build(tab, container, themeEngine)
 	else
 		DOM.Create("TextLabel", {
 			Text = "Universal fallbacks active. There are no bespoke modifications available for this place.",
-			Font = Enum.Font.Code,
+			Font = Enum.Font.Gotham,
 			TextSize = 11,
 			TextColor3 = themeEngine.Current.TextMuted,
 			TextWrapped = true,
