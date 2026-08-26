@@ -1,6 +1,6 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- UI/Components/Toggle.lua
--- Declarative state toggle switch widget
+-- Square checkbox-style toggle widget
 -- ════════════════════════════════════════════════════════════════════════════
 
 local DOM = require(script.Parent.Parent.DOM)
@@ -16,16 +16,16 @@ function Toggle.new(parent, label, defaultState, callback, themeEngine)
 
 	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Toggle",
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
+		Font = Enum.Font.Code,
+		TextSize = 11,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -46, 1, 0),
+		Size = UDim2.new(1, -30, 1, 0),
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
@@ -33,26 +33,15 @@ function Toggle.new(parent, label, defaultState, callback, themeEngine)
 	themeEngine:Bind(labelView, "TextColor3", "Text")
 
 	self.Button = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(36, 20),
-		Position = UDim2.new(1, -36, 0.5, -10),
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(1, -24, 0.5, -8),
 		BackgroundColor3 = self._state and self._theme.Current.ToggleOn or self._theme.Current.ToggleOff,
 		BorderSizePixel = 0,
 		Text = "",
 		AutoButtonColor = false,
 		Parent = self.Container,
 	}, {
-		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
-		DOM.CreateCorner("full"),
-	})
-
-	self.Pill = DOM.Create("Frame", {
-		Size = UDim2.fromOffset(14, 14),
-		Position = self._state and UDim2.new(1, -18, 0.5, -7) or UDim2.new(0, 3, 0.5, -7),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		Parent = self.Button,
-	}, {
-		DOM.CreateCorner("full"),
+		DOM.CreateStroke(self._theme.Current.Border, 1),
 	})
 
 	self.Button.MouseButton1Click:Connect(function()
@@ -65,7 +54,6 @@ end
 function Toggle:Set(state, silent)
 	self._state = state == true
 	self.Button.BackgroundColor3 = self._state and self._theme.Current.ToggleOn or self._theme.Current.ToggleOff
-	self.Pill.Position = self._state and UDim2.new(1, -18, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
 
 	if not silent and type(self._callback) == "function" then
 		pcall(self._callback, self._state)
