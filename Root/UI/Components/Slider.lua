@@ -33,8 +33,8 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 
 	self.TitleLabel = DOM.Create("TextLabel", {
 		Text = label or "Slider",
-		Font = Enum.Font.Code,
-		TextSize = 11,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -44,7 +44,7 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 
 	self.ValueLabel = DOM.Create("TextLabel", {
 		Text = tostring(self._value) .. self._suffix,
-		Font = Enum.Font.Code,
+		Font = Enum.Font.Gotham,
 		TextSize = 11,
 		TextColor3 = self._theme.Current.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -64,6 +64,7 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
+		DOM.CreateCorner(6),
 	})
 
 	local ratio = (self._value - self._min) / (self._max - self._min)
@@ -72,9 +73,12 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 		BackgroundColor3 = self._theme.Current.Accent,
 		BorderSizePixel = 0,
 		Parent = self.Track,
+	}, {
+		DOM.CreateCorner(6),
 	})
 
 	self._theme:Bind(self.TitleLabel, "TextColor3", "Text")
+	self._theme:Bind(self.ValueLabel, "TextColor3", "TextDim")
 	self._theme:Bind(self.Track, "BackgroundColor3", "Elem")
 	self._theme:Bind(self.Fill, "BackgroundColor3", "Accent")
 
