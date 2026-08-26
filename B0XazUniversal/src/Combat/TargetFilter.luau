@@ -26,12 +26,12 @@ return function(services: any)
 	visRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	visRaycastParams.IgnoreWater = true
 
-	-- The exclude list holds only the local character (if one exists) so the
-	-- local player's own body cannot occlude a target. It is rebuilt in place
-	-- whenever the character model instance changes; an empty list simply
-	-- means "exclude nothing", which is the correct state while dead.
-	local cachedFilterList: { Instance } = {}
+	-- The exclude list holds the local character and camera so local viewmodels,
+	-- accessories, and the local avatar body cannot occlude targets.
+	local baseFilterList: { Instance } = {}
+	local activeFilterList: { Instance } = {}
 	local lastLocalCharacter: Model? = nil
+	local lastCamera: Camera? = nil
 
 	function TargetFilter:IsTeammate(player: Player): boolean
 		if not player or player == LocalPlayer then return false end
@@ -108,22 +108,46 @@ return function(services: any)
 		if direction.Magnitude < 0.5 then return true end
 
 		local myAssets = PlayerTracker:GetLocalAssets()
-		local myChar = myAssets and myAssets.Character
-		if myChar ~= lastLocalCharacter then
+		local myChar = myAssets and myAssets.Character or (LocalPlayer and LocalPlayer.Character)
+		if myChar ~= lastLocalCharacter or cam ~= lastCamera or #baseFilterList == 0 then
 			lastLocalCharacter = myChar
-			cachedFilterList[1] = myChar :: any
-			visRaycastParams.FilterDescendantsInstances = cachedFilterList
+			lastCamera = cam
+			table.clear(baseFilterList)
+			if myChar then table.insert(baseFilterList, myChar) end
+			table.insert(baseFilterList, cam)
 		end
 
-		local result = Workspace:Raycast(origin, direction, visRaycastParams)
-		if not result then
-			return true
+		table.clear(activeFilterList)
+		for i = 1, #baseFilterList do
+			activeFilterList[i] = baseFilterList[i]
 		end
+		visRaycastParams.FilterDescendantsInstances = activeFilterList
 
-		-- A hit inside the target's own character counts as visible
-		local hitInstance = result.Instance
-		if hitInstance:IsDescendantOf(targetPart.Parent) or hitInstance == targetPart then
-			return true
+		local targetModel = targetPart.Parent
+
+		-- Multi-pass penetration: penetrates through non-collidable trigger
+		-- volumes, invisible parts, transparent glass/fences, and phased doors
+		-- while stopping firmly on solid walls
+		for _ = 1, 4 do
+			local result = Workspace:Raycast(origin, direction, visRaycastParams)
+			if not result then
+				return true
+			end
+
+			local hitInstance = result.Instance
+			if hitInstance == targetPart or hitInstance:IsDescendantOf(targetModel) then
+				return true
+			end
+
+			-- Invisible barriers, non-collidable trigger zones, or transparent obstacles
+			-- should not block line of sight; add to exclude filter and continue past them
+			if not hitInstance.CanCollide or hitInstance.Transparency >= 0.75 then
+				table.insert(activeFilterList, hitInstance)
+				visRaycastParams.FilterDescendantsInstances = activeFilterList
+			else
+				-- Solid opaque wall or obstacle
+				return false
+			end
 		end
 
 		return false

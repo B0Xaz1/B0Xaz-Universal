@@ -130,18 +130,18 @@ return function(services: any)
 		root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(speed) * dt * 60, 0)
 	end
 
-	-- Fling defense: a fling attack shows up as a massive change in the
-	-- local assembly's velocity within a single physics step. We compare
-	-- against the previous frame's velocity and, when the change exceeds the
-	-- threshold, zero the assembly's velocities (and optionally snap the
-	-- position back). Gravity is ~196 studs/s per second, so the default of
-	-- 300 still allows normal falling, sprinting, and CFrame stepping while
-	-- catching fling impulses that land in the tens of thousands.
+	-- Fling defense: combines collision prevention (disabling collision on
+	-- other players' character parts so they phase through without pushing)
+	-- with impulse and velocity clamping on the local assembly. Normal
+	-- movement (walking, jumping, falling) is never blocked, while extreme
+	-- fling impulses, violent spin, or extreme velocity spikes are zeroed
+	-- and snapped back.
 	local function updateAntiFling(enabled: boolean, dt: number)
 		local assets = PlayerTracker:GetLocalAssets()
 		local root = assets and assets.RootPart
+		local hum = assets and assets.Humanoid
 
-		if not root or not root.Parent or not assets.Humanoid or assets.Humanoid.Health <= 0 then
+		if not root or not root.Parent or not hum or hum.Health <= 0 then
 			ExtrasService._antiFlingRoot = nil
 			return
 		end
@@ -163,20 +163,41 @@ return function(services: any)
 			return
 		end
 
+		-- Passive collision defense: other players' character parts cannot
+		-- collide with or transfer momentum to our assembly
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character then
+				for _, part in ipairs(player.Character:GetChildren()) do
+					if part:IsA("BasePart") and part.CanCollide then
+						part.CanCollide = false
+					end
+				end
+			end
+		end
+
 		local threshold = math.clamp(tonumber(StateStore:Get("Extras.AntiFling.Threshold")) or 300, 200, 5000)
 		local vel = root.AssemblyLinearVelocity
-		local impulse = (vel - ExtrasService._antiFlingLastVel).Magnitude / math.max(dt, 1e-4)
-		ExtrasService._antiFlingLastVel = vel
-		ExtrasService._antiFlingLastCFrame = root.CFrame
+		local angVel = root.AssemblyAngularVelocity
+		local deltaVel = (vel - ExtrasService._antiFlingLastVel).Magnitude
+		local impulse = deltaVel / math.max(dt, 1e-4)
 
-		if impulse > threshold then
+		-- Maximum velocity change a humanoid can physically produce via normal walking or jumping.
+		-- Natural movement cannot exceed this, while a fling collision imparts hundreds to thousands of studs/s.
+		local maxSelfDelta = math.max((hum.WalkSpeed or 16) * 1.5 + (hum.JumpPower or 50), 100)
+
+		local isFling = false
+		if (deltaVel > maxSelfDelta and impulse > threshold) or angVel.Magnitude > 100 then
+			isFling = true
+		end
+
+		if isFling then
 			root.AssemblyLinearVelocity = Vector3.zero
 			root.AssemblyAngularVelocity = Vector3.zero
 			if StateStore:Get("Extras.AntiFling.SnapBack") == true then
 				root.CFrame = ExtrasService._antiFlingLastCFrame
 			end
 			ExtrasService._antiFlingLastVel = Vector3.zero
-			-- Throttled so a repeated fling does not spam the toast stack
+			-- Throttled so repeated contact does not spam notifications
 			if os.clock() - ExtrasService._lastFlingBlockNotify > 2 then
 				ExtrasService._lastFlingBlockNotify = os.clock()
 				local ui, theme = getUIAndTheme()
@@ -184,6 +205,9 @@ return function(services: any)
 					ui:Notify("Fling Defense", "Fling attack blocked.", 1.5, theme:GetToken("Success"))
 				end
 			end
+		else
+			ExtrasService._antiFlingLastCFrame = root.CFrame
+			ExtrasService._antiFlingLastVel = vel
 		end
 	end
 
