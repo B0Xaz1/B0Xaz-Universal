@@ -25,7 +25,7 @@ function Toggle.new(parent, label, defaultState, callback, themeEngine)
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
