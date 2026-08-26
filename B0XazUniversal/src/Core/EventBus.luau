@@ -1,8 +1,6 @@
 --!strict
 -- ══════════════════════════════════════════════════════════════════════════════
 -- B0XazUniversal - High-Performance Pub/Sub EventBus
--- Provides type-safe, decoupled signal dispatching with O(1) connection nodes
--- and automatic integration with the lifetime Disposer.
 -- ══════════════════════════════════════════════════════════════════════════════
 
 export type Connection = {
@@ -81,17 +79,6 @@ function EventBus:Subscribe(eventName: string, handler: (...any) -> ()): Connect
 	return connection
 end
 
-function EventBus:SubscribeOnce(eventName: string, handler: (...any) -> ()): Connection
-	local conn: Connection? = nil
-	conn = self:Subscribe(eventName, function(...)
-		if conn then
-			conn:Disconnect()
-		end
-		handler(...)
-	end)
-	return conn :: Connection
-end
-
 function EventBus:Publish(eventName: string, ...: any)
 	local list = self._events[eventName]
 	if not list or not list.head then return end
@@ -106,7 +93,7 @@ function EventBus:Publish(eventName: string, ...: any)
 	end
 end
 
-function EventBus:Destroy()
+function EventBus:Dispose()
 	for _, list in pairs(self._events) do
 		local current = list.head
 		while current do
@@ -117,8 +104,7 @@ function EventBus:Destroy()
 	table.clear(self._events)
 end
 
-function EventBus:Dispose()
-	self:Destroy()
+-- Factory Wrapper
+return function(disposer: any?)
+	return EventBus.new(disposer)
 end
-
-return EventBus
