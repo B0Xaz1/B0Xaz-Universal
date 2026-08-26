@@ -192,33 +192,37 @@ return function(services: any)
 		return copy
 	end
 
+	local function refreshInstanceColors(instance: Instance, previousTokens: { [string]: Color3 })
+		local target = instance :: any
+		for _, property in ipairs(COLOR_PROPERTIES) do
+			local readOk, currentColor = pcall(function()
+				return target[property]
+			end)
+			if readOk and typeof(currentColor) == "Color3" then
+				for tokenName, previousColor in pairs(previousTokens) do
+					if currentColor == previousColor then
+						local nextColor = ThemeEngine.Current[tokenName]
+						if nextColor then
+							pcall(function()
+								target[property] = nextColor
+							end)
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
 	function ThemeEngine:RefreshRootColors(previousTokens: { [string]: Color3 })
 		for rootIndex = #self._roots, 1, -1 do
 			local root = self._roots[rootIndex]
 			if not root or not root.Parent then
 				table.remove(self._roots, rootIndex)
 			else
-				local descendants = root:GetDescendants()
-				table.insert(descendants, root)
-				for _, instance in ipairs(descendants) do
-					local target = instance :: any
-					for _, property in ipairs(COLOR_PROPERTIES) do
-						local readOk, currentColor = pcall(function()
-							return target[property]
-						end)
-						if readOk and typeof(currentColor) == "Color3" then
-							for tokenName, previousColor in pairs(previousTokens) do
-								if currentColor == previousColor then
-									local nextColor = self.Current[tokenName]
-									if nextColor then
-										pcall(function() target[property] = nextColor end)
-										break
-									end
-								end
-								end
-							end
-						end
-					end
+				refreshInstanceColors(root, previousTokens)
+				for _, instance in ipairs(root:GetDescendants()) do
+					refreshInstanceColors(instance, previousTokens)
 				end
 			end
 		end
