@@ -16,37 +16,37 @@ function Dropdown.new(parent, label, items, callback, defaultItem, themeEngine)
 	self._callback = callback
 	self._open = false
 
-	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 48),
-		BackgroundTransparency = 1,
-		Parent = parent,
-	})
-
-	DOM.Create("TextLabel", {
+	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Dropdown",
-		Font = Enum.Font.Code,
-		TextSize = 11,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 14),
-		Parent = self.Container,
 	})
 
+	self.Container = DOM.Create("Frame", {
+		Size = UDim2.new(1, 0, 0, 48),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	}, { labelView })
+
 	self.Button = DOM.Create("TextButton", {
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 28),
 		Position = UDim2.new(0, 0, 0, 18),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = " " .. tostring(self._selected),
-		Font = Enum.Font.Code,
-		TextSize = 11,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		AutoButtonColor = false,
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
+		DOM.CreateCorner(6),
 	})
 
 	self.Arrow = DOM.Create("TextLabel", {
@@ -72,11 +72,13 @@ function Dropdown.new(parent, label, items, callback, defaultItem, themeEngine)
 		ZIndex = 20,
 		Parent = self.Button,
 	}, {
+		DOM.CreateCorner(6),
 		DOM.CreateStroke(self._theme.Current.Border, 1),
 		DOM.Create("UIListLayout", { Padding = UDim.new(0, 2) }),
-		DOM.CreatePadding(2),
+		DOM.CreatePadding(4),
 	})
 
+	themeEngine:Bind(labelView, "TextColor3", "Text")
 	self._theme:Bind(self.Button, "BackgroundColor3", "Elem")
 	self._theme:Bind(self.Button, "TextColor3", "Text")
 	self._theme:Bind(self.ListFrame, "BackgroundColor3", "Panel")
@@ -97,18 +99,32 @@ function Dropdown:_renderItems()
 
 	for _, item in ipairs(self._items) do
 		local itmBtn = DOM.Create("TextButton", {
-			Size = UDim2.new(1, 0, 0, 20),
+			Size = UDim2.new(1, 0, 0, 22),
 			BackgroundColor3 = self._theme.Current.Elem,
 			BackgroundTransparency = (item == self._selected) and 0 or 1,
 			BorderSizePixel = 0,
 			Text = " " .. tostring(item),
-			Font = Enum.Font.Code,
-			TextSize = 10,
+			Font = Enum.Font.Gotham,
+			TextSize = 11,
 			TextColor3 = (item == self._selected) and self._theme.Current.Accent or self._theme.Current.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			ZIndex = 21,
 			Parent = self.ListFrame,
-		})
+		}, { DOM.CreateCorner(4) })
+
+		itmBtn.MouseEnter:Connect(function()
+			if item ~= self._selected then
+				itmBtn.BackgroundTransparency = 0
+				itmBtn.BackgroundColor3 = self._theme.Current.ElemHover
+				itmBtn.TextColor3 = self._theme.Current.Text
+			end
+		end)
+		itmBtn.MouseLeave:Connect(function()
+			if item ~= self._selected then
+				itmBtn.BackgroundTransparency = 1
+				itmBtn.TextColor3 = self._theme.Current.TextDim
+			end
+		end)
 
 		itmBtn.MouseButton1Click:Connect(function()
 			self:Set(item)
