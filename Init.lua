@@ -1,51 +1,27 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (Updated to search inside the 'Root' folder)
+-- Init.lua (V2 ACTIVE - DEBUG VERSION)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
-local branch = env.B0XazRef or "main"
-local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/"
+-- I am hardcoding 'Root/' into the base URL so it cannot fail.
+local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/main/Root/"
 
 local moduleCache = {}
-
-local function httpGet(url)
-	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. os.time()
-	if game and game.HttpGet then return game:HttpGet(cacheBustUrl) end
-	local req = request or http_request or (syn and syn.request)
-	if req then
-		local res = req({ Url = cacheBustUrl, Method = "GET" })
-		return res and (res.Body or res.body)
-	end
-	error("No HttpGet capability.")
-end
-
-local function isValidLua(source)
-	if type(source) ~= "string" or #source < 10 then return false end
-	local lower = source:sub(1, 150):lower()
-	if lower:find("404: not found", 1, true) or lower:find("404 not found", 1, true) then return false end
-	if lower:find("<!doctype", 1, true) or lower:find("<html", 1, true) then return false end
-	return true
-end
 
 local function import(path)
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
 	if moduleCache[cleanPath] then return moduleCache[cleanPath] end
 
-	-- We specifically add "Root/" here because your screenshot shows that folder
-	local targetUrl = baseUrl .. "Root/" .. cleanPath
+	-- This URL construction is now absolute
+	local targetUrl = baseUrl .. cleanPath .. "?t=" .. tostring(math.random(1, 100000))
 	
-	print("[B0Xaz] Attempting: " .. targetUrl)
+	-- Note: Using [V2] so you know for sure the new script is running
+	print("[B0Xaz V2] Attempting: " .. targetUrl)
 
-	local ok, result = pcall(httpGet, targetUrl)
+	local ok, result = pcall(function() return game:HttpGet(targetUrl) end)
 	
-	-- Fallback: try without "Root/" just in case
-	if not ok or not isValidLua(result) then
-		targetUrl = baseUrl .. cleanPath
-		ok, result = pcall(httpGet, targetUrl)
-	end
-
-	if not ok or not isValidLua(result) then
-		error("[B0Xaz] 404: Could not find " .. cleanPath .. " on GitHub. URL Tried: " .. targetUrl)
+	if not ok or result:find("404: Not Found") or #result < 10 then
+		error("[B0Xaz] 404: File not found at " .. targetUrl)
 	end
 
 	local chunk, compileErr = loadstring(result, "@" .. cleanPath)
@@ -63,7 +39,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then while not Players.LocalPlayer do task.wait(0.1) end end
 
-print("[B0Xaz] Bootstrapping from Root folder...")
+print("[B0Xaz V2] Starting Framework...")
 
 -- 1. Core
 local Janitor = import("Core/Janitor.lua")
@@ -97,12 +73,11 @@ local ThemeEngine = import("UI/ThemeEngine.lua")
 local UIManager = import("UI/UIManager.lua")
 local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
--- Teardown
+-- Global Cleanup
 if env.B0XazActiveJanitor then pcall(function() env.B0XazActiveJanitor:Destroy() end) end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
 
--- IoC
 local container = Container.new()
 container:Register("Janitor", masterJanitor)
 container:Register("Signal", Signal)
@@ -118,7 +93,6 @@ scheduler:Init()
 masterJanitor:Add(scheduler)
 container:Register("Scheduler", scheduler)
 
--- Register all
 container:Register("AuthService", AuthService.new())
 local config = container:Register("ConfigService", ConfigService.new())
 container:Register("EntityService", EntityService.new())
@@ -134,18 +108,20 @@ container:Register("GameLoader", GameLoader.new())
 local theme = container:Register("ThemeEngine", ThemeEngine.new())
 container:Register("UIManager", UIManager.new())
 
-local function startApp()
-	container:InitAll()
-	container:StartAll()
-	config:LoadProfile("_autoload")
-	config:StartAutosave(2.0)
-end
+container:InitAll()
+container:StartAll()
 
 local auth = container:Get("AuthService")
 local authenticated, _, _ = auth:LoadAndVerify()
 
+local function launch()
+	config:LoadProfile("_autoload")
+	config:StartAutosave(2.0)
+	print("[B0Xaz V2] ✓ Success.")
+end
+
 if authenticated then
-	startApp()
+	launch()
 else
-	AuthModal.Show(auth, theme, startApp)
+	AuthModal.Show(auth, theme, launch)
 end
