@@ -228,7 +228,7 @@ local function bootstrap()
 	registerStep("DOM", DOM)
 
 	local unloadKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed or StateStore:GetTransient("IsBindingKey") then return end
+		if UserInputService:GetFocusedTextBox() ~= nil or StateStore:GetTransient("IsBindingKey") then return end
 		local unloadBind = Environment.ParseKeybind(StateStore:Get("Settings.UnloadKeybind") or Enum.KeyCode.End)
 		if unloadBind and (input.KeyCode == unloadBind or input.UserInputType == unloadBind) then
 			unloadSuite()

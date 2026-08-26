@@ -165,7 +165,7 @@ return function(services: any)
 		TaskScheduler:RegisterHeartbeat("FlightUpdate", 5, onFlightUpdate)
 
 		local bindConn = UserInputService.InputBegan:Connect(function(input, gp)
-			if gp or isMobile() or StateStore:GetTransient("IsBindingKey") then return end
+			if UserInputService:GetFocusedTextBox() ~= nil or isMobile() or StateStore:GetTransient("IsBindingKey") then return end
 			local flyBind = StateStore:Get("Movement.FlyKeybind")
 			local parsed = Environment.ParseKeybind(flyBind)
 			if parsed and (input.KeyCode == parsed or input.UserInputType == parsed) then

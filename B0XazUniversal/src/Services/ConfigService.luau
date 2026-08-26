@@ -30,7 +30,8 @@ return function(services: any)
 		if t == "Color3" then
 			return { __type = "Color3", r = target.R, g = target.G, b = target.B }
 		elseif t == "EnumItem" then
-			return { __type = "EnumItem", enum = tostring(target.EnumType), name = target.Name }
+			local enumName = tostring(target.EnumType):gsub("^Enum%.", "")
+			return { __type = "EnumItem", enum = enumName, name = target.Name }
 		elseif t == "table" then
 			local out = {}
 			for k, v in pairs(target) do
@@ -45,8 +46,9 @@ return function(services: any)
 		if typeof(target) == "table" then
 			if target.__type == "Color3" then
 				return Color3.new(target.r or 1, target.g or 1, target.b or 1)
-			elseif target.__type == "EnumItem" and target.enum and target.name then
-				local enumType = (Enum :: any)[target.enum]
+			elseif target.__type == "EnumItem" and target.name then
+				local cleanEnum = tostring(target.enum or "KeyCode"):gsub("^Enum%.", "")
+				local enumType = (Enum :: any)[cleanEnum]
 				if enumType then
 					local item = enumType[target.name]
 					if item then return item end

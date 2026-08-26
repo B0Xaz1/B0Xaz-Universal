@@ -307,6 +307,12 @@ return function(disposer: any)
 			local mouseEnum = MOUSE_ALIASES[upper]
 			if mouseEnum then return mouseEnum end
 			return KEYCODE_CACHE[upper]
+		elseif typeof(input) == "table" and input.__type == "EnumItem" and input.name then
+			local cleanEnum = tostring(input.enum or "KeyCode"):gsub("^Enum%.", "")
+			local enumType = (Enum :: any)[cleanEnum]
+			if enumType then
+				return enumType[input.name]
+			end
 		end
 		return nil
 	end
@@ -320,6 +326,11 @@ return function(disposer: any)
 				if bind == Enum.UserInputType.MouseButton3 then return "MB3" end
 			end
 			return bind.Name
+		elseif typeof(bind) == "table" and bind.__type == "EnumItem" and bind.name then
+			if bind.name == "MouseButton1" then return "MB1" end
+			if bind.name == "MouseButton2" then return "MB2" end
+			if bind.name == "MouseButton3" then return "MB3" end
+			return tostring(bind.name)
 		end
 		return tostring(bind)
 	end

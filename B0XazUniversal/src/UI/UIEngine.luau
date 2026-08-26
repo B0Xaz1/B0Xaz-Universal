@@ -434,7 +434,7 @@ return function(services: any)
 		end)
 
 		local toggleConn = UserInputService.InputBegan:Connect(function(input, gp)
-			if gp or StateStore:GetTransient("IsBindingKey") then return end
+			if UserInputService:GetFocusedTextBox() ~= nil or StateStore:GetTransient("IsBindingKey") then return end
 			local menuKey = Environment.ParseKeybind(StateStore:Get("Settings.MenuKeybind"))
 			if menuKey and (input.KeyCode == menuKey or input.UserInputType == menuKey) then
 				local isVis = not self.MainWindow.Visible

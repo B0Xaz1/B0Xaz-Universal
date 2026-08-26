@@ -136,7 +136,7 @@ return function(services: any)
 	end
 
 	local function onInputBegan(input: InputObject, gp: boolean)
-		if gp then return end
+		if UserInputService:GetFocusedTextBox() ~= nil then return end
 
 		local macroBind = Environment.ParseKeybind(StateStore:Get("Game.FakeMacroKey"))
 		if macroBind and (input.KeyCode == macroBind or input.UserInputType == macroBind) then

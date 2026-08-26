@@ -24,7 +24,7 @@ return function(services: any)
 	-- The capture listener is created once per factory instance and released
 	-- with the disposer so repeated suite loads do not stack listeners.
 	local function ensureCaptureListener()
-		if not captureConnection then
+		if not captureConnection or not captureConnection.Connected then
 			captureConnection = UserInputService.InputBegan:Connect(function(input)
 				if not activeCaptureHandler then return end
 				local boundInput: any = nil
@@ -146,10 +146,12 @@ return function(services: any)
 			bindButton.Text = "..."
 			bindButton.TextColor3 = ThemeEngine:GetToken("Accent")
 
-			activeCaptureHandler = function(newBound)
-				StateStore:SetTransient("IsBindingKey", false)
-				handle:Set(newBound)
-			end
+			task.defer(function()
+				activeCaptureHandler = function(newBound)
+					StateStore:SetTransient("IsBindingKey", false)
+					handle:Set(newBound)
+				end
+			end)
 		end)
 
 		return handle

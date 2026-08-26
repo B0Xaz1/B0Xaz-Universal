@@ -244,7 +244,7 @@ return function(services: any)
 		TaskScheduler:RegisterCamera("AimbotCameraUpdate", 20, onCameraStep)
 
 		local inputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if gameProcessed or StateStore:GetTransient("IsBindingKey") then return end
+			if UserInputService:GetFocusedTextBox() ~= nil or StateStore:GetTransient("IsBindingKey") then return end
 			local aimCfg = StateStore:Get("Aimbot")
 			if not aimCfg or not matchesBinding(input, aimCfg.Keybind) then return end
 
