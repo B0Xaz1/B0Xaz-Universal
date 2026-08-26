@@ -1,17 +1,17 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- init.lua (Executor Bootstrapper)
--- Dynamically fetches and boots all modular framework components
+-- init.lua (Smart Auto-Path Executor Bootstrapper)
+-- Dynamically fetches and boots all modular framework components with 404 fallbacks
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
 
--- Base URL configuration (fallback to main branch if not set)
+-- Base URL configuration
 local branch = env.B0XazRef or "main"
 local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/testmenu/" .. branch .. "/")
 
 local moduleCache = {}
 
--- Polymorphic HttpGet wrapper
+-- Safe HttpGet wrapper
 local function httpGet(url)
 	if game and game.HttpGet then
 		return game:HttpGet(url)
@@ -24,40 +24,64 @@ local function httpGet(url)
 	error("No valid HttpGet capability found in executor.")
 end
 
+-- Validate Lua source code string
+local function isValidLua(source)
+	if type(source) ~= "string" or #source < 10 then return false end
+	local lower = source:sub(1, 100):lower()
+	if lower:find("404: not found", 1, true) or lower:find("404 not found", 1, true) then return false end
+	if lower:find("<!doctype", 1, true) or lower:find("<html", 1, true) then return false end
+	return true
+end
+
+-- Fetch source code from URL with fallback retry logic
+local function fetchSource(relativePath)
+	local cleanPath = relativePath:gsub("^%./", ""):gsub("^/", "")
+	
+	-- Paths to attempt: primary provided path, then path with/without 'src/' prefix
+	local candidatePaths = { cleanPath }
+	if cleanPath:sub(1, 4) == "src/" then
+		table.insert(candidatePaths, cleanPath:sub(5))
+	else
+		table.insert(candidatePaths, "src/" .. cleanPath)
+	end
+
+	for _, path in ipairs(candidatePaths) do
+		local url = baseUrl .. path
+		for attempt = 1, 2 do
+			local requestUrl = url .. (attempt > 1 and ("?t=" .. os.time()) or "")
+			local ok, result = pcall(httpGet, requestUrl)
+			if ok and isValidLua(result) then
+				return result, path
+			end
+			task.wait(0.05)
+		end
+	end
+
+	return nil, cleanPath
+end
+
 -- Remote / Virtual Module Loader
 local function import(path)
-	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
-	if moduleCache[cleanPath] then
-		return moduleCache[cleanPath]
+	if moduleCache[path] then
+		return moduleCache[path]
 	end
 
-	local url = baseUrl .. cleanPath
-	local source = nil
-
-	for attempt = 1, 3 do
-		local ok, result = pcall(httpGet, url .. (attempt > 1 and ("?t=" .. os.time()) or ""))
-		if ok and type(result) == "string" and #result > 10 and not result:find("<!DOCTYPE") then
-			source = result
-			break
-		end
-		task.wait(0.1 * attempt)
-	end
-
+	local source, resolvedPath = fetchSource(path)
 	if not source then
-		error("[B0Xaz Loader] Failed to fetch remote module: " .. cleanPath)
+		error("[B0Xaz Loader] File not found on GitHub (404): " .. tostring(path))
 	end
 
-	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
+	local chunk, compileErr = loadstring(source, "@" .. resolvedPath)
 	if not chunk then
-		error("[B0Xaz Loader] Syntax error in " .. cleanPath .. ": " .. tostring(compileErr))
+		error("[B0Xaz Loader] Syntax error in " .. resolvedPath .. ": " .. tostring(compileErr))
 	end
 
 	local ok, module = pcall(chunk)
 	if not ok then
-		error("[B0Xaz Loader] Runtime error in " .. cleanPath .. ": " .. tostring(module))
+		error("[B0Xaz Loader] Runtime error in " .. resolvedPath .. ": " .. tostring(module))
 	end
 
-	moduleCache[cleanPath] = module
+	moduleCache[path] = module
 	return module
 end
 
@@ -70,39 +94,39 @@ end
 
 print("[B0Xaz] Loading Universal Suite Framework...")
 
--- 1. Load Core Engine
-local Janitor = import("src/Core/Janitor.lua")
-local Signal = import("src/Core/Signal.lua")
-local Container = import("src/Core/Container.lua")
-local Scheduler = import("src/Core/Scheduler.lua")
+-- 1. Core Framework Modules
+local Janitor = import("Core/Janitor.lua")
+local Signal = import("Core/Signal.lua")
+local Container = import("Core/Container.lua")
+local Scheduler = import("Core/Scheduler.lua")
 
--- 2. Load Shared Utilities
-local Constants = import("src/Shared/Constants.lua")
-local Crypto = import("src/Shared/Crypto.lua")
-local MathUtil = import("src/Shared/MathUtil.lua")
-local SpatialUtil = import("src/Shared/SpatialUtil.lua")
-local HttpUtil = import("src/Shared/HttpUtil.lua")
+-- 2. Shared Utilities
+local Constants = import("Shared/Constants.lua")
+local Crypto = import("Shared/Crypto.lua")
+local MathUtil = import("Shared/MathUtil.lua")
+local SpatialUtil = import("Shared/SpatialUtil.lua")
+local HttpUtil = import("Shared/HttpUtil.lua")
 
--- 3. Load Domain Services
-local AuthService = import("src/Services/AuthService.lua")
-local ConfigService = import("src/Services/ConfigService.lua")
-local EntityService = import("src/Services/EntityService.lua")
-local InputService = import("src/Services/InputService.lua")
-local LocomotionService = import("src/Services/LocomotionService.lua")
-local CombatService = import("src/Services/CombatService.lua")
-local FlingService = import("src/Services/FlingService.lua")
-local VisualsService = import("src/Services/VisualsService.lua")
-local OverlayService = import("src/Services/OverlayService.lua")
-local EnvironmentService = import("src/Services/EnvironmentService.lua")
-local ServerService = import("src/Services/ServerService.lua")
-local GameLoader = import("src/Games/GameLoader.lua")
+-- 3. Domain Services
+local AuthService = import("Services/AuthService.lua")
+local ConfigService = import("Services/ConfigService.lua")
+local EntityService = import("Services/EntityService.lua")
+local InputService = import("Services/InputService.lua")
+local LocomotionService = import("Services/LocomotionService.lua")
+local CombatService = import("Services/CombatService.lua")
+local FlingService = import("Services/FlingService.lua")
+local VisualsService = import("Services/VisualsService.lua")
+local OverlayService = import("Services/OverlayService.lua")
+local EnvironmentService = import("Services/EnvironmentService.lua")
+local ServerService = import("Services/ServerService.lua")
+local GameLoader = import("Games/GameLoader.lua")
 
--- 4. Load UI Framework
-local ThemeEngine = import("src/UI/ThemeEngine.lua")
-local UIManager = import("src/UI/UIManager.lua")
-local AuthModal = import("src/UI/Components/Modals/AuthModal.lua")
+-- 4. UI Framework
+local ThemeEngine = import("UI/ThemeEngine.lua")
+local UIManager = import("UI/UIManager.lua")
+local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
--- Teardown prior session if present
+-- Teardown prior active sessions
 if env.B0XazActiveJanitor then
 	pcall(function() env.B0XazActiveJanitor:Destroy() end)
 end
@@ -148,7 +172,7 @@ local function startApp()
 	container:InitAll()
 	container:StartAll()
 
-	-- Load Autoload Configuration
+	-- Load Autoload Profile
 	config:LoadProfile(Constants.AUTOLOAD_FILE or "_autoload")
 	config:StartAutosave(2.0)
 
