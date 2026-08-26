@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Dropdown = require(script.Parent.Parent.Components.Dropdown)
 local Button = require(script.Parent.Parent.Components.Button)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local PlayersPresenter = {}
 
@@ -31,6 +32,7 @@ function PlayersPresenter.Build(tab, container, themeEngine)
 	local names = getPlayerNames()
 	selectedName = names[1] ~= "No Players Found" and names[1] or nil
 
+	Section.new(page, "Targeting", themeEngine)
 	local playerDropdown = Dropdown.new(page, "Select Target Player", names, function(v)
 		selectedName = v ~= "No Players Found" and v or nil
 	end, selectedName or "No Players Found", themeEngine)
@@ -40,6 +42,7 @@ function PlayersPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- Actions
+	Section.new(page, "Actions", themeEngine)
 	Button.new(page, "Teleport to Target", function()
 		if not selectedName then return end
 		local target = Players:FindFirstChild(selectedName)
