@@ -65,11 +65,16 @@ trace(string.format("Readiness complete: gameLoaded=%s localPlayer=%s", tostring
 
 local sourceCache: { [string]: string } = {}
 local compiledCache: { [string]: any } = {}
+local initializedCache: { [string]: any } = {}
+local initializedFlags: { [string]: boolean } = {}
 
 local function fetchSource(path: string): string
 	-- Strip prefixes for clean path resolution across repos
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^B0XazUniversal/", "")
-	if sourceCache[cleanPath] then return sourceCache[cleanPath] end
+	if sourceCache[cleanPath] then
+		trace("Fetch cache hit: " .. cleanPath)
+		return sourceCache[cleanPath]
+	end
 
 	local lastErr = "Unknown"
 	for attempt = 1, RETRY_ATTEMPTS do
@@ -90,39 +95,53 @@ end
 
 local function requireModule(path: string, ...: any): any
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^B0XazUniversal/", "")
-	trace("Require start: " .. cleanPath)
-	if compiledCache[cleanPath] ~= nil then
-		trace("Require cache hit: " .. cleanPath)
-		return compiledCache[cleanPath]
+	local hasArguments = select("#", ...) > 0
+	trace("Require start: " .. cleanPath .. (hasArguments and " (with arguments)" or " (factory)"))
+
+	if initializedFlags[cleanPath] then
+		trace("Require initialized cache hit: " .. cleanPath)
+		return initializedCache[cleanPath]
 	end
 
-	local source = fetchSource(cleanPath)
-	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
-	if not chunk then
-		error(string.format("[B0Xaz] Syntax Error in '%s': %s", cleanPath, tostring(compileErr)))
-	end
-	trace("Compiled: " .. cleanPath)
+	local moduleValue = compiledCache[cleanPath]
+	if moduleValue == nil then
+		local source = fetchSource(cleanPath)
+		local chunk, compileErr = loadstring(source, "@" .. cleanPath)
+		if not chunk then
+			error(string.format("[B0Xaz] Syntax Error in '%s': %s", cleanPath, tostring(compileErr)))
+		end
+		trace("Compiled: " .. cleanPath)
 
-	local execOk, factory = pcall(chunk)
-	if not execOk then
-		error(string.format("[B0Xaz] Runtime Error in '%s': %s", cleanPath, tostring(factory)))
+		local execOk, value = pcall(chunk)
+		if not execOk then
+			error(string.format("[B0Xaz] Runtime Error in '%s': %s", cleanPath, tostring(value)))
+		end
+		moduleValue = value
+		compiledCache[cleanPath] = moduleValue
+		trace("Executed: " .. cleanPath)
+	else
+		trace("Require compiled cache hit: " .. cleanPath)
 	end
-	trace("Executed: " .. cleanPath)
 
-	local result = factory
-	if typeof(factory) == "function" then
+	if typeof(moduleValue) == "function" then
+		if not hasArguments then
+			trace("Returning factory: " .. cleanPath)
+			return moduleValue
+		end
+
 		trace("Factory initialize: " .. cleanPath)
-		local initOk, initialized = pcall(factory, ...)
+		local initOk, initialized = pcall(moduleValue, ...)
 		if not initOk then
 			error(string.format("[B0Xaz] Init Error in '%s': %s", cleanPath, tostring(initialized)))
 		end
-		result = initialized
+		initializedFlags[cleanPath] = true
+		initializedCache[cleanPath] = initialized
 		trace("Factory ready: " .. cleanPath)
+		return initialized
 	end
 
-	compiledCache[cleanPath] = result
 	trace("Require complete: " .. cleanPath)
-	return result
+	return moduleValue
 end
 
 local function requireStep(label: string, path: string, ...: any): any

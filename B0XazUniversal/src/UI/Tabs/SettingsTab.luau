@@ -14,13 +14,13 @@ return function(services: any, tab: any)
 	local Require = services:Get("Require")
 	local DOM = services:Get("DOM")
 
-	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau")
-	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau")
-	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau")
-	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau")
-	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau")
-	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau")
-	local ConfigShareModal = Require("B0XazUniversal/src/UI/Modals/ConfigShareModal.luau")
+	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau", services)
+	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau", services)
+	local Dropdown = Require("B0XazUniversal/src/UI/Components/Dropdown.luau", services)
+	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau", services)
+	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau", services)
+	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
+	local ConfigShareModal = Require("B0XazUniversal/src/UI/Modals/ConfigShareModal.luau", services)
 
 	local function createSection(parent: Instance, title: string): Frame
 		local secFrame = DOM.Create("Frame", {

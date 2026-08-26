@@ -15,10 +15,10 @@ return function(services: any, tab: any)
 	local Require = services:Get("Require")
 	local DOM = services:Get("DOM")
 
-	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau")
-	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau")
-	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau")
-	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau")
+	local Toggle = Require("B0XazUniversal/src/UI/Components/Toggle.luau", services)
+	local Slider = Require("B0XazUniversal/src/UI/Components/Slider.luau", services)
+	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau", services)
+	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
 	local function createSection(parent: Instance, title: string): Frame
 		local secFrame = DOM.Create("Frame", {
