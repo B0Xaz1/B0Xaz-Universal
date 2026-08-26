@@ -67,6 +67,18 @@ function DOM.Create(className, properties, children)
 	return inst
 end
 
+-- Pre-styled UICorner factory (pass "full" for a pill radius)
+function DOM.CreateCorner(radius)
+	if radius == "full" then
+		return DOM.Create("UICorner", {
+			CornerRadius = UDim.new(1, 0),
+		})
+	end
+	return DOM.Create("UICorner", {
+		CornerRadius = UDim.new(0, radius or 8),
+	})
+end
+
 -- Pre-styled UIStroke factory
 function DOM.CreateStroke(color, thickness)
 	return DOM.Create("UIStroke", {
