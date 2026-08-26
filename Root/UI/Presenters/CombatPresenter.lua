@@ -7,6 +7,7 @@ local Toggle = require(script.Parent.Parent.Components.Toggle)
 local Slider = require(script.Parent.Parent.Components.Slider)
 local Dropdown = require(script.Parent.Parent.Components.Dropdown)
 local Keybind = require(script.Parent.Parent.Components.Keybind)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local CombatPresenter = {}
 
@@ -15,6 +16,7 @@ function CombatPresenter.Build(tab, container, themeEngine)
 	local page = tab.Page
 
 	-- Aimbot Core Controls
+	Section.new(page, "Aimbot", themeEngine)
 	Toggle.new(page, "Enable Aimbot", config:Get("Aimbot.Enabled"), function(v)
 		config:Set("Aimbot.Enabled", v)
 	end, themeEngine)
@@ -44,6 +46,7 @@ function CombatPresenter.Build(tab, container, themeEngine)
 	end, config:Get("Aimbot.MovementMode"), themeEngine)
 
 	-- FOV Reticle Controls
+	Section.new(page, "FOV Reticle", themeEngine)
 	Toggle.new(page, "Show FOV Circle", config:Get("Aimbot.FOV.Show"), function(v)
 		config:Set("Aimbot.FOV.Show", v)
 	end, themeEngine)
@@ -61,6 +64,7 @@ function CombatPresenter.Build(tab, container, themeEngine)
 	end, " px", themeEngine)
 
 	-- Triggerbot Controls
+	Section.new(page, "Triggerbot", themeEngine)
 	Toggle.new(page, "Enable Triggerbot", config:Get("Aimbot.Triggerbot.Enabled"), function(v)
 		config:Set("Aimbot.Triggerbot.Enabled", v)
 	end, themeEngine)
