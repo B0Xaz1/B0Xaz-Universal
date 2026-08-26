@@ -162,8 +162,9 @@ local function bootstrap()
 	ServiceContainer:Register("PluginManager", PluginManager)
 
 	local ThemeEngine = requireModule("src/UI/ThemeEngine.luau", ServiceContainer)
-	local UIEngine = requireModule("src/UI/UIEngine.luau", ServiceContainer)
 	ServiceContainer:Register("ThemeEngine", ThemeEngine)
+
+	local UIEngine = requireModule("src/UI/UIEngine.luau", ServiceContainer)
 	ServiceContainer:Register("UIEngine", UIEngine)
 
 	local function launch()
