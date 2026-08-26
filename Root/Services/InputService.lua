@@ -58,13 +58,21 @@ end
 -- Evaluates if an input matches a given bind
 function InputService:MatchesBind(input, bind)
 	if not input or bind == nil then return false end
-	
+
 	local t = typeof(bind)
 	if t == "string" then
 		local alias = KEY_ALIASES[bind:upper()]
 		if alias then return input.UserInputType == alias end
-		local ok, code = pcall(function() return Enum.KeyCode[bind:upper()] end)
-		return ok and input.KeyCode == code
+		-- Try the exact name first (legacy saves keep plain names like
+		-- "RightShift"), then the uppercased form. Cover both KeyCode and
+		-- UserInputType so mouse button binds resolve too.
+		for _, candidate in ipairs({ bind, bind:upper() }) do
+			local ok, code = pcall(function() return Enum.KeyCode[candidate] end)
+			if ok and code then return input.KeyCode == code end
+			local ok2, uit = pcall(function() return Enum.UserInputType[candidate] end)
+			if ok2 and uit then return input.UserInputType == uit end
+		end
+		return false
 	elseif t == "EnumItem" then
 		if bind.EnumType == Enum.KeyCode then
 			return input.KeyCode == bind
