@@ -111,19 +111,18 @@ function Window.new(title, themeEngine, container)
 	})
 	self._theme:Bind(self.TabBar, "BackgroundColor3", "Side")
 
-	self.TabList = DOM.Create("ScrollingFrame", {
-		Size = UDim2.new(1, -8, 1, 0),
-		Position = UDim2.new(0, 4, 0, 0),
+	-- Plain frame (no ScrollingFrame): the fixed tab set fits without scrolling,
+	-- and this avoids executor-specific auto-canvas quirks in the tab strip.
+	self.TabList = DOM.Create("Frame", {
+		Size = UDim2.new(1, -12, 1, 0),
+		Position = UDim2.new(0, 6, 0, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 0,
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		Parent = self.TabBar,
 	}, {
 		DOM.Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, 6),
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 		}),
 	})
@@ -200,21 +199,21 @@ function Window:AddTab(name)
 			Visible = false,
 			Parent = self.Content,
 		}, {
-			DOM.Create("UIListLayout", { Padding = UDim.new(0, 10) }),
-			DOM.CreatePadding(14),
+			DOM.Create("UIListLayout", { Padding = UDim.new(0, 6) }),
+			DOM.CreatePadding(12),
 		}),
 		Button = DOM.Create("TextButton", {
 			Text = name,
 			Font = Enum.Font.Gotham,
-			TextSize = 11,
+			TextSize = 12,
 			TextColor3 = self._theme.Current.TextDim,
 			BackgroundColor3 = self._theme.Current.ElemHover,
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(80, 22),
+			Size = UDim2.fromOffset(84, 24),
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
 			Parent = self.TabList,
-		}, { DOM.CreateCorner(11) }),
+		}, { DOM.CreateCorner(12) }),
 	}
 
 	tab.Button.MouseButton1Click:Connect(function()
