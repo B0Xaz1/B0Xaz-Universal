@@ -167,7 +167,7 @@ return function(services: any)
 		-- collide with or transfer momentum to our assembly
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer and player.Character then
-				for _, part in ipairs(player.Character:GetChildren()) do
+				for _, part in ipairs(player.Character:GetDescendants()) do
 					if part:IsA("BasePart") and part.CanCollide then
 						part.CanCollide = false
 					end
@@ -181,12 +181,13 @@ return function(services: any)
 		local deltaVel = (vel - ExtrasService._antiFlingLastVel).Magnitude
 		local impulse = deltaVel / math.max(dt, 1e-4)
 
-		-- Maximum velocity change a humanoid can physically produce via normal walking or jumping.
-		-- Natural movement cannot exceed this, while a fling collision imparts hundreds to thousands of studs/s.
-		local maxSelfDelta = math.max((hum.WalkSpeed or 16) * 1.5 + (hum.JumpPower or 50), 100)
+		-- Only classify as a fling if velocity or angular spin is truly beyond
+		-- any physically possible player movement. Normal walking, sprinting,
+		-- jumping, and falling can never produce these extreme velocities.
+		local maxSelfDelta = math.max((hum.WalkSpeed or 16) * 1.5 + (hum.JumpPower or 50), 120)
 
 		local isFling = false
-		if (deltaVel > maxSelfDelta and impulse > threshold) or angVel.Magnitude > 100 then
+		if (deltaVel > maxSelfDelta and impulse > threshold) or angVel.Magnitude > 250 then
 			isFling = true
 		end
 

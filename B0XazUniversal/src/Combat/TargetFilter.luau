@@ -128,7 +128,7 @@ return function(services: any)
 		-- Multi-pass penetration: penetrates through non-collidable trigger
 		-- volumes, invisible parts, transparent glass/fences, and phased doors
 		-- while stopping firmly on solid walls
-		for _ = 1, 4 do
+		for _ = 1, 8 do
 			local result = Workspace:Raycast(origin, direction, visRaycastParams)
 			if not result then
 				return true
@@ -140,9 +140,15 @@ return function(services: any)
 			end
 
 			-- Invisible barriers, non-collidable trigger zones, or transparent obstacles
-			-- should not block line of sight; add to exclude filter and continue past them
-			if not hitInstance.CanCollide or hitInstance.Transparency >= 0.75 then
-				table.insert(activeFilterList, hitInstance)
+			-- should not block line of sight; add the part (or its parent model if it's
+			-- a door/fence/foliage model) to the exclude filter and continue past them
+			if not hitInstance.CanCollide or hitInstance.Transparency >= 0.5 then
+				local ancestorModel = hitInstance.Parent
+				if ancestorModel and ancestorModel:IsA("Model") and ancestorModel ~= Workspace then
+					table.insert(activeFilterList, ancestorModel)
+				else
+					table.insert(activeFilterList, hitInstance)
+				end
 				visRaycastParams.FilterDescendantsInstances = activeFilterList
 			else
 				-- Solid opaque wall or obstacle
