@@ -176,7 +176,8 @@ return function(services: any)
 		end
 
 		self._bindings[instance][property] = tokenName
-		(instance :: any)[property] = self:GetToken(tokenName)
+		local target = instance :: any
+		target[property] = self:GetToken(tokenName)
 	end
 
 	function ThemeEngine:SetPreset(presetName: string)
@@ -211,7 +212,8 @@ return function(services: any)
 				for prop, token in pairs(propMap) do
 					local val = self.Current[token]
 					if val then
-						(instance :: any)[prop] = val
+						local target = instance :: any
+						target[prop] = val
 					end
 				end
 			else
