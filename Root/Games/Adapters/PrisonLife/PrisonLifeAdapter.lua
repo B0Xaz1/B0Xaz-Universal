@@ -11,6 +11,7 @@ local MeleeController = require(script.Parent.MeleeController)
 local Toggle = require(script.Parent.Parent.Parent.Parent.UI.Components.Toggle)
 local Slider = require(script.Parent.Parent.Parent.Parent.UI.Components.Slider)
 local Button = require(script.Parent.Parent.Parent.Parent.UI.Components.Button)
+local Section = require(script.Parent.Parent.Parent.Parent.UI.Components.Section)
 
 local PrisonLifeAdapter = {}
 PrisonLifeAdapter.__index = PrisonLifeAdapter
@@ -50,6 +51,7 @@ function PrisonLifeAdapter:BuildUI(tab)
 	local theme = self._container:Get("ThemeEngine")
 
 	-- Gun Grabber Spawns
+	Section.new(page, "Weapon Spawns", theme)
 	for name, pos in pairs(Manifest.GUN_SPAWNS) do
 		Button.new(page, "Grab Gun: " .. name, function()
 			local char = game:GetService("Players").LocalPlayer.Character
@@ -64,12 +66,14 @@ function PrisonLifeAdapter:BuildUI(tab)
 	end
 
 	-- Door Phasing
+	Section.new(page, "Doors & Gates", theme)
 	Toggle.new(page, "Phase Doors & Gates", self._config:Get("Game.DoorPhase"), function(v)
 		self._config:Set("Game.DoorPhase", v)
 		if v then self.Doors:Scan() else self.Doors:RestoreAll() end
 	end, theme)
 
 	-- Combat Modifiers
+	Section.new(page, "Weapon Mods", theme)
 	Toggle.new(page, "No Spread", self._config:Get("Game.NoSpread"), function(v)
 		self._config:Set("Game.NoSpread", v)
 		self.Weapons:ScanGuns()
@@ -86,6 +90,7 @@ function PrisonLifeAdapter:BuildUI(tab)
 	end, theme)
 
 	-- Melee
+	Section.new(page, "Melee", theme)
 	Toggle.new(page, "Punch Aura", self._config:Get("Game.PunchAura"), function(v)
 		self._config:Set("Game.PunchAura", v)
 	end, theme)
