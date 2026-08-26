@@ -9,8 +9,8 @@ local DOM = require(script.Parent.DOM)
 local Window = {}
 Window.__index = Window
 
-local TITLE_HEIGHT = 34
-local TAB_HEIGHT = 34
+local TITLE_HEIGHT = 28
+local TAB_HEIGHT = 28
 
 function Window.new(title, themeEngine, container)
 	local self = setmetatable({}, Window)
@@ -33,16 +33,14 @@ function Window.new(title, themeEngine, container)
 		Parent = safeParent,
 	})
 
-	-- Main Window Frame
+	-- Main Window Frame (flat, 1px border)
 	self.MainFrame = DOM.Create("Frame", {
-		Size = UDim2.fromOffset(660, 460),
-		Position = UDim2.new(0.5, -330, 0.5, -230),
+		Size = UDim2.fromOffset(720, 520),
+		Position = UDim2.new(0.5, -360, 0.5, -260),
 		BackgroundColor3 = theme.Bg,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Parent = self.ScreenGui,
-	}, {
-		DOM.CreateCorner(10),
 	})
 	local mainStroke = DOM.CreateStroke(theme.Border, 1)
 	mainStroke.Parent = self.MainFrame
@@ -56,33 +54,15 @@ function Window.new(title, themeEngine, container)
 		BorderSizePixel = 0,
 		Parent = self.MainFrame,
 	})
-	self.TitleDot = DOM.Create("Frame", {
-		Size = UDim2.fromOffset(8, 8),
-		Position = UDim2.fromOffset(14, 13),
-		BackgroundColor3 = theme.Accent,
-		BorderSizePixel = 0,
-		Parent = self.TitleBar,
-	}, { DOM.CreateCorner(2) })
 	self.TitleLabel = DOM.Create("TextLabel", {
 		Text = title or "B0Xaz Universal",
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.Code,
 		TextSize = 13,
 		TextColor3 = theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(28, 0),
-		Size = UDim2.new(1, -104, 1, 0),
-		Parent = self.TitleBar,
-	})
-	self.TitleTag = DOM.Create("TextLabel", {
-		Text = "universal hub",
-		Font = Enum.Font.Gotham,
-		TextSize = 9,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -76, 0, 0),
-		Size = UDim2.fromOffset(60, TITLE_HEIGHT),
+		Position = UDim2.fromOffset(10, 0),
+		Size = UDim2.new(1, -20, 1, 0),
 		Parent = self.TitleBar,
 	})
 	self.TitleLine = DOM.Create("Frame", {
@@ -93,9 +73,7 @@ function Window.new(title, themeEngine, container)
 		Parent = self.TitleBar,
 	})
 	self._theme:Bind(self.TitleBar, "BackgroundColor3", "Side")
-	self._theme:Bind(self.TitleDot, "BackgroundColor3", "Accent")
 	self._theme:Bind(self.TitleLabel, "TextColor3", "Text")
-	self._theme:Bind(self.TitleTag, "TextColor3", "TextMuted")
 	self._theme:Bind(self.TitleLine, "BackgroundColor3", "BorderDim")
 
 	-- Dragging Logic
@@ -105,24 +83,21 @@ function Window.new(title, themeEngine, container)
 	self.TabBar = DOM.Create("Frame", {
 		Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
 		Position = UDim2.new(0, 0, 0, TITLE_HEIGHT),
-		BackgroundColor3 = theme.Side,
+		BackgroundColor3 = theme.Bg,
 		BorderSizePixel = 0,
 		Parent = self.MainFrame,
 	})
-	self._theme:Bind(self.TabBar, "BackgroundColor3", "Side")
+	self._theme:Bind(self.TabBar, "BackgroundColor3", "Bg")
 
-	-- Plain frame (no ScrollingFrame): the fixed tab set fits without scrolling,
-	-- and this avoids executor-specific auto-canvas quirks in the tab strip.
 	self.TabList = DOM.Create("Frame", {
-		Size = UDim2.new(1, -12, 1, 0),
-		Position = UDim2.new(0, 6, 0, 0),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 4, 0, 0),
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
 		Parent = self.TabBar,
 	}, {
 		DOM.Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
-			Padding = UDim.new(0, 6),
+			Padding = UDim.new(0, -1),
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 		}),
 	})
@@ -193,35 +168,36 @@ function Window:AddTab(name)
 		Page = DOM.Create("ScrollingFrame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
-			ScrollBarThickness = 4,
+			ScrollBarThickness = 3,
 			ScrollBarImageColor3 = self._theme.Current.Accent,
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			Visible = false,
 			Parent = self.Content,
 		}, {
 			DOM.Create("UIListLayout", { Padding = UDim.new(0, 6) }),
-			DOM.CreatePadding(12),
+			DOM.CreatePadding(10),
 		}),
 		Button = DOM.Create("TextButton", {
 			Text = name,
-			Font = Enum.Font.Gotham,
-			TextSize = 12,
+			Font = Enum.Font.Code,
+			TextSize = 11,
 			TextColor3 = self._theme.Current.TextDim,
-			BackgroundColor3 = self._theme.Current.ElemHover,
-			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(84, 24),
+			BackgroundColor3 = self._theme.Current.Side,
+			Size = UDim2.fromOffset(92, 22),
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
 			Parent = self.TabList,
-		}, { DOM.CreateCorner(12) }),
+		}, {
+			DOM.CreateStroke(self._theme.Current.BorderDim, 1),
+		}),
 	}
+	self._theme:Bind(tab.Button, "BackgroundColor3", "Side")
 
 	tab.Button.MouseButton1Click:Connect(function()
 		self:SelectTab(tab)
 	end)
 	tab.Button.MouseEnter:Connect(function()
 		if tab ~= self._activeTab then
-			tab.Button.BackgroundTransparency = 0
 			tab.Button.BackgroundColor3 = self._theme.Current.ElemHover
 			tab.Button.TextColor3 = self._theme.Current.Text
 		end
@@ -245,11 +221,10 @@ end
 function Window:_paintTab(tab)
 	local active = (tab == self._activeTab)
 	if active then
-		tab.Button.BackgroundTransparency = 0
-		tab.Button.BackgroundColor3 = self._theme.Current.Accent
-		tab.Button.TextColor3 = Color3.new(0, 0, 0)
+		tab.Button.BackgroundColor3 = self._theme.Current.Elem
+		tab.Button.TextColor3 = self._theme.Current.Text
 	else
-		tab.Button.BackgroundTransparency = 1
+		tab.Button.BackgroundColor3 = self._theme.Current.Side
 		tab.Button.TextColor3 = self._theme.Current.TextDim
 	end
 end
@@ -276,44 +251,33 @@ function Window:Notify(title, message, duration, color)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = self._theme.Current.Panel,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
 		Parent = self.NotifyContainer,
 	}, {
-		DOM.CreateCorner(10),
 		DOM.CreateStroke(accent, 1),
-	})
-
-	-- Left accent tick
-	DOM.Create("Frame", {
-		Size = UDim2.new(0, 3, 1, -10),
-		Position = UDim2.fromOffset(2, 5),
-		BackgroundColor3 = accent,
-		BorderSizePixel = 0,
-		Parent = card,
 	})
 
 	DOM.Create("TextLabel", {
 		Text = title or "Notification",
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.Code,
 		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(1, -18, 0, 14),
+		Position = UDim2.fromOffset(10, 8),
+		Size = UDim2.new(1, -20, 0, 14),
 		Parent = card,
 	})
 
 	DOM.Create("TextLabel", {
 		Text = message or "",
-		Font = Enum.Font.Gotham,
+		Font = Enum.Font.Code,
 		TextSize = 11,
 		TextColor3 = self._theme.Current.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = true,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(12, 24),
-		Size = UDim2.new(1, -18, 0, 0),
+		Position = UDim2.fromOffset(10, 24),
+		Size = UDim2.new(1, -20, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = card,
 	})
