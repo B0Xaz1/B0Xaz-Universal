@@ -12,6 +12,9 @@ local UI_WIDTH: number = 660
 local UI_HEIGHT: number = 460
 local TITLE_HEIGHT: number = 28
 local TAB_HEIGHT: number = 26
+local PAGE_ZINDEX: number = 1
+local TAB_ZINDEX: number = 50
+local OVERLAY_ZINDEX: number = 100
 
 export type TabInstance = {
 	Name: string,
@@ -187,7 +190,9 @@ return function(services: any)
 			Position = UDim2.new(0.5, -UI_WIDTH * 0.5, 0.5, -UI_HEIGHT * 0.5),
 			BackgroundColor3 = ThemeEngine:GetToken("Bg"),
 			BorderSizePixel = 0,
+			Active = true,
 			ClipsDescendants = true,
+			ZIndex = PAGE_ZINDEX,
 			Parent = self.ScreenGui,
 		}, {
 			DOM.CreateStroke(ThemeEngine:GetToken("Border"), 1),
@@ -205,6 +210,7 @@ return function(services: any)
 			Size = UDim2.new(1, 0, 0, TITLE_HEIGHT),
 			BackgroundColor3 = ThemeEngine:GetToken("Side"),
 			BorderSizePixel = 0,
+			ZIndex = TAB_ZINDEX,
 			Parent = self.MainWindow,
 		}, {
 			DOM.Create("TextLabel", {
@@ -229,6 +235,7 @@ return function(services: any)
 			BackgroundTransparency = 1,
 			Size = UDim2.fromOffset(28, TITLE_HEIGHT),
 			Position = UDim2.new(1, -28, 0, 0),
+			ZIndex = TAB_ZINDEX + 2,
 			Parent = titleBar,
 		}) :: TextButton
 		closeBtn.MouseButton1Click:Connect(function()
@@ -242,6 +249,9 @@ return function(services: any)
 			Position = UDim2.new(0, 0, 0, TITLE_HEIGHT),
 			BackgroundColor3 = ThemeEngine:GetToken("Side"),
 			BorderSizePixel = 0,
+			Active = true,
+			ClipsDescendants = true,
+			ZIndex = TAB_ZINDEX,
 			Parent = self.MainWindow,
 		}, {
 			DOM.Create("Frame", {
@@ -261,6 +271,8 @@ return function(services: any)
 			ScrollBarThickness = 0,
 			ScrollingDirection = Enum.ScrollingDirection.X,
 			AutomaticCanvasSize = Enum.AutomaticSize.X,
+			Active = true,
+			ZIndex = TAB_ZINDEX + 1,
 			Parent = self.TabContainer,
 		}, {
 			DOM.Create("UIListLayout", {
@@ -275,6 +287,8 @@ return function(services: any)
 			Size = UDim2.new(1, 0, 1, -(TITLE_HEIGHT + TAB_HEIGHT)),
 			Position = UDim2.new(0, 0, 0, TITLE_HEIGHT + TAB_HEIGHT),
 			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = PAGE_ZINDEX,
 			Parent = self.MainWindow,
 		}) :: Frame
 
@@ -283,6 +297,7 @@ return function(services: any)
 			Size = UDim2.new(0, 280, 1, -20),
 			Position = UDim2.new(1, -290, 0, 10),
 			BackgroundTransparency = 1,
+			ZIndex = OVERLAY_ZINDEX,
 			Parent = self.ScreenGui,
 		}, {
 			DOM.Create("UIListLayout", {
@@ -304,6 +319,7 @@ return function(services: any)
 				TextColor3 = ThemeEngine:GetToken("TextDim"),
 				BackgroundTransparency = 1,
 				Size = UDim2.new(0, math.max(60, #tabName * 7 + 20), 1, 0),
+				ZIndex = TAB_ZINDEX + 2,
 				Parent = tabListLayout,
 			}) :: TextButton
 
@@ -313,6 +329,7 @@ return function(services: any)
 				BackgroundColor3 = ThemeEngine:GetToken("Accent"),
 				BorderSizePixel = 0,
 				Visible = false,
+				ZIndex = TAB_ZINDEX + 3,
 				Parent = tabBtn,
 			}) :: Frame
 
@@ -320,6 +337,8 @@ return function(services: any)
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				Visible = false,
+				ClipsDescendants = true,
+				ZIndex = PAGE_ZINDEX,
 				Parent = self.PagesContainer,
 			}) :: Frame
 
@@ -331,6 +350,7 @@ return function(services: any)
 				ScrollBarThickness = 3,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ZIndex = PAGE_ZINDEX + 1,
 				Parent = pageFrame,
 			}, {
 				DOM.Create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
@@ -345,6 +365,7 @@ return function(services: any)
 				ScrollBarThickness = 3,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ZIndex = PAGE_ZINDEX + 1,
 				Parent = pageFrame,
 			}, {
 				DOM.Create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
