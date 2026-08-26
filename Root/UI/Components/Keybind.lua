@@ -33,14 +33,14 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 	})
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	}, { labelView })
 
 	self.Button = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(65, 20),
-		Position = UDim2.new(1, -65, 0.5, -10),
+		Size = UDim2.fromOffset(64, 20),
+		Position = UDim2.new(1, -64, 0.5, -10),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = "[" .. formatBind(self._bind) .. "]",
