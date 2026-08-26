@@ -1,33 +1,53 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (Matches Screenshot: Init at Root, Modules in Root/ folder)
+-- Init.lua (Magic Virtual-Require Bootstrapper)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
-local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/main/Root/"
+local branch = env.B0XazRef or "main"
+local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/Root/"
 
 local moduleCache = {}
 
+local function httpGet(url)
+	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(math.random(1, 100000))
+	return game:HttpGet(cacheBustUrl)
+end
+
+-- Virtual Module Loader
 local function import(path)
+	-- Normalize path (handles both "Core/Janitor" and "Core/Janitor.lua")
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	if not cleanPath:find("%.lua$") then cleanPath = cleanPath .. ".lua" end
+	
 	if moduleCache[cleanPath] then return moduleCache[cleanPath] end
 
-	-- Based on screenshot: baseUrl points to /Root/ 
-	-- So import("Core/Janitor.lua") becomes .../main/Root/Core/Janitor.lua
-	local targetUrl = baseUrl .. cleanPath .. "?t=" .. tostring(math.random(1, 100000))
-	
-	print("[B0Xaz] Loading: " .. targetUrl)
-
-	local ok, result = pcall(function() return game:HttpGet(targetUrl) end)
+	local targetUrl = baseUrl .. cleanPath
+	local ok, result = pcall(httpGet, targetUrl)
 	
 	if not ok or result:find("404: Not Found") or #result < 10 then
-		error("[B0Xaz] 404: File not found. Verify repository is PUBLIC and path is correct: " .. targetUrl)
+		-- Try one fallback: lowercase
+		targetUrl = baseUrl .. cleanPath:lower()
+		ok, result = pcall(httpGet, targetUrl)
+	end
+
+	if not ok or result:find("404: Not Found") or #result < 10 then
+		error("[B0Xaz] 404: File not found at " .. targetUrl)
 	end
 
 	local chunk, compileErr = loadstring(result, "@" .. cleanPath)
 	if not chunk then error("[B0Xaz] Syntax Error: " .. tostring(compileErr)) end
 
+	-- MAGIC INJECTION:
+	-- This replaces 'require' inside the module with our 'import' function
+	-- and provides a fake 'script' object so 'script.Parent' doesn't crash.
+	local proxyScript = { Parent = { Name = "Virtual" } }
+	setfenv(chunk, setmetatable({
+		require = import,
+		script = proxyScript,
+	}, { __index = getfenv(0) }))
+
 	local ok2, module = pcall(chunk)
-	if not ok2 then error("[B0Xaz] Runtime Error: " .. tostring(module)) end
+	if not ok2 then error("[B0Xaz] Runtime Error in " .. cleanPath .. ": " .. tostring(module)) end
 
 	moduleCache[cleanPath] = module
 	return module
@@ -38,41 +58,41 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then while not Players.LocalPlayer do task.wait(0.1) end end
 
-print("[B0Xaz] Starting Universal Suite...")
+print("[B0Xaz] Bootstrapping System...")
 
--- 1. Core
-local Janitor = import("Core/Janitor.lua")
-local Signal = import("Core/Signal.lua")
-local Container = import("Core/Container.lua")
-local Scheduler = import("Core/Scheduler.lua")
+-- 1. Load Core
+local Janitor = import("Core/Janitor")
+local Signal = import("Core/Signal")
+local Container = import("Core/Container")
+local Scheduler = import("Core/Scheduler")
 
--- 2. Shared
-local Constants = import("Shared/Constants.lua")
-local Crypto = import("Shared/Crypto.lua")
-local MathUtil = import("Shared/MathUtil.lua")
-local SpatialUtil = import("Shared/SpatialUtil.lua")
-local HttpUtil = import("Shared/HttpUtil.lua")
+-- 2. Load Shared
+local Constants = import("Shared/Constants")
+local Crypto = import("Shared/Crypto")
+local MathUtil = import("Shared/MathUtil")
+local SpatialUtil = import("Shared/SpatialUtil")
+local HttpUtil = import("Shared/HttpUtil")
 
 -- 3. Services
-local AuthService = import("Services/AuthService.lua")
-local ConfigService = import("Services/ConfigService.lua")
-local EntityService = import("Services/EntityService.lua")
-local InputService = import("Services/InputService.lua")
-local LocomotionService = import("Services/LocomotionService.lua")
-local CombatService = import("Services/CombatService.lua")
-local FlingService = import("Services/FlingService.lua")
-local VisualsService = import("Services/VisualsService.lua")
-local OverlayService = import("Services/OverlayService.lua")
-local EnvironmentService = import("Services/EnvironmentService.lua")
-local ServerService = import("Services/ServerService.lua")
-local GameLoader = import("Games/GameLoader.lua")
+local AuthService = import("Services/AuthService")
+local ConfigService = import("Services/ConfigService")
+local EntityService = import("Services/EntityService")
+local InputService = import("Services/InputService")
+local LocomotionService = import("Services/LocomotionService")
+local CombatService = import("Services/CombatService")
+local FlingService = import("Services/FlingService")
+local VisualsService = import("Services/VisualsService")
+local OverlayService = import("Services/OverlayService")
+local EnvironmentService = import("Services/EnvironmentService")
+local ServerService = import("Services/ServerService")
+local GameLoader = import("Games/GameLoader")
 
 -- 4. UI
-local ThemeEngine = import("UI/ThemeEngine.lua")
-local UIManager = import("UI/UIManager.lua")
-local AuthModal = import("UI/Components/Modals/AuthModal.lua")
+local ThemeEngine = import("UI/ThemeEngine")
+local UIManager = import("UI/UIManager")
+local AuthModal = import("UI/Components/Modals/AuthModal")
 
--- Setup Session
+-- Teardown
 if env.B0XazActiveJanitor then pcall(function() env.B0XazActiveJanitor:Destroy() end) end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
@@ -85,7 +105,6 @@ container:Register("Crypto", Crypto)
 container:Register("MathUtil", MathUtil)
 container:Register("SpatialUtil", SpatialUtil)
 container:Register("HttpUtil", HttpUtil)
-container:Register("Import", import)
 
 local scheduler = Scheduler.new()
 scheduler:Init()
@@ -116,7 +135,7 @@ local authenticated, _, _ = auth:LoadAndVerify()
 local function launch()
 	config:LoadProfile("_autoload")
 	config:StartAutosave(2.0)
-	print("[B0Xaz] ✓ Suite Loaded.")
+	print("[B0Xaz] ✓ Universal Hub Online.")
 end
 
 if authenticated then
