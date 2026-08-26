@@ -271,6 +271,9 @@ return function(services: any)
 			ScrollBarThickness = 0,
 			ScrollingDirection = Enum.ScrollingDirection.X,
 			AutomaticCanvasSize = Enum.AutomaticSize.X,
+			-- Keep the vertical canvas non-zero so buttons sized to 1 scale
+			-- receive the full tab-bar height inside the ScrollingFrame.
+			CanvasSize = UDim2.new(0, 0, 1, 0),
 			Active = true,
 			ZIndex = TAB_ZINDEX + 1,
 			Parent = self.TabContainer,
