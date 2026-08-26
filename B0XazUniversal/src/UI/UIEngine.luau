@@ -184,6 +184,7 @@ return function(services: any)
 			Parent = parent,
 		}) :: ScreenGui
 		Disposer:Add(self.ScreenGui)
+		ThemeEngine:RegisterRoot(self.ScreenGui)
 
 		self.MainWindow = DOM.Create("Frame", {
 			Size = UDim2.fromOffset(UI_WIDTH, UI_HEIGHT),

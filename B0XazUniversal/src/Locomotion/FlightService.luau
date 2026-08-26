@@ -29,7 +29,10 @@ return function(services: any)
 	end
 
 	function FlightService:CleanupMovers()
+		-- A Disposer cannot accept new items after Dispose(). Recreate the
+		-- child container so every subsequent flight start can register movers.
 		self._flightDisposer:Dispose()
+		self._flightDisposer = Disposer:CreateChild("FlightDisposer")
 		self._linearVelocity = nil
 		self._bodyGyro = nil
 		self._attachment = nil
@@ -110,7 +113,14 @@ return function(services: any)
 	-- Flight Tick Processing
 	-- ─────────────────────────────────────────────────────────────────────────
 	local function onFlightUpdate(dt: number)
-		if not FlightService._active then return end
+		if not FlightService._active then
+			-- The toggle can be clicked before PlayerTracker has finished
+			-- indexing the character. Retry once assets become available.
+			if StateStore:Get("Movement.FlyEnabled") == true then
+				FlightService:Start()
+			end
+			return
+		end
 
 		local myAssets = PlayerTracker:GetLocalAssets()
 		local cam = Workspace.CurrentCamera

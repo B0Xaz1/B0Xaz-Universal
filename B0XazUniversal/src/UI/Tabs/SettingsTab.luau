@@ -149,7 +149,7 @@ return function(services: any, tab: any)
 	for name in pairs(ThemeEngine.Presets) do table.insert(presetList, name) end
 	table.sort(presetList)
 
-	Dropdown.new(themeSec, "Color Preset", presetList, ThemeEngine.ActivePresetName, function(preset)
+	Dropdown.new(themeSec, "Color Preset", presetList, "Theme.ActivePreset", function(preset)
 		ThemeEngine:SetPreset(preset)
 		UIEngine:Notify("Themes", "Applied theme: " .. preset, 1.5, ThemeEngine:GetToken("Success"))
 	end)
