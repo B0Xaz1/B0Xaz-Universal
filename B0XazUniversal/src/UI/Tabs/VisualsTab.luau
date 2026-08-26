@@ -40,7 +40,11 @@ return function(services: any, tab: any)
 			Lighting.Ambient = fullbrightBackup.Ambient
 			Lighting.OutdoorAmbient = fullbrightBackup.OutdoorAmbient
 			Lighting.Brightness = fullbrightBackup.Brightness
-			Lighting.GlobalShadows = fullbrightBackup.GlobalShadows
+			if StateStore:Get("Performance.NoShadows") == true then
+				Lighting.GlobalShadows = false
+			else
+				Lighting.GlobalShadows = fullbrightBackup.GlobalShadows
+			end
 			fullbrightBackup = nil
 		end
 	end

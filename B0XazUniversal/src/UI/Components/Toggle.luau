@@ -118,6 +118,16 @@ return function(services: any)
 			end)
 		end
 
+		if isPath then
+			EventBus:Subscribe("StateHydrated", function()
+				local hydratedValue = StateStore:Get(statePathOrInit)
+				if hydratedValue ~= currentState then
+					currentState = hydratedValue == true
+					updateVisuals(currentState)
+					if callback then task.spawn(callback, currentState) end
+				end
+			end)
+		end
 		EventBus:Subscribe("ThemeUpdated", function()
 			updateVisuals(currentState)
 		end)

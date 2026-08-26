@@ -8,6 +8,7 @@
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local ConfigService = services:Get("ConfigService")
 	local KeyService = services:Get("KeyService")
 	local UIEngine = services:Get("UIEngine")
@@ -137,10 +138,15 @@ return function(services: any, tab: any)
 	-- Right Column: Themes, UI Scale & License Management
 	-- ─────────────────────────────────────────────────────────────────────────
 	local uiSec = createSection(tab.RightCol, "UI Preferences")
-	Slider.new(uiSec, "UI Scale Factor", 50, 150, math.floor((StateStore:Get("Settings.UIScale") or 1.0) * 100), 5, "%", function(scaleVal)
+	local uiScaleSlider = Slider.new(uiSec, "UI Scale Factor", 50, 150, math.floor((StateStore:Get("Settings.UIScale") or 1.0) * 100), 5, "%", function(scaleVal)
 		local factor = scaleVal / 100
 		StateStore:Set("Settings.UIScale", factor)
 		if UIEngine.ScaleObject then UIEngine.ScaleObject.Scale = factor end
+	end)
+	EventBus:Subscribe("StateHydrated", function()
+		local factor = tonumber(StateStore:Get("Settings.UIScale")) or 1.0
+		if UIEngine.ScaleObject then UIEngine.ScaleObject.Scale = factor end
+		uiScaleSlider:Set(math.floor(factor * 100), true)
 	end)
 	Keybind.new(uiSec, "Menu Toggle Hotkey", "Settings.MenuKeybind")
 

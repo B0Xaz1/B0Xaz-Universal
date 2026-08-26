@@ -40,6 +40,7 @@ end)
 return function(services: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
+	local EventBus = services:Get("EventBus")
 	local Environment = services:Get("Environment")
 	local DOM = services:Get("DOM")
 
@@ -117,6 +118,17 @@ return function(services: any)
 			return currentBind
 		end
 
+		if isPath then
+			local function syncFromState()
+				local hydratedBind = StateStore:Get(defaultOrPath)
+				if hydratedBind ~= nil then handle:Set(hydratedBind, true) end
+			end
+			StateStore:Observe(defaultOrPath, function(newValue)
+				if newValue ~= nil then handle:Set(newValue, true) end
+			end)
+			EventBus:Subscribe("StateHydrated", syncFromState)
+		end
+		
 		bindButton.MouseButton1Click:Connect(function()
 			StateStore:SetTransient("IsBindingKey", true)
 			bindButton.Text = "..."
