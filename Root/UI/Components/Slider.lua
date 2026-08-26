@@ -1,6 +1,6 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- UI/Components/Slider.lua
--- Draggable numeric slider widget with suffix formatting
+-- Draggable numeric slider widget with value/max readout
 -- ════════════════════════════════════════════════════════════════════════════
 
 local UserInputService = game:GetService("UserInputService")
@@ -20,7 +20,7 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 	self._dragging = false
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 44),
+		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
@@ -33,8 +33,8 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 
 	self.TitleLabel = DOM.Create("TextLabel", {
 		Text = label or "Slider",
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
+		Font = Enum.Font.Code,
+		TextSize = 11,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -43,8 +43,8 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 	})
 
 	self.ValueLabel = DOM.Create("TextLabel", {
-		Text = tostring(self._value) .. self._suffix,
-		Font = Enum.Font.Gotham,
+		Text = self:_formatValue(),
+		Font = Enum.Font.Code,
 		TextSize = 11,
 		TextColor3 = self._theme.Current.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -55,16 +55,13 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 	})
 
 	self.Track = DOM.Create("TextButton", {
-		Size = UDim2.new(1, 0, 0, 12),
-		Position = UDim2.new(0, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 10),
+		Position = UDim2.new(0, 0, 0, 20),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = "",
 		AutoButtonColor = false,
 		Parent = self.Container,
-	}, {
-		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
-		DOM.CreateCorner(6),
 	})
 
 	local ratio = (self._value - self._min) / (self._max - self._min)
@@ -73,8 +70,6 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 		BackgroundColor3 = self._theme.Current.Accent,
 		BorderSizePixel = 0,
 		Parent = self.Track,
-	}, {
-		DOM.CreateCorner(6),
 	})
 
 	self._theme:Bind(self.TitleLabel, "TextColor3", "Text")
@@ -112,11 +107,15 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 	return self
 end
 
+function Slider:_formatValue()
+	return tostring(self._value) .. "/" .. tostring(self._max) .. self._suffix
+end
+
 function Slider:Set(value, silent)
 	self._value = math.clamp(tonumber(value) or self._min, self._min, self._max)
 	local ratio = (self._value - self._min) / (self._max - self._min)
 	self.Fill.Size = UDim2.new(ratio, 0, 1, 0)
-	self.ValueLabel.Text = tostring(self._value) .. self._suffix
+	self.ValueLabel.Text = self:_formatValue()
 
 	if not silent and type(self._callback) == "function" then
 		pcall(self._callback, self._value)
