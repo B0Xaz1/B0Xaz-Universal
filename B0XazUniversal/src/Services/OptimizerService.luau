@@ -192,6 +192,10 @@ return function(services: any)
 	end
 
 	function OptimizerService:Initialize()
+		Disposer:Add(function()
+			self:RestoreAll()
+		end)
+
 		-- Reactive state listeners
 		EventBus:Subscribe("StateChanged:Performance.NoTextures", function(enabled)
 			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end

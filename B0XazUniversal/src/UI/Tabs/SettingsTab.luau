@@ -180,4 +180,10 @@ return function(services: any, tab: any)
 			(getgenv and getgenv()).B0XazRelaunch()
 		end
 	end)
+	Components.CreateButton(keySec, "Unload Suite & Clear Output", function()
+		local globalEnv = (getgenv and getgenv()) or _G
+		if typeof(globalEnv.B0XazUnload) == "function" then
+			globalEnv.B0XazUnload()
+		end
+	end)
 end

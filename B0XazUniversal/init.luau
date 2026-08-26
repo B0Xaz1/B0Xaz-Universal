@@ -14,6 +14,35 @@ local function trace(message: string)
 	print("[B0Xaz][Trace] " .. message)
 end
 
+local function clearClientOutput()
+	-- Roblox does not expose a public in-game output-clear API. Supported
+	-- executors commonly expose one of these client-local helpers, so try each
+	-- without making unload depend on any particular executor.
+	for _, functionName in ipairs({ "rconsoleclear", "consoleclear", "clearconsole", "clearoutput" }) do
+		local clearFunction = globalEnv[functionName]
+		if typeof(clearFunction) == "function" then
+			pcall(clearFunction)
+			return
+		end
+	end
+end
+
+local function unloadSuite()
+	trace("Unload requested")
+	local disposer = globalEnv.B0XazMasterDisposer
+	globalEnv.B0XazRunning = false
+	globalEnv.B0XazMasterDisposer = nil
+	globalEnv.B0XazServiceContainer = nil
+	globalEnv.B0XazUnload = nil
+	if disposer and typeof(disposer.Dispose) == "function" then
+		pcall(function() disposer:Dispose() end)
+	end
+	clearClientOutput()
+end
+
+globalEnv.B0XazUnload = unloadSuite
+globalEnv.B0XazRunning = true
+
 local SOURCE_ROOT: string = "B0XazUniversal"
 local sourceRef: string = tostring(globalEnv.B0XazRef or "main")
 
@@ -167,6 +196,8 @@ local function bootstrap()
 	local TaskScheduler = requireStep("TaskScheduler", "src/Core/TaskScheduler.luau", masterDisposer)
 	local ServiceContainer = requireStep("ServiceContainer", "src/Core/ServiceContainer.luau")
 	local DOM = requireStep("DOM", "src/UI/DOM.luau")
+
+	globalEnv.B0XazServiceContainer = ServiceContainer
 
 	local function registerStep(name: string, service: any)
 		trace("Register service: " .. name)

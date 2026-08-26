@@ -23,6 +23,12 @@ return function(services: any)
 		_flingOffset = 0.1,
 	}
 
+	local originalHumanoid: Humanoid? = nil
+	local originalWalkSpeed: number? = nil
+	local originalUseJumpPower: boolean? = nil
+	local originalJumpPower: number? = nil
+	local originalJumpHeight: number? = nil
+
 	-- ─────────────────────────────────────────────────────────────────────────
 	-- Physics Updates (Heartbeat & Pre-Simulation)
 	-- ─────────────────────────────────────────────────────────────────────────
@@ -34,6 +40,13 @@ return function(services: any)
 
 		local hum = myAssets.Humanoid
 		local root = myAssets.RootPart
+		if originalHumanoid == nil then
+			originalHumanoid = hum
+			originalWalkSpeed = hum.WalkSpeed
+			originalUseJumpPower = hum.UseJumpPower
+			originalJumpPower = hum.JumpPower
+			originalJumpHeight = hum.JumpHeight
+		end
 		local movSettings = StateStore:Get("Movement")
 		if not movSettings then return end
 
@@ -195,6 +208,16 @@ return function(services: any)
 			end
 		end)
 		Disposer:Add(inputConn)
+
+		Disposer:Add(function()
+			self:StopFling()
+			if originalHumanoid and originalHumanoid.Parent then
+				if originalWalkSpeed ~= nil then originalHumanoid.WalkSpeed = originalWalkSpeed end
+				if originalUseJumpPower ~= nil then originalHumanoid.UseJumpPower = originalUseJumpPower end
+				if originalJumpPower ~= nil then originalHumanoid.JumpPower = originalJumpPower end
+				if originalJumpHeight ~= nil then originalHumanoid.JumpHeight = originalJumpHeight end
+			end
+		end)
 	end
 
 	return LocomotionService

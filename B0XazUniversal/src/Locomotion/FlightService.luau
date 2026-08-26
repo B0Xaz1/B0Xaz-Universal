@@ -167,6 +167,10 @@ return function(services: any)
 			end
 		end)
 		Disposer:Add(bindConn)
+		Disposer:Add(function()
+			self._active = false
+			self:CleanupMovers()
+		end)
 
 		-- Character Lifecycle Reconnection
 		PlayerTracker:OnLocalCharacterRespawn(function()
