@@ -27,12 +27,19 @@ return function(services: any)
 		CurrentTier = 0,
 	}
 
+	local function debug(message: string)
+		print("[B0Xaz][KeyService] " .. message)
+	end
+
+	debug("Initialized")
+
 	local function getKeyFilePath(): string
 		return "B0XazUniversal/_key.json"
 	end
 
 	-- Send HTTP Request to Supabase Authentication Endpoint
 	local function requestValidation(key: string, hwid: string): (boolean, number, string)
+		debug("Validation request: preparing payload")
 		local payload = HttpService:JSONEncode({ key = key, hwid = hwid })
 		local headers = {
 			["Content-Type"] = "application/json",
@@ -52,10 +59,12 @@ return function(services: any)
 		end
 
 		if not ok or typeof(response) ~= "table" then
+			debug("Validation request failed: no response table")
 			return false, 0, "Authentication server unreachable."
 		end
 
 		local statusCode = tonumber(response.StatusCode or response.Status) or 500
+		debug("Validation response status=" .. tostring(statusCode))
 		local body = response.Body or response.body or ""
 
 		if statusCode < 200 or statusCode >= 300 then
@@ -89,8 +98,12 @@ return function(services: any)
 	end
 
 	function KeyService:VerifySavedKey(): (boolean, number, string)
+		debug("VerifySavedKey: reading saved key")
 		local content = Environment.ReadFile(getKeyFilePath())
-		if not content or content == "" then return false, 0, "No key found" end
+		if not content or content == "" then
+			debug("VerifySavedKey: no saved key found")
+			return false, 0, "No key found"
+		end
 
 		local jsonPayload: string? = nil
 		pcall(function()
@@ -104,20 +117,29 @@ return function(services: any)
 
 		local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, jsonPayload or "")
 		if not decodeOk or typeof(data) ~= "table" or typeof(data.Key) ~= "string" then
+			debug("VerifySavedKey: saved key is corrupt")
 			return false, 0, "Saved key corrupt"
 		end
 
+		debug("VerifySavedKey: saved key decoded; authenticating")
 		return self:AuthenticateKey(data.Key)
 	end
 
 	function KeyService:AuthenticateKey(rawKey: string): (boolean, number, string)
+		debug("AuthenticateKey: validating supplied key")
 		local cleanKey = tostring(rawKey or ""):match("^%s*(.-)%s*$") or ""
-		if cleanKey == "" then return false, 0, "Key cannot be empty" end
+		if cleanKey == "" then
+			debug("AuthenticateKey: key is empty")
+			return false, 0, "Key cannot be empty"
+		end
 
+		debug("AuthenticateKey: requesting device id")
 		local hwid = Environment.GetDeviceId()
+		debug("AuthenticateKey: requesting validation")
 		local valid, tier, msg = requestValidation(cleanKey, hwid)
 
 		if valid then
+			debug("AuthenticateKey: validation succeeded tier=" .. tostring(tier))
 			self.CurrentKey = cleanKey
 			self.CurrentTier = tier
 			self:SaveEncryptedKey(cleanKey)
@@ -125,6 +147,7 @@ return function(services: any)
 			return true, tier, msg
 		end
 
+		debug("AuthenticateKey: validation rejected")
 		return false, 0, msg
 	end
 
