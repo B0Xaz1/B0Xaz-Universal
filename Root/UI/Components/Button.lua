@@ -3,17 +3,13 @@
 -- Executor-safe action button component
 -- ════════════════════════════════════════════════════════════════════════════
 
-local DOM = setmetatable({}, {
-	__index = function(_, k)
-		return _G.B0XazDOM and _G.B0XazDOM[k]
-	end
-})
+local DOM = require(script.Parent.Parent.DOM)
 
 local Button = {}
 Button.__index = Button
 
 function Button.new(parent, text, callback, themeEngine, domModule)
-	local dom = domModule or _G.B0XazDOM
+	local dom = domModule or DOM
 	local self = setmetatable({}, Button)
 	self._theme = themeEngine
 	self._callback = callback

@@ -161,7 +161,7 @@ function VisualsService:_updateVisuals()
 							data.Box.Position = Vector2.new(rootScreen.X - halfW, rootScreen.Y - halfH)
 							data.Box.Color = espColor
 							data.Box.Visible = true
-						else
+						elseif data.Box then
 							data.Box.Visible = false
 						end
 
@@ -171,7 +171,7 @@ function VisualsService:_updateVisuals()
 							data.Name.Position = Vector2.new(rootScreen.X, headScreen.Y - 18)
 							data.Name.Color = espColor
 							data.Name.Visible = true
-						else
+						elseif data.Name then
 							data.Name.Visible = false
 						end
 
@@ -189,8 +189,8 @@ function VisualsService:_updateVisuals()
 							data.Health.Color = Color3.fromHSV(ratio * 0.33, 1, 1)
 							data.Health.Visible = true
 						else
-							data.Health.Visible = false
-							data.HealthBG.Visible = false
+							if data.Health then data.Health.Visible = false end
+							if data.HealthBG then data.HealthBG.Visible = false end
 						end
 
 						-- Distance Label
@@ -201,7 +201,7 @@ function VisualsService:_updateVisuals()
 							data.Distance.Position = Vector2.new(rootScreen.X, feetScreen.Y + 2)
 							data.Distance.Color = espColor
 							data.Distance.Visible = true
-						else
+						elseif data.Distance then
 							data.Distance.Visible = false
 						end
 
@@ -211,7 +211,7 @@ function VisualsService:_updateVisuals()
 							data.Tracer.To = Vector2.new(rootScreen.X, rootScreen.Y)
 							data.Tracer.Color = espColor
 							data.Tracer.Visible = true
-						else
+						elseif data.Tracer then
 							data.Tracer.Visible = false
 						end
 					else
