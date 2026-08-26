@@ -15,6 +15,59 @@ local function deepCopy(tbl)
 	return out
 end
 
+-- ── JSON-safe config tree conversion ────────────────────────────────────────
+-- Roblox JSONEncode cannot serialize EnumItem/Color3 userdata; it drops or
+-- mangles them, which used to kill keybinds (Aimbot/Menu) and colors after
+-- the first save + reload cycle. We rewrite those values into plain-table
+-- markers before encoding and restore the real types after decoding.
+local function toSafeJson(value)
+	local t = typeof(value)
+	if t == "EnumItem" then
+		return { __rbxType = "Enum", enumType = value.EnumType.Name, name = value.Name }
+	elseif t == "Color3" then
+		return { __rbxType = "Color3", r = value.R, g = value.G, b = value.B }
+	elseif type(value) == "table" then
+		local out = {}
+		for k, v in pairs(value) do
+			out[tostring(k)] = toSafeJson(v)
+		end
+		return out
+	end
+	return value
+end
+
+local function fromSafeJson(value)
+	if type(value) ~= "table" then return value end
+	if value.__rbxType == "Enum" then
+		local ok, item = pcall(function()
+			local enumType = Enum[value.enumType]
+			return enumType and enumType[value.name] or nil
+		end)
+		if ok and item then return item end
+		return nil
+	elseif value.__rbxType == "Color3" then
+		return Color3.new(value.r or 0, value.g or 0, value.b or 0)
+	end
+	local out = {}
+	for k, v in pairs(value) do
+		out[k] = fromSafeJson(v)
+	end
+	return out
+end
+
+-- Recursive merge so partial/corrupt profile files only override the keys
+-- they actually contain instead of wiping whole sections
+local function deepMerge(base, extra)
+	for k, v in pairs(extra) do
+		if type(v) == "table" and type(base[k]) == "table" and not v.__rbxType then
+			deepMerge(base[k], v)
+		else
+			base[k] = v
+		end
+	end
+	return base
+end
+
 function ConfigService.new()
 	local self = setmetatable({}, ConfigService)
 	self.Dirty = false
@@ -23,6 +76,8 @@ function ConfigService.new()
 end
 
 function ConfigService:Init(container)
+	if self._initialized then return end
+	self._initialized = true
 	self._constants = container:Get("Constants")
 	self._http = container:Get("HttpUtil")
 	self._signalClass = container:Get("Signal")
@@ -80,7 +135,7 @@ function ConfigService:SaveProfile(name)
 	end
 	if not writefile then return false, "writefile unavailable" end
 
-	local encoded = self._http.JSONEncode(self.Data)
+	local encoded = self._http.JSONEncode(toSafeJson(self.Data))
 	if not encoded then return false, "JSON serialization failed" end
 
 	local ok = pcall(writefile, self:_getPath(name), encoded)
@@ -109,9 +164,7 @@ function ConfigService:LoadProfile(name)
 
 	self._isLoading = true
 	self.Data = deepCopy(self._constants.DEFAULT_CONFIG)
-	for k, v in pairs(decoded) do
-		self.Data[k] = v
-	end
+	deepMerge(self.Data, fromSafeJson(decoded))
 	self._isLoading = false
 	self.Dirty = false
 	self.OnProfileLoaded:Fire(name)
@@ -139,7 +192,7 @@ end
 
 -- Export configuration to clipboard
 function ConfigService:Export()
-	local encoded = self._http.JSONEncode(self.Data)
+	local encoded = self._http.JSONEncode(toSafeJson(self.Data))
 	if encoded and setclipboard then
 		pcall(setclipboard, encoded)
 	end
@@ -155,7 +208,7 @@ function ConfigService:Import(rawJson)
 
 	self._isLoading = true
 	self.Data = deepCopy(self._constants.DEFAULT_CONFIG)
-	for k, v in pairs(decoded) do self.Data[k] = v end
+	deepMerge(self.Data, fromSafeJson(decoded))
 	self._isLoading = false
 	self.Dirty = true
 	self.OnProfileLoaded:Fire("Imported")
@@ -169,7 +222,7 @@ function ConfigService:StartAutosave(interval)
 			task.wait(interval or 2.0)
 			if self.Dirty and not self._isLoading and writefile then
 				self.Dirty = false
-				local encoded = self._http.JSONEncode(self.Data)
+				local encoded = self._http.JSONEncode(toSafeJson(self.Data))
 				if encoded then
 					pcall(writefile, self:_getPath(self._constants.AUTOLOAD_FILE or "_autoload"), encoded)
 				end
