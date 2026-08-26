@@ -213,4 +213,69 @@ return function(services: any)
 		end
 
 		local smoothness = math.clamp(tonumber(aimCfg.Smoothness) or 4, 1, 20)
-		local alpha = 1 - math.exp(-dt * (60 
+		local alpha = 1 - math.exp(-dt * (60 / smoothness))
+		local windStrength = math.clamp(tonumber(aimCfg.WindStrength) or 1, 0, 5)
+		local windDamping = math.clamp(tonumber(aimCfg.WindDamping) or 0.8, 0.1, 0.95)
+		local step = computeWindMouseDelta(delta, alpha, dt, windStrength, windDamping)
+
+		if aimCfg.UseCamera then
+			local desiredCFrame = CFrame.lookAt(cam.CFrame.Position, aimWorldPos)
+			cam.CFrame = cam.CFrame:Lerp(desiredCFrame, alpha)
+		else
+			-- Preserve fractional movement so smoothing does not permanently lose
+			-- sub-pixel corrections when the executor only accepts integer deltas.
+			AimbotService._subPixelRemainder += step
+			local moveX = math.floor(AimbotService._subPixelRemainder.X + 0.5)
+			local moveY = math.floor(AimbotService._subPixelRemainder.Y + 0.5)
+			AimbotService._subPixelRemainder -= Vector2.new(moveX, moveY)
+			if moveX ~= 0 or moveY ~= 0 then
+				Environment.MouseMove(moveX, moveY)
+			end
+		end
+	end
+
+	local function matchesBinding(input: InputObject, binding: any): boolean
+		local parsed = Environment.ParseKeybind(binding)
+		return parsed ~= nil and (input.KeyCode == parsed or input.UserInputType == parsed)
+	end
+
+	function AimbotService:LockOff()
+		self._targetPlayer = nil
+		self._windVelocity = Vector2.zero
+		self._subPixelRemainder = Vector2.zero
+		StateStore:SetTransient("AimTarget", nil)
+		StateStore:SetTransient("AimTargetName", nil)
+	end
+
+	function AimbotService:Initialize()
+		TaskScheduler:RegisterCamera("AimbotCameraUpdate", 20, onCameraStep)
+
+		local inputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed or StateStore:GetTransient("IsBindingKey") then return end
+			local aimCfg = StateStore:Get("Aimbot")
+			if not aimCfg or not matchesBinding(input, aimCfg.Keybind) then return end
+
+			if aimCfg.LockMode == "Toggle" then
+				if self._targetPlayer then
+					self:LockOff()
+				else
+					self._isHoldActive = true
+				end
+			else
+				self._isHoldActive = true
+			end
+		end)
+		Disposer:Add(inputBegan)
+
+		local inputEnded = UserInputService.InputEnded:Connect(function(input)
+			local aimCfg = StateStore:Get("Aimbot")
+			if aimCfg and matchesBinding(input, aimCfg.Keybind) and aimCfg.LockMode ~= "Toggle" then
+				self._isHoldActive = false
+				self:LockOff()
+			end
+		end)
+		Disposer:Add(inputEnded)
+	end
+
+	return AimbotService
+end

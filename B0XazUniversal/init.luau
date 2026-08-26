@@ -115,6 +115,7 @@ local function bootstrap()
 	local StateStore = requireModule("src/Core/StateStore.luau", EventBus, masterDisposer)
 	local TaskScheduler = requireModule("src/Core/TaskScheduler.luau", masterDisposer)
 	local ServiceContainer = requireModule("src/Core/ServiceContainer.luau")
+	local DOM = requireModule("src/UI/DOM.luau")
 
 	ServiceContainer:Register("Disposer", masterDisposer)
 	ServiceContainer:Register("Environment", Environment)
@@ -122,6 +123,7 @@ local function bootstrap()
 	ServiceContainer:Register("StateStore", StateStore)
 	ServiceContainer:Register("TaskScheduler", TaskScheduler)
 	ServiceContainer:Register("Require", requireModule)
+	ServiceContainer:Register("DOM", DOM)
 
 	local KeyService = requireModule("src/Services/KeyService.luau", ServiceContainer)
 	local ConfigService = requireModule("src/Services/ConfigService.luau", ServiceContainer)
@@ -133,23 +135,26 @@ local function bootstrap()
 	ServiceContainer:Register("PlayerTracker", PlayerTracker)
 	ServiceContainer:Register("OptimizerService", OptimizerService)
 
+	-- Register each dependency before loading consumers that resolve it during
+	-- their factory call. This keeps the bootstrap order deterministic.
 	local DrawingPool = requireModule("src/Visuals/DrawingPool.luau", ServiceContainer)
+	ServiceContainer:Register("DrawingPool", DrawingPool)
+
+	local TargetFilter = requireModule("src/Combat/TargetFilter.luau", ServiceContainer)
+	ServiceContainer:Register("TargetFilter", TargetFilter)
+
 	local ESPController = requireModule("src/Visuals/ESPController.luau", ServiceContainer)
 	local OverlayController = requireModule("src/Visuals/OverlayController.luau", ServiceContainer)
-	local LocomotionService = requireModule("src/Locomotion/LocomotionService.luau", ServiceContainer)
-	local FlightService = requireModule("src/Locomotion/FlightService.luau", ServiceContainer)
-
-	ServiceContainer:Register("DrawingPool", DrawingPool)
 	ServiceContainer:Register("ESPController", ESPController)
 	ServiceContainer:Register("OverlayController", OverlayController)
+
+	local LocomotionService = requireModule("src/Locomotion/LocomotionService.luau", ServiceContainer)
+	local FlightService = requireModule("src/Locomotion/FlightService.luau", ServiceContainer)
 	ServiceContainer:Register("LocomotionService", LocomotionService)
 	ServiceContainer:Register("FlightService", FlightService)
 
-	local TargetFilter = requireModule("src/Combat/TargetFilter.luau", ServiceContainer)
 	local AimbotService = requireModule("src/Combat/AimbotService.luau", ServiceContainer)
 	local TriggerbotService = requireModule("src/Combat/TriggerbotService.luau", ServiceContainer)
-
-	ServiceContainer:Register("TargetFilter", TargetFilter)
 	ServiceContainer:Register("AimbotService", AimbotService)
 	ServiceContainer:Register("TriggerbotService", TriggerbotService)
 

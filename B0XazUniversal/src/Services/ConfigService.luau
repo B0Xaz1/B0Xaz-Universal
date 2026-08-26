@@ -204,4 +204,19 @@ return function(services: any)
 				if self.Dirty and not self._isLoading then
 					self.Dirty = false
 					local snapshot = sanitizeForSerialization(StateStore:GetSettingsSnapshot())
-					local 
+					local encodeOk, jsonString = pcall(HttpService.JSONEncode, HttpService, snapshot)
+					if encodeOk and typeof(jsonString) == "string" then
+						local writeOk, writeErr = Environment.WriteFile(getFilePath(AUTOLOAD_FILENAME), jsonString)
+						if not writeOk then
+							warn("[ConfigService] Autosave failed: " .. tostring(writeErr))
+						end
+					else
+						warn("[ConfigService] Autosave JSON encoding failed")
+					end
+				end
+			end
+		end)
+	end
+
+	return ConfigService
+end
