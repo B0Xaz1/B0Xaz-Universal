@@ -4,6 +4,7 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local LOAD_TIMEOUT: number = 15
 local RETRY_ATTEMPTS: number = 3
@@ -212,6 +213,16 @@ local function bootstrap()
 	registerStep("TaskScheduler", TaskScheduler)
 	registerStep("Require", requireModule)
 	registerStep("DOM", DOM)
+
+	local unloadKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed or StateStore:GetTransient("IsBindingKey") then return end
+		local unloadBind = Environment.ParseKeybind(StateStore:Get("Settings.UnloadKeybind") or Enum.KeyCode.End)
+		if unloadBind and (input.KeyCode == unloadBind or input.UserInputType == unloadBind) then
+			unloadSuite()
+		end
+	end)
+	masterDisposer:Add(unloadKeyConnection)
+	trace("Quick unload hotkey listener ready")
 
 	local KeyService = requireStep("KeyService", "src/Services/KeyService.luau", ServiceContainer)
 	local ConfigService = requireStep("ConfigService", "src/Services/ConfigService.luau", ServiceContainer)

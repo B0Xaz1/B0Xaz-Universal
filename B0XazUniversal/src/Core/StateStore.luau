@@ -106,6 +106,7 @@ local DEFAULT_SETTINGS = {
 	Settings = {
 		UIScale = 1.0,
 		MenuKeybind = Enum.KeyCode.RightShift,
+		UnloadKeybind = Enum.KeyCode.End,
 		ShowHotkeys = false,
 		ShowFPS = false,
 		ShowPing = false,
@@ -142,6 +143,21 @@ local function deepClone<T>(src: T): T
 		copy[k] = deepClone(v)
 	end
 	return (copy :: any) :: T
+end
+
+local function mergeWithDefaults<T>(defaults: T, source: T): T
+	local merged = deepClone(defaults)
+	local function apply(target: any, values: any)
+		for key, value in pairs(values) do
+			if typeof(value) == "table" and typeof(target[key]) == "table" then
+				apply(target[key], value)
+			else
+				target[key] = deepClone(value)
+			end
+		end
+	end
+	apply(merged :: any, source :: any)
+	return merged
 end
 
 return function(eventBus: any, disposer: any)
@@ -273,7 +289,7 @@ return function(eventBus: any, disposer: any)
 
 	function StateStore:LoadSettingsSnapshot(snapshot: { [string]: any })
 		if typeof(snapshot) ~= "table" then return end
-		self._settings = deepClone(snapshot)
+		self._settings = mergeWithDefaults(DEFAULT_SETTINGS, snapshot)
 		self:EnforcePermissions()
 		eventBus:Publish("StateHydrated", self._settings)
 	end

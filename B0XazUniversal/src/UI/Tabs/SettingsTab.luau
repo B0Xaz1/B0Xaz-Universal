@@ -149,6 +149,7 @@ return function(services: any, tab: any)
 		uiScaleSlider:Set(math.floor(factor * 100), true)
 	end)
 	Keybind.new(uiSec, "Menu Toggle Hotkey", "Settings.MenuKeybind")
+	Keybind.new(uiSec, "Quick Unload Hotkey", "Settings.UnloadKeybind")
 
 	local themeSec = createSection(tab.RightCol, "Themes & Styling")
 	local presetList = {}
