@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Utilities & Performance UI Tab
--- Performance strippers, hitbox dilations, spin bot parameters, on-screen
--- telemetry monitors, Anti-AFK hooks, and automated server hopping.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
@@ -73,9 +68,6 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: Performance Boosters, Hitbox & SpinBot
-	-- ─────────────────────────────────────────────────────────────────────────
 	local perfSec = createSection(tab.LeftCol, "Performance Boosters")
 	Toggle.new(perfSec, "Strip Textures & Decals", "Performance.NoTextures")
 	Toggle.new(perfSec, "Force Flat Smooth Plastic", "Performance.LowMaterials")
@@ -92,38 +84,41 @@ return function(services: any, tab: any)
 	Toggle.new(spinSec, "Enable Spin Bot", "Extras.SpinBot.Enabled", nil, 1)
 	Slider.new(spinSec, "Spin Velocity Speed", 1, 100, "Extras.SpinBot.Speed", 5)
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: Telemetry & Server Management
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Blocks the velocity impulse a fling attack applies to your character;
+	-- your own teleports/flings/flight are auto-suppressed so they never
+	-- trip the guard.
+	local antiFlingSec = createSection(tab.LeftCol, "Fling Defense")
+	Toggle.new(antiFlingSec, "Anti Fling (Block Impulses)", "Extras.AntiFling.Enabled", nil, 1)
+	Slider.new(antiFlingSec, "Impulse Threshold", 200, 5000, "Extras.AntiFling.Threshold", 50, " u/s²")
+	Toggle.new(antiFlingSec, "Snap Back Position", "Extras.AntiFling.SnapBack")
+
 	local statSec = createSection(tab.RightCol, "On-Screen Telemetry")
 	Toggle.new(statSec, "Display FPS Counter", "Settings.ShowFPS")
 	Toggle.new(statSec, "Display Ping Monitor", "Settings.ShowPing")
 
 	local serverSec = createSection(tab.RightCol, "Anti-AFK & Server Management")
 
-	-- Anti-AFK Hook
-	local afkConn: RBXScriptConnection? = nil
+	-- Bind/Unbind by key keeps at most one anti-AFK connection registered
+	-- with the disposer no matter how often the toggle is flipped.
 	local function updateAntiAfk(enabled: boolean)
-		if afkConn then
-			afkConn:Disconnect()
-			afkConn = nil
-		end
 		if enabled and Players.LocalPlayer then
-			afkConn = Players.LocalPlayer.Idled:Connect(function()
+			local conn = Players.LocalPlayer.Idled:Connect(function()
 				pcall(function()
 					VirtualUser:CaptureController()
 					VirtualUser:ClickButton2(Vector2.zero)
 				end)
 			end)
-			Disposer:Add(afkConn)
+			Disposer:Bind("B0XazAntiAfk", conn)
+		else
+			Disposer:Unbind("B0XazAntiAfk")
 		end
 	end
 
 	Toggle.new(serverSec, "Enable Anti-AFK", "Settings.AntiAfk", updateAntiAfk)
 
-	-- Server Hop Pipeline
 	local lastHopTime = 0
 	Components.CreateButton(serverSec, "Server Hop (Public Matchmaking)", function()
+		-- A short cooldown prevents double-clicks from stacking hops
 		local now = os.clock()
 		if (now - lastHopTime) < 3 then
 			UIEngine:Notify("Server Hop", "Please wait before hopping again.", 2, ThemeEngine:GetToken("Warning"))
@@ -149,6 +144,8 @@ return function(services: any, tab: any)
 
 			for _, server in ipairs(serverData.data) do
 				if server.id ~= game.JobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then
+					-- Queue the launcher source first so the new instance
+					-- auto-runs the suite right after the teleport lands.
 					local globalEnv = (getgenv and getgenv()) or _G
 					local initUrl = tostring(globalEnv.B0XazInitURL or "")
 					if initUrl ~= "" then

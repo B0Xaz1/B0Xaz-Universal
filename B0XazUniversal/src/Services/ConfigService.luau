@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Schema-Driven Configuration & Profile Service
--- Automatically serializes and deserializes the Reactive StateStore to JSON
--- files in B0XazUniversal/Configs/, with non-blocking autosaving.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local HttpService = game:GetService("HttpService")
 
@@ -22,11 +17,14 @@ return function(services: any)
 	}
 
 	local function getFilePath(profileName: string): string
+		-- Strip characters that are illegal in filenames so profiles map to
+		-- one safe file each.
 		local cleanName = profileName:gsub("[/\\%.:%*%?<>|%c\"]", "_")
 		return string.format("%s/%s.json", CONFIGS_FOLDER, cleanName)
 	end
 
-	-- Transform Color3 and Enum objects into serializable JSON primitives
+	-- Color3 and Enum values are not JSON primitives, so they are wrapped in
+	-- marker tables on the way out and rebuilt on the way in.
 	local function sanitizeForSerialization(target: any): any
 		local t = typeof(target)
 		if t == "Color3" then
@@ -43,7 +41,6 @@ return function(services: any)
 		return target
 	end
 
-	-- Restore Color3 and Enum objects from JSON representation
 	local function restoreFromSerialization(target: any): any
 		if typeof(target) == "table" then
 			if target.__type == "Color3" then
@@ -86,17 +83,16 @@ return function(services: any)
 
 	function ConfigService:Load(profileName: string): (boolean, string?)
 		self._isLoading = true
-		local content: string? = nil
 
 		if profileName:lower() == "default" then
-			StateStore:LoadSettingsSnapshot(StateStore._defaults)
+			StateStore:LoadSettingsSnapshot(StateStore:GetDefaultSettings())
 			self._isLoading = false
 			self.Dirty = false
 			EventBus:Publish("ConfigLoaded", "Default")
 			return true, nil
 		end
 
-		content = Environment.ReadFile(getFilePath(profileName))
+		local content = Environment.ReadFile(getFilePath(profileName))
 		if not content then
 			self._isLoading = false
 			return false, "Config file not found"
@@ -153,6 +149,7 @@ return function(services: any)
 	end
 
 	function ConfigService:Import(rawJson: string): (boolean, string?)
+		-- An empty payload falls back to whatever is on the clipboard
 		local clean = rawJson
 		if clean == "" then
 			clean = Environment.GetClipboard() or ""
@@ -186,18 +183,15 @@ return function(services: any)
 		return false
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Non-Blocking Autosave Engine
-	-- ─────────────────────────────────────────────────────────────────────────
 	function ConfigService:Initialize()
-		-- Mark dirty on state mutations
+		-- Any state change marks the autoload dirty unless a load is in
+		-- flight, which would otherwise save the load right back out.
 		EventBus:Subscribe("StateChanged", function()
 			if not self._isLoading then
 				self.Dirty = true
 			end
 		end)
 
-		-- Periodic autosave loop (1.5s interval)
 		Disposer:Spawn(function()
 			while not Disposer.IsDisposed do
 				task.wait(1.5)

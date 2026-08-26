@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Live Swatch & Palette Color Picker Component
--- Features collapsible swatch grid, live color preview, theme integration,
--- and reactive serialization with the central StateStore.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type ColorPickerHandle = {
 	Set: (self: ColorPickerHandle, color: Color3, silent: boolean?) -> (),
@@ -27,6 +22,7 @@ return function(services: any)
 
 	local ColorPicker = {}
 
+	-- A string defaultOrPath is a StateStore path, a Color3 is a literal
 	function ColorPicker.new(
 		parent: Instance,
 		label: string,
@@ -112,8 +108,10 @@ return function(services: any)
 			expansionFrame.Size = open and UDim2.new(1, 0, 0, 48) or UDim2.new(1, 0, 0, 0)
 		end
 
+		-- The guard keeps the shared close-all sweep from touching a picker
+		-- whose GUI has already been destroyed.
 		UIEngine:RegisterDropdownClose(function()
-			if isOpen then setOpen(false) end
+			if isOpen and expansionFrame.Parent then setOpen(false) end
 		end)
 
 		local handle: ColorPickerHandle = {
@@ -152,7 +150,7 @@ return function(services: any)
 			end)
 			EventBus:Subscribe("StateHydrated", syncFromState)
 		end
-		
+
 		for _, col in ipairs(PRESET_PALETTE) do
 			local cell = DOM.Create("TextButton", {
 				Text = "",

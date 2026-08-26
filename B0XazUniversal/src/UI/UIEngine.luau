@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Modern Responsive UI Engine
--- Window host, responsive Draggable controller, Toast notification stack,
--- Keybinds HUD overlay, and tab coordination controller.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -44,16 +39,13 @@ return function(services: any)
 		TabContainer = nil :: Frame?,
 		PagesContainer = nil :: Frame?,
 		NotifyContainer = nil :: Frame?,
-		HotkeysHUD = nil :: Frame?,
-		HotkeysList = nil :: Frame?,
 		Tabs = {} :: { TabInstance },
 		ActiveTab = nil :: TabInstance?,
 		_dropdownCloseHandlers = {} :: { () -> () },
 	}
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Isolated Draggable Component Controller
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Drag state lives in this closure; the two UserInputService listeners
+	-- are registered with the disposer so dragging cannot survive an unload.
 	function UIEngine:MakeDraggable(targetFrame: Frame, handleBar: GuiObject)
 		local dragging = false
 		local dragStart = Vector3.zero
@@ -86,18 +78,21 @@ return function(services: any)
 		Disposer:Add(inputChanged)
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Toast Notifications
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Toasts stack bottom-up; each new toast gets a higher LayoutOrder so
+	-- the newest one always appears above the older ones.
+	local toastOrder = 0
+
 	function UIEngine:Notify(title: string, text: string, duration: number?, customColor: Color3?)
 		if not self.NotifyContainer then return end
 		local accent = customColor or ThemeEngine:GetToken("Accent")
+		toastOrder += 1
 
 		local toast = DOM.Create("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundColor3 = ThemeEngine:GetToken("Panel"),
 			BorderSizePixel = 0,
+			LayoutOrder = toastOrder,
 			Parent = self.NotifyContainer,
 		}, {
 			DOM.CreateStroke(accent, 1),
@@ -140,6 +135,7 @@ return function(services: any)
 		table.insert(self._dropdownCloseHandlers, closeFn)
 	end
 
+	-- Opening one dropdown closes every other open dropdown
 	function UIEngine:CloseAllDropdownsExcept(exceptFn: (() -> ())?)
 		for _, fn in ipairs(self._dropdownCloseHandlers) do
 			if fn ~= exceptFn then
@@ -169,9 +165,6 @@ return function(services: any)
 		self:CloseAllDropdownsExcept(nil)
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- UI Window Constructor & Tab Mounts
-	-- ─────────────────────────────────────────────────────────────────────────
 	function UIEngine:ConstructInterface()
 		local parent = Environment.GetSafeGuiParent()
 
@@ -206,7 +199,6 @@ return function(services: any)
 			Parent = self.MainWindow,
 		}) :: UIScale
 
-		-- Title Bar
 		local titleBar = DOM.Create("Frame", {
 			Size = UDim2.new(1, 0, 0, TITLE_HEIGHT),
 			BackgroundColor3 = ThemeEngine:GetToken("Side"),
@@ -227,7 +219,6 @@ return function(services: any)
 		ThemeEngine:BindToken(titleBar, "BackgroundColor3", "Side")
 		self:MakeDraggable(self.MainWindow, titleBar)
 
-		-- Close Button
 		local closeBtn = DOM.Create("TextButton", {
 			Text = "✕",
 			Font = Enum.Font.Code,
@@ -244,7 +235,6 @@ return function(services: any)
 			StateStore:SetTransient("MenuVisible", false)
 		end)
 
-		-- Tab Bar
 		self.TabContainer = DOM.Create("Frame", {
 			Size = UDim2.new(1, 0, 0, TAB_HEIGHT),
 			Position = UDim2.new(0, 0, 0, TITLE_HEIGHT),
@@ -272,8 +262,8 @@ return function(services: any)
 			ScrollBarThickness = 0,
 			ScrollingDirection = Enum.ScrollingDirection.X,
 			AutomaticCanvasSize = Enum.AutomaticSize.X,
-			-- Keep the vertical canvas non-zero so buttons sized to 1 scale
-			-- receive the full tab-bar height inside the ScrollingFrame.
+			-- The vertical canvas must stay non-zero or the 1-scale buttons
+			-- collapse to zero height inside the horizontal scroller.
 			CanvasSize = UDim2.new(0, 0, 1, 0),
 			Active = true,
 			ZIndex = TAB_ZINDEX + 1,
@@ -296,7 +286,6 @@ return function(services: any)
 			Parent = self.MainWindow,
 		}) :: Frame
 
-		-- Toast Notification Container
 		self.NotifyContainer = DOM.Create("Frame", {
 			Size = UDim2.new(0, 280, 1, -20),
 			Position = UDim2.new(1, -290, 0, 10),
@@ -311,7 +300,6 @@ return function(services: any)
 			}),
 		}) :: Frame
 
-		-- Tab Constructor Bridge
 		local function addTab(tabName: string, reqTier: number?): TabInstance
 			local tier = reqTier or 1
 			local isLocked = tier > StateStore:GetTier()
@@ -396,7 +384,6 @@ return function(services: any)
 			return tabRecord
 		end
 
-		-- Mount All Domain Tabs
 		local tabFiles = {
 			{ Path = "B0XazUniversal/src/UI/Tabs/CombatTab.luau", Tier = 3 },
 			{ Path = "B0XazUniversal/src/UI/Tabs/VisualsTab.luau", Tier = 2 },
@@ -419,7 +406,33 @@ return function(services: any)
 			self:SelectTab(self.Tabs[1])
 		end
 
-		-- Hotkey to toggle interface visibility
+		-- Lock state is computed once at construction; this keeps it current
+		-- when the tier changes later (logout, key swap).
+		EventBus:Subscribe("TierChanged", function()
+			for _, tabRecord in ipairs(self.Tabs) do
+				local locked = tabRecord.RequiredTier > StateStore:GetTier()
+				if locked ~= tabRecord.Locked then
+					tabRecord.Locked = locked
+					tabRecord.Button.Text = tabRecord.Name .. (locked and " [🔒]" or "")
+				end
+			end
+			-- If the active tab just got locked, fall back to the first one
+			-- the current tier can open.
+			if self.ActiveTab and self.ActiveTab.Locked then
+				local fallback = nil
+				for _, tabRecord in ipairs(self.Tabs) do
+					if not tabRecord.Locked then
+						fallback = tabRecord
+						break
+					end
+				end
+				self:Notify("Access", "Your tier no longer covers the active tab.", 2.5, ThemeEngine:GetToken("Warning"))
+				if fallback then
+					self:SelectTab(fallback)
+				end
+			end
+		end)
+
 		local toggleConn = UserInputService.InputBegan:Connect(function(input, gp)
 			if gp or StateStore:GetTransient("IsBindingKey") then return end
 			local menuKey = Environment.ParseKeybind(StateStore:Get("Settings.MenuKeybind"))

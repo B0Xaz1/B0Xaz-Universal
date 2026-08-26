@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Game Plugin Lifecycle Manager
--- Loads, initializes, and safely tears down Place-specific game extensions
--- using structured lifecycle contracts.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type IGamePlugin = {
 	Name: string,
@@ -17,6 +12,7 @@ return function(services: any)
 	local Disposer = services:Get("Disposer")
 	local PluginRegistry = Require("B0XazUniversal/src/Plugins/PluginRegistry.luau")
 
+	-- The manifest is resolved once at boot from the current Place/Universe id
 	local activeManifest = PluginRegistry.Resolve(game.PlaceId, game.GameId)
 	local activePluginInstance: IGamePlugin? = nil
 

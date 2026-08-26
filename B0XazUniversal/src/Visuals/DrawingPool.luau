@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Recycled Drawing Primitive Pool
--- Eliminates memory fragmentation and native allocation leaks by recycling
--- Lines, Texts, Squares, and Circles in pre-allocated object pools.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type PoolableDrawing = any
 
@@ -20,7 +15,8 @@ return function(services: any)
 		_activeObjects = {} :: { [PoolableDrawing]: string },
 	}
 
-	-- Validate Drawing API Availability
+	-- Probe the executor's Drawing API once; on executors without it the pool
+	-- stays empty and consumers fall back to no drawing.
 	pcall(function()
 		if Drawing and typeof(Drawing.new) == "function" then
 			local testLine = Drawing.new("Line")
@@ -50,6 +46,7 @@ return function(services: any)
 		local instance: PoolableDrawing? = nil
 
 		if pool and #pool > 0 then
+			-- Recycling a hidden primitive avoids a native allocation
 			instance = table.remove(pool)
 		else
 			instance = createPrimitive(primitiveType)

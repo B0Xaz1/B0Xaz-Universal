@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Players & Interactions UI Tab
--- Target filtering, player search, whitelist management, spectating,
--- and target fling actions.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
@@ -72,9 +67,6 @@ return function(services: any, tab: any)
 	local playerList = PlayerTracker:GetPlayerNames(true)
 	if #playerList > 0 then selectedPlayerName = playerList[1] end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: Target Selection & Whitelist
-	-- ─────────────────────────────────────────────────────────────────────────
 	local targetSec = createSection(tab.LeftCol, "Target Selection")
 
 	local playerDropdown = Dropdown.new(targetSec, "Select Target", playerList, selectedPlayerName, function(selected)
@@ -105,6 +97,8 @@ return function(services: any, tab: any)
 		if selectedPlayerName ~= "" and selectedPlayerName ~= "No Players Found" then
 			local wl = StateStore:Get("Settings.Whitelist") or {}
 			wl[selectedPlayerName] = true
+			-- StateStore stores tables by copy, so mutating this local and
+			-- setting it fires a proper change signal to the target filter.
 			StateStore:Set("Settings.Whitelist", wl)
 			UIEngine:Notify("Whitelist", "Added: " .. selectedPlayerName, 2, ThemeEngine:GetToken("Success"))
 		end
@@ -122,9 +116,6 @@ return function(services: any, tab: any)
 		UIEngine:Notify("Whitelist", "All whitelists cleared.", 2, ThemeEngine:GetToken("Success"))
 	end)
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: Target Actions
-	-- ─────────────────────────────────────────────────────────────────────────
 	local actionSec = createSection(tab.RightCol, "Target Actions")
 	Components.CreateButton(actionSec, "Teleport to Player", function()
 		local target = PlayerTracker:GetPlayerByName(selectedPlayerName)

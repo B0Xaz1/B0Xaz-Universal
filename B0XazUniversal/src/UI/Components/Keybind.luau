@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Keybind & Input Capture Component
--- Captures keyboard inputs and mouse buttons, sets global binding states,
--- and integrates with Environment keycode formatters.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -13,36 +8,48 @@ export type KeybindHandle = {
 	Instance: Frame,
 }
 
+-- Only one component can capture input at a time; the active handler takes
+-- the next matching key and is then cleared.
 local activeCaptureHandler: ((any) -> ())? = nil
-
-UserInputService.InputBegan:Connect(function(input)
-	if not activeCaptureHandler then return end
-	local boundInput: any = nil
-	local shouldFinalize = false
-
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		boundInput = (input.KeyCode == Enum.KeyCode.Escape) and nil or input.KeyCode
-		shouldFinalize = true
-	elseif input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.MouseButton2
-		or input.UserInputType == Enum.UserInputType.MouseButton3 then
-		boundInput = input.UserInputType
-		shouldFinalize = true
-	end
-
-	if shouldFinalize then
-		local handler = activeCaptureHandler
-		activeCaptureHandler = nil
-		handler(boundInput)
-	end
-end)
+local captureConnection: RBXScriptConnection? = nil
 
 return function(services: any)
 	local ThemeEngine = services:Get("ThemeEngine")
 	local StateStore = services:Get("StateStore")
 	local EventBus = services:Get("EventBus")
 	local Environment = services:Get("Environment")
+	local Disposer = services:Get("Disposer")
 	local DOM = services:Get("DOM")
+
+	-- The capture listener is created once per factory instance and released
+	-- with the disposer so repeated suite loads do not stack listeners.
+	local function ensureCaptureListener()
+		if not captureConnection then
+			captureConnection = UserInputService.InputBegan:Connect(function(input)
+				if not activeCaptureHandler then return end
+				local boundInput: any = nil
+				local shouldFinalize = false
+
+				if input.UserInputType == Enum.UserInputType.Keyboard then
+					-- Escape cancels capture and unbinds the key
+					boundInput = (input.KeyCode == Enum.KeyCode.Escape) and nil or input.KeyCode
+					shouldFinalize = true
+				elseif input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.MouseButton2
+					or input.UserInputType == Enum.UserInputType.MouseButton3 then
+					boundInput = input.UserInputType
+					shouldFinalize = true
+				end
+
+				if shouldFinalize then
+					local handler = activeCaptureHandler
+					activeCaptureHandler = nil
+					handler(boundInput)
+				end
+			end)
+			Disposer:Add(captureConnection)
+		end
+	end
 
 	local Keybind = {}
 
@@ -52,6 +59,9 @@ return function(services: any)
 		defaultOrPath: any,
 		callback: ((bound: any) -> ())?
 	): KeybindHandle
+		ensureCaptureListener()
+
+		-- Any string is treated as a StateStore path; pass nil for "no bind"
 		local isPath = typeof(defaultOrPath) == "string"
 		local currentBind: any = nil
 
@@ -128,8 +138,10 @@ return function(services: any)
 			end)
 			EventBus:Subscribe("StateHydrated", syncFromState)
 		end
-		
+
 		bindButton.MouseButton1Click:Connect(function()
+			-- The global "binding key" flag pauses the menu/unload hotkeys so
+			-- pressing a candidate key cannot toggle the UI mid-capture.
 			StateStore:SetTransient("IsBindingKey", true)
 			bindButton.Text = "..."
 			bindButton.TextColor3 = ThemeEngine:GetToken("Accent")

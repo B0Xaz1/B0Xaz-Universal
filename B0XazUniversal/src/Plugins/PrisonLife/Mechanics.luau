@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Prison Life Mechanics & UI Controller
--- Zero-allocation weapon macro, punch aura, multi-hit super punch,
--- map teleports, gun grabbers, and full Prison Life UI mount.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 return function(services: any)
 	local StateStore = services:Get("StateStore")
 	local TaskScheduler = services:Get("TaskScheduler")
+	local Disposer = services:Get("Disposer")
 	local LocomotionService = services:Get("LocomotionService")
 	local PlayerTracker = services:Get("PlayerTracker")
 	local TargetFilter = services:Get("TargetFilter")
@@ -33,15 +29,19 @@ return function(services: any)
 	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
 	local LocalPlayer = Players.LocalPlayer
+
+	-- The melee remote is resolved lazily because some maps add it late
 	local meleeRemote = ReplicatedStorage:FindFirstChild("meleeEvent")
 
 	local PrisonLifePlugin = {
 		Name = "Prison Life",
 		_macroRunning = false,
+		_macroThread = nil :: thread?,
 		_macroSlotIndex = 1,
 		_gunBuffer = table.create(10) :: { Tool },
 		_lastPunchTime = 0,
 		_lastSuperTime = 0,
+		_inputConnections = {} :: { RBXScriptConnection },
 	}
 
 	local function fireMelee(target: Player?)
@@ -59,14 +59,13 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Weapon Macro (Zero Memory Allocation Loop)
-	-- ─────────────────────────────────────────────────────────────────────────
 	function PrisonLifePlugin:StartMacro()
 		if self._macroRunning then return end
 		self._macroRunning = true
 
-		task.spawn(function()
+		-- The loop reuses one buffer table and rotates through the guns it
+		-- finds, so a full cycle produces no per-iteration allocations.
+		self._macroThread = task.spawn(function()
 			while self._macroRunning do
 				local myAssets = PlayerTracker:GetLocalAssets()
 				local bp = LocalPlayer and LocalPlayer:FindFirstChildOfClass("Backpack")
@@ -99,14 +98,18 @@ return function(services: any)
 
 	function PrisonLifePlugin:StopMacro()
 		self._macroRunning = false
+		-- Cancelling the loop thread keeps the plugin from outliving unload
+		-- while a wait delay is still pending.
+		if self._macroThread and coroutine.status(self._macroThread) ~= "dead" then
+			task.cancel(self._macroThread)
+		end
+		self._macroThread = nil
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Punch Aura Tick Update
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onHeartbeat(dt: number)
 		if not StateStore:Get("Game.PunchAura") then return end
 		local now = os.clock()
+		-- The aura fires at most ten times per second
 		if (now - PrisonLifePlugin._lastPunchTime) < 0.1 then return end
 		PrisonLifePlugin._lastPunchTime = now
 
@@ -132,13 +135,9 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Super Punch Click Interceptor
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onInputBegan(input: InputObject, gp: boolean)
 		if gp then return end
 
-		-- Macro Hotkey
 		local macroBind = Environment.ParseKeybind(StateStore:Get("Game.FakeMacroKey"))
 		if macroBind and (input.KeyCode == macroBind or input.UserInputType == macroBind) then
 			if StateStore:Get("Game.FakeMacroMode") == "Toggle" then
@@ -150,7 +149,7 @@ return function(services: any)
 			end
 		end
 
-		-- Super Punch Burst
+		-- Super punch bursts on left click, rate limited to about 6 clicks/s
 		if StateStore:Get("Game.SuperPunch") and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			local now = os.clock()
 			if (now - PrisonLifePlugin._lastSuperTime) >= 0.15 then
@@ -175,9 +174,6 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- UI Mount Builder
-	-- ─────────────────────────────────────────────────────────────────────────
 	function PrisonLifePlugin:BuildUI(tab: any)
 		local function createSec(parent: Instance, title: string): Frame
 			local secFrame = DOM.Create("Frame", {
@@ -228,7 +224,6 @@ return function(services: any)
 			return content
 		end
 
-		-- Left Column: Gun Grabbers & Combat Mods
 		local grabSec = createSec(tab.LeftCol, "Armory Gun Grabbers")
 		for name, pos in pairs(Manifest.GUN_SPAWNS) do
 			Components.CreateButton(grabSec, "Acquire " .. name, function()
@@ -243,7 +238,6 @@ return function(services: any)
 		Toggle.new(combatSec, "Force Full-Auto", "Game.ForceAuto", function() WeaponMods:ScanAllWeapons() end)
 		Toggle.new(combatSec, "Force Infinite Range", "Game.ForceRange", function() WeaponMods:ScanAllWeapons() end)
 
-		-- Right Column: Door Phasing, Macro & Melee
 		local doorSec = createSec(tab.RightCol, "Obstacles & Doors")
 		Toggle.new(doorSec, "Phase Doors & Fences", "Game.DoorPhase", function(active)
 			if active then WorldPhase:ScanAllDoors() else WorldPhase:RestoreAll() end
@@ -285,12 +279,20 @@ return function(services: any)
 		WeaponMods:Initialize()
 
 		TaskScheduler:RegisterHeartbeat("PrisonLifeHeartbeat", 20, onHeartbeat)
-		UserInputService.InputBegan:Connect(onInputBegan)
-		UserInputService.InputEnded:Connect(onInputEnded)
+
+		-- Input connections are stored so Destroy can release them; left
+		-- untracked they would keep firing on the global UserInputService
+		-- after the plugin (or the whole suite) is unloaded.
+		table.insert(self._inputConnections, UserInputService.InputBegan:Connect(onInputBegan))
+		table.insert(self._inputConnections, UserInputService.InputEnded:Connect(onInputEnded))
 	end
 
 	function PrisonLifePlugin:Destroy()
 		self:StopMacro()
+		for _, conn in ipairs(self._inputConnections) do
+			conn:Disconnect()
+		end
+		table.clear(self._inputConnections)
 		WorldPhase:RestoreAll()
 		WeaponMods:RestoreAll()
 	end

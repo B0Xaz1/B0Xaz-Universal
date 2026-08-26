@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Key Authentication Modal Dialog
--- Renders clean verification prompts, provides non-blocking async feedback,
--- error reporting, and automatic clipboard help copy actions.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any)
 	local Environment = services:Get("Environment")
@@ -118,6 +113,8 @@ return function(services: any)
 			statusLabel.TextColor3 = ThemeEngine:GetToken("Success")
 		end)
 
+		-- Validation runs in a spawned thread so the modal stays responsive
+		-- while the network request is in flight.
 		local function submitAuth()
 			local rawKey = keyInput.Text
 			if rawKey == "" then

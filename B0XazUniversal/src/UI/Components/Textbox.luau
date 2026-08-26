@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Textbox & Action Button Component Factories
--- Encapsulates text inputs, clear on focus options, sanitize hooks,
--- and styled section action buttons.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type TextboxHandle = {
 	Set: (self: TextboxHandle, text: string) -> (),
@@ -25,14 +20,11 @@ return function(services: any)
 		placeholder: string?,
 		callback: ((text: string, enterPressed: boolean) -> ())?
 	): TextboxHandle
-		local isPath = typeof(defaultOrPath) == "string"
-		local currentText = ""
-
-		if isPath then
-			currentText = tostring(StateStore:Get(defaultOrPath) or "")
-		elseif typeof(defaultOrPath) == "string" then
-			currentText = defaultOrPath
-		end
+		-- Unlike the other components, a string here is a literal starting
+		-- value, not a state path; none of the current textboxes persist, so
+		-- treating "MyProfile"-style defaults as paths would lose them.
+		local isPath = false
+		local currentText = typeof(defaultOrPath) == "string" and defaultOrPath or ""
 
 		local container = DOM.Create("Frame", {
 			Size = UDim2.new(1, 0, 0, 38),
@@ -94,6 +86,8 @@ return function(services: any)
 			return textBox.Text
 		end
 
+		-- The callback fires on commit (Enter or focus loss) rather than on
+		-- every keystroke so expensive handlers stay cheap.
 		textBox.FocusLost:Connect(function(enter)
 			currentText = textBox.Text
 			if isPath then
@@ -113,6 +107,8 @@ return function(services: any)
 		callback: () -> (),
 		requiredTier: number?
 	): TextButton?
+		-- Buttons below the viewer's tier are not created at all instead of
+		-- being shown disabled.
 		local tier = requiredTier or 0
 		if tier > StateStore:GetTier() then return nil end
 

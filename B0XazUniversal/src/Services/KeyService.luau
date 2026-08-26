@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - License Authentication & Key Service
--- Validates tokens against Supabase Edge Functions, manages HWID bindings,
--- and encrypts saved keys locally in B0XazUniversal/_key.json.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local HttpService = game:GetService("HttpService")
 
@@ -37,7 +32,8 @@ return function(services: any)
 		return "B0XazUniversal/_key.json"
 	end
 
-	-- Send HTTP Request to Supabase Authentication Endpoint
+	-- Uses whichever HTTP implementation the executor provides; RequestAsync
+	-- is the last-resort fallback since it is slowest on some executors.
 	local function requestValidation(key: string, hwid: string): (boolean, number, string)
 		debug("Validation request: preparing payload")
 		local payload = HttpService:JSONEncode({ key = key, hwid = hwid })
@@ -90,6 +86,8 @@ return function(services: any)
 		return true, tierNumber, data.tier .. " Access Granted"
 	end
 
+	-- The key is wrapped in XOR + base64 before touching disk; this is
+	-- obfuscation against casual inspection, not real encryption.
 	function KeyService:SaveEncryptedKey(rawKey: string): boolean
 		local payload = HttpService:JSONEncode({ Key = rawKey, Timestamp = os.time() })
 		local scrambled = Environment.Base64Encode(Environment.XorCipher(payload, STATIC_SALT))
@@ -111,8 +109,10 @@ return function(services: any)
 			jsonPayload = Environment.XorCipher(decoded, STATIC_SALT)
 		end)
 
+		-- Files written by older builds are plain JSON; fall back to the raw
+		-- content when the round trip does not come out as an object.
 		if not jsonPayload or jsonPayload:sub(1, 1) ~= "{" then
-			jsonPayload = content -- Plain JSON fallback
+			jsonPayload = content
 		end
 
 		local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, jsonPayload or "")

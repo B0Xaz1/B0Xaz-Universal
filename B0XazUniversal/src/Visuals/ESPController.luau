@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Optimized 2D Skeletal & Highlight ESP Controller
--- Renders 2D boxes, health bars, names, weapons, look vectors, 2D skeletons,
--- and 3D highlights with dirty-checked text and zero-allocation viewport caching.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -22,6 +17,8 @@ type ESPRecord = {
 	Tracer: any,
 	Skeleton: { any },
 	Highlight: Highlight?,
+	Character: Model?,
+	SkeletonParts: { BasePart? }?,
 	LastInventorySig: string,
 	LastBackpackText: string,
 }
@@ -47,6 +44,36 @@ return function(services: any)
 		_throttleTimer = 0,
 	}
 
+	-- Six bone segments for the 2D skeleton: head->torso, torso->root,
+	-- root->each arm and leg. Missing parts simply skip their segment.
+	local SKELETON_SEGMENTS = {
+		{ "Head", "Torso" },
+		{ "Torso", "Root" },
+		{ "Root", "LeftArm" },
+		{ "Root", "RightArm" },
+		{ "Root", "LeftLeg" },
+		{ "Root", "RightLeg" },
+	}
+
+	local function resolveSkeletonParts(character: Model): { BasePart? }
+		local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+		local names = {
+			Head = "Head",
+			Torso = isR15 and "UpperTorso" or "Torso",
+			Root = "HumanoidRootPart",
+			LeftArm = isR15 and "LeftUpperArm" or "Left Arm",
+			RightArm = isR15 and "RightUpperArm" or "Right Arm",
+			LeftLeg = isR15 and "LeftUpperLeg" or "Left Leg",
+			RightLeg = isR15 and "RightUpperLeg" or "Right Leg",
+		}
+		local parts: { BasePart? } = {}
+		for key, partName in pairs(names) do
+			local part = character:FindFirstChild(partName)
+			parts[key] = (part and part:IsA("BasePart")) and (part :: BasePart) or nil
+		end
+		return parts
+	end
+
 	local function createRecord(player: Player): ESPRecord
 		local skeletonLines = {}
 		for _ = 1, 6 do
@@ -68,6 +95,8 @@ return function(services: any)
 			Tracer = DrawingPool:Acquire("Line"),
 			Skeleton = skeletonLines,
 			Highlight = nil,
+			Character = nil,
+			SkeletonParts = nil,
 			LastInventorySig = "",
 			LastBackpackText = "",
 		}
@@ -107,9 +136,6 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Frame Render Update
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onRenderUpdate(dt: number)
 		local espSettings = StateStore:Get("ESP")
 		local chamsSettings = StateStore:Get("Chams")
@@ -137,7 +163,6 @@ return function(services: any)
 		for player, record in pairs(ESPController._records) do
 			local assets = PlayerTracker:GetPlayerAssets(player)
 
-			-- Validation & Team/Whitelist Filtering
 			if not assets or not assets.Character or not assets.RootPart or not assets.Head or assets.Humanoid.Health <= 0 then
 				hideRecord(record)
 			elseif espSettings.TeamCheck and TargetFilter:IsTeammate(player) then
@@ -149,7 +174,8 @@ return function(services: any)
 				if distSq > maxDistSq then
 					hideRecord(record)
 				else
-					-- 3D Chams (Highlight) Handling
+					-- Chams live on the character model and must be rebuilt
+					-- if the record's highlight was lost (e.g. respawn).
 					if isChamsEnabled then
 						if not record.Highlight or not record.Highlight.Parent then
 							local hl = Instance.new("Highlight")
@@ -166,7 +192,6 @@ return function(services: any)
 						record.Highlight.Enabled = false
 					end
 
-					-- 2D Drawing ESP Projections
 					if isESPEnabled then
 						local headPos = assets.Head.Position + Vector3.new(0, 0.5, 0)
 						local feetPos = rootPos - Vector3.new(0, 3, 0)
@@ -184,7 +209,6 @@ return function(services: any)
 							local rootV = Vector2.new(rootScreen.X, rootScreen.Y)
 							local headV = Vector2.new(headScreen.X, headScreen.Y)
 
-							-- Box
 							if espSettings.Box and record.Box then
 								record.Box.Size = Vector2.new(width, height)
 								record.Box.Position = Vector2.new(rootV.X - halfW, rootV.Y - halfH)
@@ -192,7 +216,6 @@ return function(services: any)
 								record.Box.Visible = true
 							elseif record.Box then record.Box.Visible = false end
 
-							-- Name
 							if espSettings.Name and record.Name then
 								record.Name.Text = player.DisplayName
 								record.Name.Position = Vector2.new(rootV.X, headV.Y - 18)
@@ -202,7 +225,6 @@ return function(services: any)
 								record.Name.Visible = true
 							elseif record.Name then record.Name.Visible = false end
 
-							-- Health Bar
 							if espSettings.Health and record.Health and record.HealthBG then
 								local healthRatio = math.clamp(assets.Humanoid.Health / math.max(assets.Humanoid.MaxHealth, 1), 0, 1)
 								local barX = rootV.X - halfW - 6
@@ -223,7 +245,6 @@ return function(services: any)
 								if record.HealthBG then record.HealthBG.Visible = false end
 							end
 
-							-- Distance
 							local bottomOffset = 2
 							if espSettings.Distance and record.Distance then
 								record.Distance.Text = string.format("%dm", math.floor(math.sqrt(distSq)))
@@ -235,7 +256,6 @@ return function(services: any)
 								bottomOffset += 13
 							elseif record.Distance then record.Distance.Visible = false end
 
-							-- Equipped Tool
 							if espSettings.Tool and record.Tool then
 								local tool = assets.Character:FindFirstChildOfClass("Tool")
 								if tool then
@@ -250,7 +270,58 @@ return function(services: any)
 								end
 							elseif record.Tool then record.Tool.Visible = false end
 
-							-- Tracers
+							-- 2D skeleton: project both ends of each bone
+							if espSettings.Skeleton then
+								-- Parts are cached per character instance so the
+								-- FindFirstChild lookups run once per respawn.
+								if record.Character ~= assets.Character then
+									record.Character = assets.Character
+									record.SkeletonParts = resolveSkeletonParts(assets.Character)
+								end
+								local parts = record.SkeletonParts
+								for i, segment in ipairs(SKELETON_SEGMENTS) do
+									local line = record.Skeleton[i]
+									if line and parts then
+										local fromPart = parts[segment[1]]
+										local toPart = parts[segment[2]]
+										if fromPart and toPart then
+											local fromScreen, fromOn = cam:WorldToViewportPoint(fromPart.Position)
+											local toScreen, toOn = cam:WorldToViewportPoint(toPart.Position)
+											if fromOn and toOn and fromScreen.Z > 0 then
+												line.From = Vector2.new(fromScreen.X, fromScreen.Y)
+												line.To = Vector2.new(toScreen.X, toScreen.Y)
+												line.Color = espColor
+												line.Visible = true
+												continue
+											end
+										end
+									end
+									if line then line.Visible = false end
+								end
+							else
+								for _, line in ipairs(record.Skeleton) do
+									if line then line.Visible = false end
+								end
+							end
+
+							-- Look direction: a short ray from the head along
+							-- the head's current facing
+							if espSettings.LookDir and record.LookLine then
+								local headCF = assets.Head.CFrame
+								local lookStart = headCF.Position
+								local lookEnd = lookStart + headCF.LookVector * 6
+								local startScreen, startOn = cam:WorldToViewportPoint(lookStart)
+								local endScreen, endOn = cam:WorldToViewportPoint(lookEnd)
+								if startOn and endOn and startScreen.Z > 0 then
+									record.LookLine.From = Vector2.new(startScreen.X, startScreen.Y)
+									record.LookLine.To = Vector2.new(endScreen.X, endScreen.Y)
+									record.LookLine.Color = espColor
+									record.LookLine.Visible = true
+								else
+									record.LookLine.Visible = false
+								end
+							elseif record.LookLine then record.LookLine.Visible = false end
+
 							if espSettings.Tracers and record.Tracer then
 								record.Tracer.From = screenBottom
 								record.Tracer.To = rootV
@@ -258,7 +329,6 @@ return function(services: any)
 								record.Tracer.Visible = true
 							elseif record.Tracer then record.Tracer.Visible = false end
 
-							-- Head Dot
 							if espSettings.HeadDot and record.HeadDot then
 								record.HeadDot.Position = headV
 								record.HeadDot.Color = espColor
@@ -276,7 +346,6 @@ return function(services: any)
 	function ESPController:Initialize()
 		TaskScheduler:RegisterRender("ESPUpdate", 10, onRenderUpdate)
 
-		-- Sync with PlayerTracker
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer then
 				self._records[player] = createRecord(player)
@@ -295,6 +364,15 @@ return function(services: any)
 				destroyRecord(rec)
 				self._records[player] = nil
 			end
+		end)
+
+		-- Highlights are parented to other players' characters, so releasing
+		-- the drawing pool alone would leave them on screen after an unload.
+		Disposer:Add(function()
+			for _, rec in pairs(self._records) do
+				destroyRecord(rec)
+			end
+			table.clear(self._records)
 		end)
 	end
 

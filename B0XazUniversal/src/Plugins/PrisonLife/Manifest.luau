@@ -1,13 +1,8 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Prison Life Plugin Manifest & Data Tables
--- Pre-computed coordinate arrays, weapon spawns, door container tables,
--- and default state configurations.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Manifest = {
 	Name = "Prison Life",
-	
+
 	LOCATIONS = {
 		{ Name = "Prison Cells", CFrame = CFrame.new(920, 98, 2436) },
 		{ Name = "Cafeteria", CFrame = CFrame.new(920, 98, 2290) },
@@ -30,6 +25,7 @@ local Manifest = {
 		["MP5"] = Vector3.new(813.72, 102.50, 2229.37),
 	},
 
+	-- Folder names whose descendants are treated as phaseable obstacles
 	DOOR_FOLDERS = {
 		["doors"] = true,
 		["glass"] = true,
@@ -51,6 +47,8 @@ local Manifest = {
 	CRIMINAL_SPAWN = Vector3.new(-943, 95, 2058),
 }
 
+-- The data tables are read-only at runtime; freezing them turns accidental
+-- writes into loud errors instead of silent map corruption.
 table.freeze(Manifest.LOCATIONS)
 table.freeze(Manifest.GUN_SPAWNS)
 table.freeze(Manifest.DOOR_FOLDERS)

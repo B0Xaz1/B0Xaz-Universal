@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Fractional Drag & Touch Slider Component
--- Smooth delta calculation, dynamic suffix formatting, step clamping,
--- and unified touch & mouse drag support.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -22,6 +17,7 @@ return function(services: any)
 
 	local Slider = {}
 
+	-- A number defaultOrPath is a literal value, a string is a StateStore path
 	function Slider.new(
 		parent: Instance,
 		label: string,
@@ -103,6 +99,8 @@ return function(services: any)
 			Get = nil :: any,
 		}
 
+		-- The silent flag breaks the observe/set feedback loop: state-driven
+		-- updates redraw the bar without writing the same value back.
 		local function applyValue(val: number, silent: boolean?)
 			local clamped = math.clamp(val, min, max)
 			if stepSize > 0 then
@@ -141,10 +139,12 @@ return function(services: any)
 				if callback then task.spawn(callback, currentValue) end
 			end)
 		end
-		-- Drag Interaction
+
 		local dragging = false
 
 		local function updateFromX(absoluteX: number)
+			-- Absolute screen coordinates are mapped onto the track's current
+			-- on-screen rect, so window dragging does not offset the mapping.
 			local trackX = trackFrame.AbsolutePosition.X
 			local trackWidth = math.max(trackFrame.AbsoluteSize.X, 1)
 			local relFraction = math.clamp((absoluteX - trackX) / trackWidth, 0, 1)

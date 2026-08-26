@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Player Entity Lifecycle & Tracker Service
--- Observes character additions/removals, maintains clean weak references to
--- character limbs without memory leaks, and provides camera spectate handling.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -29,6 +24,9 @@ return function(services: any)
 	}
 
 	local function onCharacterAdded(player: Player, character: Model)
+		-- Waiting with timeouts keeps this safe for characters that spawn
+		-- their parts asynchronously; a partially loaded character is simply
+		-- not registered.
 		local hum = character:WaitForChild("Humanoid", 5) :: Humanoid?
 		local root = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 		local head = character:WaitForChild("Head", 5) :: BasePart?
@@ -50,9 +48,19 @@ return function(services: any)
 		EventBus:Publish("PlayerCharacterRemoving", player, character)
 	end
 
+	-- Entries whose character started destroying are dropped eagerly so
+	-- consumers never hold a reference into a half-destroyed model.
 	function PlayerTracker:GetPlayerAssets(player: Player?): PlayerAssets?
 		if not player then return nil end
-		return self._registry[player]
+		local assets = self._registry[player]
+		if assets then
+			if assets.Character.Destroyed or assets.Humanoid.Destroyed or assets.RootPart.Destroyed then
+				self._registry[player] = nil
+				return nil
+			end
+			return assets
+		end
+		return nil
 	end
 
 	function PlayerTracker:GetLocalAssets(): PlayerAssets?
@@ -68,6 +76,8 @@ return function(services: any)
 		if query == "" then return nil end
 		local lowerQuery = query:lower()
 
+		-- Exact match first, then substring, so short queries do not shadow
+		-- the player the user most likely meant.
 		for player in pairs(self._registry) do
 			if player.Name == query or player.DisplayName == query then
 				return player
@@ -93,9 +103,6 @@ return function(services: any)
 		return list
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Camera Spectate Management
-	-- ─────────────────────────────────────────────────────────────────────────
 	function PlayerTracker:StartSpectate(targetPlayer: Player): boolean
 		if not targetPlayer or targetPlayer == LocalPlayer or not self:IsAlive(targetPlayer) then
 			return false
@@ -113,6 +120,7 @@ return function(services: any)
 			cam.CameraSubject = assets.Humanoid
 		end
 
+		-- If the target respawns mid-spectate, re-attach to the new humanoid
 		self._spectateConnection = targetPlayer.CharacterAdded:Connect(function()
 			task.wait(0.5)
 			if self._spectatingTarget == targetPlayer then
@@ -134,9 +142,16 @@ return function(services: any)
 
 		local cam = Workspace.CurrentCamera
 		if cam then
-			local localAssets = self:GetLocalAssets()
-			if localAssets and localAssets.Humanoid then
-				cam.CameraSubject = localAssets.Humanoid
+			local saved = self._originalCameraSubject
+			if saved and not saved.Destroyed then
+				cam.CameraSubject = saved
+			else
+				-- The original subject may be gone (respawned); fall back to
+				-- the local player's current humanoid.
+				local localAssets = self:GetLocalAssets()
+				if localAssets and localAssets.Humanoid then
+					cam.CameraSubject = localAssets.Humanoid
+				end
 			end
 		end
 
@@ -144,12 +159,15 @@ return function(services: any)
 		self._originalCameraSubject = nil
 	end
 
+	-- Each call registers its own connection so multiple listeners can
+	-- coexist; every one of them is disposed with the master disposer.
 	function PlayerTracker:OnLocalCharacterRespawn(callback: () -> ())
 		if LocalPlayer then
-			LocalPlayer.CharacterAdded:Connect(function()
+			local conn = LocalPlayer.CharacterAdded:Connect(function()
 				task.wait(0.2)
 				callback()
 			end)
+			Disposer:Add(conn)
 		end
 	end
 
@@ -162,13 +180,21 @@ return function(services: any)
 	end
 
 	function PlayerTracker:Initialize()
+		-- Per-player connections live on the Player instance, but they are
+		-- collected so an explicit unload severs them as well.
+		local playerConnections: { RBXScriptConnection } = {}
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player.Character then
 				task.spawn(onCharacterAdded, player, player.Character)
 			end
-			player.CharacterAdded:Connect(function(char) onCharacterAdded(player, char) end)
-			player.CharacterRemoving:Connect(function(char) onCharacterRemoving(player, char) end)
+			table.insert(playerConnections, player.CharacterAdded:Connect(function(char) onCharacterAdded(player, char) end))
+			table.insert(playerConnections, player.CharacterRemoving:Connect(function(char) onCharacterRemoving(player, char) end))
 		end
+		Disposer:Add(function()
+			for _, conn in ipairs(playerConnections) do
+				conn:Disconnect()
+			end
+		end)
 
 		local pAdded = Players.PlayerAdded:Connect(function(player)
 			player.CharacterAdded:Connect(function(char) onCharacterAdded(player, char) end)
@@ -185,6 +211,10 @@ return function(services: any)
 			EventBus:Publish("PlayerLeft", player)
 		end)
 		Disposer:Add(pRemoving)
+
+		Disposer:Add(function()
+			self:StopSpectate()
+		end)
 	end
 
 	return PlayerTracker

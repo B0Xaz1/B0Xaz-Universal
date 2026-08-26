@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Expandable Dropdown Component
--- Features responsive expanding layout, auto-closing coordinator hooks,
--- full option refreshing, and reactive selection bindings.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type DropdownHandle = {
 	Set: (self: DropdownHandle, option: string, silent: boolean?) -> (),
@@ -21,6 +16,7 @@ return function(services: any)
 
 	local Dropdown = {}
 
+	-- A string defaultOrPath is a StateStore path, a non-string is a literal
 	function Dropdown.new(
 		parent: Instance,
 		label: string,
@@ -33,9 +29,8 @@ return function(services: any)
 		local selectedOption: string = ""
 
 		if isPath then
+			-- A missing or invalid saved value falls back to the first option
 			selectedOption = tostring(StateStore:Get(defaultOrPath) or currentOptions[1] or "None")
-		elseif typeof(defaultOrPath) == "string" and defaultOrPath ~= "" then
-			selectedOption = defaultOrPath
 		else
 			selectedOption = currentOptions[1] or "None"
 		end
@@ -108,6 +103,7 @@ return function(services: any)
 		local function setOpen(open: boolean)
 			isOpen = open
 			if open then
+				-- Cap the open height at five visible rows; the list scrolls beyond
 				local height = math.min(#currentOptions, 5) * 20 + 4
 				expansionFrame.Size = UDim2.new(1, 0, 0, math.max(height, 24))
 				expansionFrame.Visible = true
@@ -119,8 +115,10 @@ return function(services: any)
 			end
 		end
 
+		-- The guard keeps the shared close-all sweep from touching a dropdown
+		-- whose GUI has already been destroyed.
 		UIEngine:RegisterDropdownClose(function()
-			if isOpen then setOpen(false) end
+			if isOpen and expansionFrame.Parent then setOpen(false) end
 		end)
 
 		local handle: DropdownHandle = {
@@ -196,7 +194,7 @@ return function(services: any)
 			end)
 			EventBus:Subscribe("StateHydrated", syncFromState)
 		end
-		
+
 		function handle:Refresh(newOptions: { string }, preserveSelection: boolean?)
 			currentOptions = table.clone(newOptions)
 			if not preserveSelection or not table.find(currentOptions, selectedOption) then

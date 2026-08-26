@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Environment & Performance Optimizer Service
--- Executes unified single-pass workspace scans to strip textures, disable shadows,
--- force flat materials, disable particles, and lower terrain fidelity.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
@@ -40,67 +35,58 @@ return function(services: any)
 		_terrainDefaults = nil :: { [string]: any }?,
 	}
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Single-Pass Traversal Pipeline
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Every mutation path (initial scan or late-arriving object) goes
+	-- through this function so originals are always cached before they are
+	-- changed; skipping the cache would make restore incomplete.
+	local function processInstance(obj: Instance, perf: { [string]: any })
+		if perf.NoTextures == true and (obj:IsA("Decal") or obj:IsA("Texture")) then
+			local decal = obj :: Decal
+			if self._textureCache[decal] == nil then
+				self._textureCache[decal] = decal.Texture
+			end
+			decal.Texture = ""
+		end
+
+		if obj:IsA("BasePart") and not obj:IsA("Terrain") then
+			local part = obj :: BasePart
+			if perf.LowMaterials == true then
+				if self._materialCache[part] == nil then
+					self._materialCache[part] = part.Material
+				end
+				part.Material = SMOOTH_PLASTIC
+			end
+			if perf.NoShadows == true then
+				if self._shadowCache[part] == nil then
+					self._shadowCache[part] = part.CastShadow
+				end
+				part.CastShadow = false
+			end
+		end
+
+		if perf.NoParticles == true and PARTICLE_CLASSES[obj.ClassName] then
+			local emitter = obj :: any
+			if self._particleCache[emitter] == nil then
+				self._particleCache[emitter] = emitter.Enabled
+			end
+			emitter.Enabled = false
+		end
+	end
+
 	function OptimizerService:ApplyAllOptimizations()
 		local perf = StateStore:Get("Performance")
 		if not perf then return end
 
-		local shouldStripTextures = perf.NoTextures == true
-		local shouldLowerMaterials = perf.LowMaterials == true
-		local shouldDisableShadows = perf.NoShadows == true
-		local shouldDisableParticles = perf.NoParticles == true
-
-		-- Lighting Global Shadows
-		if shouldDisableShadows then
+		if perf.NoShadows == true then
 			Lighting.GlobalShadows = false
 		else
 			Lighting.GlobalShadows = self._originalGlobalShadows
 		end
 
-		-- Single-pass descendant scan
 		local allDescendants = Workspace:GetDescendants()
 		for i = 1, #allDescendants do
-			local obj = allDescendants[i]
-
-			-- 1. Decals & Textures
-			if shouldStripTextures and (obj:IsA("Decal") or obj:IsA("Texture")) then
-				local decal = obj :: Decal
-				if self._textureCache[decal] == nil then
-					self._textureCache[decal] = decal.Texture
-				end
-				decal.Texture = ""
-			end
-
-			-- 2. BaseParts (Materials & Shadows)
-			if obj:IsA("BasePart") and not obj:IsA("Terrain") then
-				local part = obj :: BasePart
-				if shouldLowerMaterials then
-					if self._materialCache[part] == nil then
-						self._materialCache[part] = part.Material
-					end
-					part.Material = SMOOTH_PLASTIC
-				end
-				if shouldDisableShadows then
-					if self._shadowCache[part] == nil then
-						self._shadowCache[part] = part.CastShadow
-					end
-					part.CastShadow = false
-				end
-			end
-
-			-- 3. Particle Systems
-			if shouldDisableParticles and PARTICLE_CLASSES[obj.ClassName] then
-				local emitter = obj :: any
-				if self._particleCache[emitter] == nil then
-					self._particleCache[emitter] = emitter.Enabled
-				end
-				emitter.Enabled = false
-			end
+			processInstance(allDescendants[i], perf)
 		end
 
-		-- Post-Processing & Terrain Optimizations
 		self:SetOptimizeTerrain(perf.OptimizeTerrain == true)
 		self:SetNoPostProcessing(perf.NoPostProcessing == true)
 	end
@@ -196,19 +182,21 @@ return function(services: any)
 			self:RestoreAll()
 		end)
 
-		-- Reactive state listeners
-		EventBus:Subscribe("StateChanged:Performance.NoTextures", function(enabled)
-			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end
-		end)
-		EventBus:Subscribe("StateChanged:Performance.LowMaterials", function(enabled)
-			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end
-		end)
-		EventBus:Subscribe("StateChanged:Performance.NoShadows", function(enabled)
-			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end
-		end)
-		EventBus:Subscribe("StateChanged:Performance.NoParticles", function(enabled)
-			if enabled then self:ApplyAllOptimizations() else self:RestoreAll() self:ApplyAllOptimizations() end
-		end)
+		-- Any perf flag that turns off first restores everything, then
+		-- re-applies the flags that are still on, so features never fight.
+		local function onPerfFlagChanged(enabled: any)
+			if enabled then
+				self:ApplyAllOptimizations()
+			else
+				self:RestoreAll()
+				self:ApplyAllOptimizations()
+			end
+		end
+		EventBus:Subscribe("StateChanged:Performance.NoTextures", onPerfFlagChanged)
+		EventBus:Subscribe("StateChanged:Performance.LowMaterials", onPerfFlagChanged)
+		EventBus:Subscribe("StateChanged:Performance.NoShadows", onPerfFlagChanged)
+		EventBus:Subscribe("StateChanged:Performance.NoParticles", onPerfFlagChanged)
+
 		EventBus:Subscribe("StateChanged:Performance.OptimizeTerrain", function(enabled)
 			self:SetOptimizeTerrain(enabled == true)
 		end)
@@ -216,23 +204,14 @@ return function(services: any)
 			self:SetNoPostProcessing(enabled == true)
 		end)
 
-		-- Descendant added listener with throttled evaluation
 		local descConn = Workspace.DescendantAdded:Connect(function(d: Instance)
 			local perf = StateStore:Get("Performance")
 			if not perf then return end
 
-			if perf.NoTextures and (d:IsA("Decal") or d:IsA("Texture")) then
-				local decal = d :: Decal
-				decal.Texture = ""
-			elseif perf.LowMaterials and d:IsA("BasePart") and not d:IsA("Terrain") then
-				local part = d :: BasePart
-				part.Material = SMOOTH_PLASTIC
-			elseif perf.NoShadows and d:IsA("BasePart") then
-				local part = d :: BasePart
-				part.CastShadow = false
-			elseif perf.NoParticles and PARTICLE_CLASSES[d.ClassName] then
-				local emitter = d :: any
-				emitter.Enabled = false
+			-- Late objects go through the same cached path as the scan so
+			-- restore stays lossless for them as well.
+			if perf.NoTextures or perf.LowMaterials or perf.NoShadows or perf.NoParticles then
+				processInstance(d, perf)
 			end
 		end)
 		Disposer:Add(descConn)

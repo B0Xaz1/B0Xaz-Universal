@@ -1,18 +1,14 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Composite Lifecycle Disposer (Janitor / Maid Pattern)
--- Provides deterministic, hierarchical cleanup of event connections, threads,
--- Roblox instances, Drawing primitives, and custom destructor objects.
--- ══════════════════════════════════════════════════════════════════════════════
 
-type Destructible = 
-	RBXScriptConnection 
-	| thread 
-	| Instance 
-	| () -> () 
-	| { Dispose: (any) -> () } 
-	| { Destroy: (any) -> () } 
+type Destructible =
+	RBXScriptConnection
+	| thread
+	| Instance
+	| () -> ()
+	| { Dispose: (any) -> () }
+	| { Destroy: (any) -> () }
 	| { Remove: (any) -> () }
+	| { Disconnect: (any) -> () }
 
 export type DisposerInstance = {
 	Name: string,
@@ -31,7 +27,7 @@ Disposer.__index = Disposer
 
 function Disposer.new(name: string?): DisposerInstance
 	local self = setmetatable({}, Disposer)
-	self.Name = name or "Disposer_" .. tostring(os.clock())
+	self.Name = name or "Disposer_ " .. tostring(os.clock())
 	self.IsDisposed = false
 	self._items = {}
 	self._keyedItems = {}
@@ -60,14 +56,20 @@ local function cleanItem(item: any, customMethod: string?)
 	elseif itemType == "Instance" then
 		pcall(function() item:Destroy() end)
 	elseif itemType == "table" then
+		-- Tables are cleaned through whichever lifecycle method they expose.
+		-- Disconnect is included so EventBus connection objects registered
+		-- here are actually released, not just dropped.
 		if typeof(item.Dispose) == "function" then
 			pcall(function() item:Dispose() end)
 		elseif typeof(item.Destroy) == "function" then
 			pcall(function() item:Destroy() end)
+		elseif typeof(item.Disconnect) == "function" then
+			pcall(function() item:Disconnect() end)
 		elseif typeof(item.Remove) == "function" then
 			pcall(function() item:Remove() end)
 		elseif item.Visible ~= nil then
-			-- Drawing primitive fallback
+			-- Drawing primitives are hidden first so a failed Remove call
+			-- cannot leave visible artifacts on screen.
 			item.Visible = false
 			pcall(function()
 				if typeof(item.Remove) == "function" then item:Remove()
@@ -79,6 +81,8 @@ end
 
 function Disposer:Add<T>(item: T, customMethod: string?): T
 	if self.IsDisposed then
+		-- Accepts new items even after disposal so late registrations are
+		-- cleaned immediately instead of leaking.
 		cleanItem(item, customMethod)
 		return item
 	end
@@ -106,6 +110,8 @@ function Disposer:Bind<T>(key: string, item: T, customMethod: string?): T
 		return item
 	end
 	if self._keyedItems[key] then
+		-- Rebinding the same key disposes the previous item first, which is
+		-- what makes Bind a drop-in replacement for "swap this resource".
 		self:Unbind(key)
 	end
 	if item ~= nil then
@@ -132,13 +138,13 @@ function Disposer:Dispose()
 	if self.IsDisposed then return end
 	self.IsDisposed = true
 
-	-- Clean keyed items
 	for _, entry in pairs(self._keyedItems) do
 		cleanItem(entry.item, entry.method)
 	end
 	table.clear(self._keyedItems)
 
-	-- Clean array items in reverse order
+	-- Array items are cleaned in reverse so later registrations tear down
+	-- first, mirroring the order they were set up.
 	for i = #self._items, 1, -1 do
 		local entry = self._items[i]
 		cleanItem(entry.item, entry.method)

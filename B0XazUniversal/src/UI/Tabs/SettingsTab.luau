@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Settings & Profile Manager UI Tab
--- Profile persistence, configuration export/import, reactive theme selector,
--- custom token palette pickers, and license status.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
@@ -73,12 +68,23 @@ return function(services: any, tab: any)
 		return content
 	end
 
+	-- Read-only rows use plain labels; only rows with an action are buttons
+	local function createInfoLabel(parent: Instance, text: string): TextLabel
+		return DOM.Create("TextLabel", {
+			Text = "  " .. text,
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = ThemeEngine:GetToken("TextDim"),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -8, 0, 18),
+			Parent = parent,
+		}) :: TextLabel
+	end
+
 	local selectedProfileName = "Default"
 	local inputProfileName = "MyProfile"
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: Profiles & Import/Export
-	-- ─────────────────────────────────────────────────────────────────────────
 	local profileSec = createSection(tab.LeftCol, "Configuration Profiles")
 	local profileDropdown = Dropdown.new(profileSec, "Select Profile", ConfigService:ListProfiles(), selectedProfileName, function(name)
 		selectedProfileName = name
@@ -134,9 +140,6 @@ return function(services: any, tab: any)
 		ConfigShareModal:Show(jsonStr)
 	end)
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: Themes, UI Scale & License Management
-	-- ─────────────────────────────────────────────────────────────────────────
 	local uiSec = createSection(tab.RightCol, "UI Preferences")
 	local uiScaleSlider = Slider.new(uiSec, "UI Scale Factor", 50, 150, math.floor((StateStore:Get("Settings.UIScale") or 1.0) * 100), 5, "%", function(scaleVal)
 		local factor = scaleVal / 100
@@ -169,7 +172,7 @@ return function(services: any, tab: any)
 	end
 
 	local keySec = createSection(tab.RightCol, "License & Account")
-	Components.CreateButton(keySec, "Access Tier: " .. KeyService:GetTierName(), function() end)
+	createInfoLabel(keySec, "Access Tier: " .. KeyService:GetTierName())
 	Components.CreateButton(keySec, "Copy Support Link", function()
 		local ok, msg = KeyService:CopyInfo()
 		UIEngine:Notify("Support", msg, 2, ThemeEngine:GetToken("Success"))
@@ -177,8 +180,11 @@ return function(services: any, tab: any)
 	Components.CreateButton(keySec, "Logout & Clear License", function()
 		KeyService:ClearKey()
 		UIEngine:Notify("License", "Cleared saved license key.", 2, ThemeEngine:GetToken("Warning"))
-		if (getgenv and getgenv()).B0XazRelaunch then
-			(getgenv and getgenv()).B0XazRelaunch()
+		-- Relaunch reloads the whole suite so the auth modal shows again;
+		-- without this the cleared key would stay logged out with a live UI.
+		local globalEnv = (getgenv and getgenv()) or _G
+		if typeof(globalEnv.B0XazRelaunch) == "function" then
+			globalEnv.B0XazRelaunch()
 		end
 	end)
 	Components.CreateButton(keySec, "Unload Suite & Clear Output", function()

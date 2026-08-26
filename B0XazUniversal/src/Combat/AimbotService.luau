@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - High-Performance Aimbot Service
--- Features zero-allocation WindMouse physics, linear smoothing, target leading
--- prediction, dynamic CFrame interpolation, and priority camera execution.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -41,7 +36,8 @@ return function(services: any)
 		return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	end
 
-	-- Resolve target HitPart on character model
+	-- Resolves the configured hitpart name to a real part on either rig,
+	-- falling back to Head then HumanoidRootPart for unusual character models
 	local function resolveHitPart(character: Model, desiredKey: string): BasePart?
 		if not character then return nil end
 		local isR15 = character:FindFirstChild("UpperTorso") ~= nil
@@ -55,7 +51,6 @@ return function(services: any)
 		return character:FindFirstChild("Head") :: BasePart? or character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	end
 
-	-- Find closest eligible player within FOV circle
 	function AimbotService:GetClosestTarget(): (Player?, BasePart?)
 		local aimCfg = StateStore:Get("Aimbot")
 		if not aimCfg then return nil, nil end
@@ -88,7 +83,6 @@ return function(services: any)
 						if TargetFilter:ValidateTarget(player, targetPart, aimCfg) then
 							local partPos = targetPart.Position
 
-							-- 3D Distance Check
 							local distance3DSq = myPos and (myPos - partPos).Magnitude ^ 2 or 0
 							if distance3DSq <= maxDistSq then
 								local screenPos, onScreen = cam:WorldToViewportPoint(partPos)
@@ -113,7 +107,8 @@ return function(services: any)
 		return bestPlayer, bestPart
 	end
 
-	-- Zero-allocation WindMouse physics step calculation
+	-- WindMouse step: a damped random perturbation on top of the direct
+	-- correction makes the cursor path look less machine-precise
 	local function computeWindMouseDelta(delta: Vector2, alpha: number, dt: number, windStrength: number, windDamping: number): Vector2
 		local distance = delta.Magnitude
 		if distance < 0.1 then return Vector2.zero end
@@ -137,9 +132,6 @@ return function(services: any)
 		return step
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Frame Camera Step Update
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onCameraStep(dt: number)
 		local aimCfg = StateStore:Get("Aimbot")
 		if not aimCfg or not aimCfg.Enabled or not StateStore:HasPermission("Aimbot.Enabled") then
@@ -149,7 +141,6 @@ return function(services: any)
 			return
 		end
 
-		-- Lock Mode Evaluation
 		if aimCfg.LockMode == "Hold" then
 			if not AimbotService._isHoldActive then
 				if AimbotService._targetPlayer ~= nil then AimbotService:LockOff() end
@@ -157,7 +148,6 @@ return function(services: any)
 			end
 		end
 
-		-- Target Refresh
 		if not AimbotService._targetPlayer or not PlayerTracker:IsAlive(AimbotService._targetPlayer) then
 			local newTarget, _ = AimbotService:GetClosestTarget()
 			AimbotService._targetPlayer = newTarget
@@ -178,7 +168,7 @@ return function(services: any)
 		local cam = Workspace.CurrentCamera
 		if not cam then return end
 
-		-- Prediction Lead Calculation
+		-- Lead prediction offsets the aim point along the target's velocity
 		local prediction = aimCfg.Prediction or {}
 		local px = tonumber(prediction.Horizontal) or 0
 		local py = tonumber(prediction.Vertical) or 0
@@ -186,7 +176,6 @@ return function(services: any)
 
 		local aimWorldPos = targetPart.Position + Vector3.new(vel.X * px, vel.Y * py, vel.Z * px)
 
-		-- Shake Perturbation
 		local shake = tonumber(aimCfg.ShakeIntensity) or 0
 		if shake > 0 then
 			local s = shake * 0.1
@@ -206,15 +195,17 @@ return function(services: any)
 		local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
 		local delta = targetScreen - mousePos
 
-		-- Break on Mouse Pull
 		if aimCfg.BreakOnPull and delta.Magnitude > (aimCfg.MaxLockRadius or 200) then
 			AimbotService:LockOff()
 			return
 		end
 
+		-- Exponential smoothing expressed per-frame so the feel is identical
+		-- at any frame rate
 		local smoothness = math.clamp(tonumber(aimCfg.Smoothness) or 4, 1, 20)
 		local alpha = 1 - math.exp(-dt * (60 / smoothness))
-		local windStrength = math.clamp(tonumber(aimCfg.WindStrength) or 1, 0, 5)
+		-- "Linear" movement mode disables the wind perturbation entirely
+		local windStrength = aimCfg.MovementMode == "Linear" and 0 or math.clamp(tonumber(aimCfg.WindStrength) or 1, 0, 5)
 		local windDamping = math.clamp(tonumber(aimCfg.WindDamping) or 0.8, 0.1, 0.95)
 		local step = computeWindMouseDelta(delta, alpha, dt, windStrength, windDamping)
 
@@ -222,8 +213,9 @@ return function(services: any)
 			local desiredCFrame = CFrame.lookAt(cam.CFrame.Position, aimWorldPos)
 			cam.CFrame = cam.CFrame:Lerp(desiredCFrame, alpha)
 		else
-			-- Preserve fractional movement so smoothing does not permanently lose
-			-- sub-pixel corrections when the executor only accepts integer deltas.
+			-- Accumulate fractional movement so smoothing does not permanently
+			-- lose sub-pixel corrections on executors that only accept integer
+			-- mouse deltas.
 			AimbotService._subPixelRemainder += step
 			local moveX = math.floor(AimbotService._subPixelRemainder.X + 0.5)
 			local moveY = math.floor(AimbotService._subPixelRemainder.Y + 0.5)
@@ -248,6 +240,7 @@ return function(services: any)
 	end
 
 	function AimbotService:Initialize()
+		-- Camera pipeline so the camera CFrame is fresh before aim math runs
 		TaskScheduler:RegisterCamera("AimbotCameraUpdate", 20, onCameraStep)
 
 		local inputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)

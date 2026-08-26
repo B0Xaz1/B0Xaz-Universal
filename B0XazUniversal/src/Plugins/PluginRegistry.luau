@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Polymorphic Game Plugin Registry
--- Provides O(1) indexed lookup tables mapping PlaceIds and UniverseIds to
--- structured game manifest definitions.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type PluginManifest = {
 	Name: string,
@@ -11,8 +6,9 @@ export type PluginManifest = {
 	Description: string,
 }
 
+-- Place and Universe ids are both keys into the same map so either can
+-- identify a supported game.
 local REGISTRY_MAP: { [string]: PluginManifest } = {
-	-- Prison Life Main & Universe Place IDs
 	["155615604"] = {
 		Name = "Prison Life",
 		PluginModule = "B0XazUniversal/src/Plugins/PrisonLife/Mechanics.luau",

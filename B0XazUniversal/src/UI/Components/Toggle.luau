@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Reactive Toggle Component
--- Automatically binds to StateStore paths or standalone boolean states,
--- supports tier permission gating, and features reactive theme transitions.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type ToggleHandle = {
 	Set: (self: ToggleHandle, value: boolean, silent: boolean?) -> (),
@@ -19,6 +14,7 @@ return function(services: any)
 
 	local Toggle = {}
 
+	-- A string statePathOrInit is a StateStore path, a boolean is a literal
 	function Toggle.new(
 		parent: Instance,
 		label: string,
@@ -84,6 +80,8 @@ return function(services: any)
 		end
 
 		function handle:Set(value: boolean, silent: boolean?)
+			-- Tries to turn on a feature above the viewer's tier are silently
+			-- refused; turning off is always allowed.
 			if tier > StateStore:GetTier() and value == true then
 				return
 			end
@@ -108,8 +106,9 @@ return function(services: any)
 			handle:Set(not currentState)
 		end)
 
-		-- Observe reactive state path if provided
 		if isPath then
+			-- State changes from anywhere else (config load, permission
+			-- enforcement) update the visual without re-firing the callback.
 			StateStore:Observe(statePathOrInit, function(newVal)
 				if newVal ~= currentState then
 					currentState = newVal == true

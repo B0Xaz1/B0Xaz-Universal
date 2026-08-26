@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Movement & Locomotion UI Tab
--- Controls humanoid speeds, jump force, infinite jump, constraint flight,
--- world gravity, click-to-teleport, and location bookmarks.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 
@@ -12,6 +7,7 @@ return function(services: any, tab: any)
 	local LocomotionService = services:Get("LocomotionService")
 	local FlightService = services:Get("FlightService")
 	local UIEngine = services:Get("UIEngine")
+	local Disposer = services:Get("Disposer")
 	local Require = services:Get("Require")
 	local DOM = services:Get("DOM")
 
@@ -70,9 +66,6 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: Speed, Jump & Flight
-	-- ─────────────────────────────────────────────────────────────────────────
 	local speedSec = createSection(tab.LeftCol, "Speed & Jump Controls")
 	Slider.new(speedSec, "Walk Speed", 16, 500, "Movement.Speed", 2, " ws")
 	Slider.new(speedSec, "Jump Power", 50, 500, "Movement.JumpPower", 5, " jp")
@@ -89,12 +82,17 @@ return function(services: any, tab: any)
 	Slider.new(flightSec, "Flight Velocity Speed", 10, 500, "Movement.FlySpeed", 5)
 	Keybind.new(flightSec, "Flight Toggle Hotkey", "Movement.FlyKeybind")
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: Physics Adjustments & Teleports
-	-- ─────────────────────────────────────────────────────────────────────────
 	local worldSec = createSection(tab.RightCol, "World Physics")
-	Slider.new(worldSec, "World Gravity", 0, 300, math.floor(Workspace.Gravity), 5, "", function(grav)
+	-- Gravity is a live server property; remember the original so unload can
+	-- put the world back instead of leaving the modified value behind.
+	local originalGravity = Workspace.Gravity
+	Slider.new(worldSec, "World Gravity", 0, 300, math.floor(originalGravity), 5, "", function(grav)
 		Workspace.Gravity = grav
+	end)
+	Disposer:Add(function()
+		if Workspace.Gravity ~= originalGravity then
+			Workspace.Gravity = originalGravity
+		end
 	end)
 	Slider.new(worldSec, "Camera Field of View", 70, 120, "Camera.FOV", 1, "°", function(fov)
 		local cam = Workspace.CurrentCamera

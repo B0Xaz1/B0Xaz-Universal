@@ -1,28 +1,25 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - DOM & Fast Instance Factory
--- Eliminates dynamic closure allocations and pcall overhead during UI mounting,
--- providing fast ASCII string generators, UIStrokes, and layout helpers.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type InstanceProperties = { [string]: any }
 
 local DOM = {}
 
--- Fast Pseudo-Random String Generator (Zero allocation byte buffering)
+-- Short pseudo-random name used only to keep ScreenGui names unique; it is
+-- not cryptographic and does not need to be stable across sessions.
 function DOM.GenerateGUID(): string
 	local bytes = table.create(16)
 	for i = 1, 16 do
-		bytes[i] = math.random(65, 90) -- Uppercase ASCII (A-Z)
+		bytes[i] = math.random(65, 90)
 	end
 	return string.char(table.unpack(bytes))
 end
 
--- Fast Property Applier
 function DOM.Create(className: string, properties: InstanceProperties?, children: { Instance }?): Instance
 	local instance = Instance.new(className)
 	local targetParent: Instance? = nil
 
+	-- Parent is applied last so the instance is configured while detached,
+	-- which avoids layout passes firing mid-construction.
 	if properties then
 		for prop, value in pairs(properties) do
 			if prop == "Parent" then
@@ -55,6 +52,7 @@ function DOM.CreateStroke(color: Color3, thickness: number?): UIStroke
 	}) :: UIStroke
 end
 
+-- Single-number calls apply the same padding on all four edges
 function DOM.CreatePadding(top: number, bottom: number?, left: number?, right: number?): UIPadding
 	if bottom == nil then
 		return DOM.Create("UIPadding", {

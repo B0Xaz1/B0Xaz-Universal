@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Dynamic Game Plugin UI Tab
--- Inspects active runtime PlaceId metadata and dynamically mounts game-specific
--- plugin interfaces when supported.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
@@ -65,9 +60,20 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Target Place Context & Plugin Mounting
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Read-only rows use plain labels; only rows with an action are buttons
+	local function createInfoLabel(parent: Instance, text: string): TextLabel
+		return DOM.Create("TextLabel", {
+			Text = "  " .. text,
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = ThemeEngine:GetToken("TextDim"),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -8, 0, 18),
+			Parent = parent,
+		}) :: TextLabel
+	end
+
 	local infoSec = createSection(tab.LeftCol, "Target Game Context")
 
 	Components.CreateButton(infoSec, "Place ID: " .. tostring(game.PlaceId), function()
@@ -75,13 +81,12 @@ return function(services: any, tab: any)
 		UIEngine:Notify("Place ID", "Copied to clipboard.", 2, ThemeEngine:GetToken("Success"))
 	end)
 
-	local pluginName = PluginManager:GetActivePluginName()
-	Components.CreateButton(infoSec, "Active Plugin: " .. pluginName, function() end)
+	createInfoLabel(infoSec, "Active Plugin: " .. PluginManager:GetActivePluginName())
 
 	if PluginManager:IsGameSupported() then
 		PluginManager:MountUI(tab)
 	else
 		local unsupSec = createSection(tab.RightCol, "No Plugin Detected")
-		Components.CreateButton(unsupSec, "No modifications available for this place.", function() end)
+		createInfoLabel(unsupSec, "No modifications available for this place.")
 	end
 end

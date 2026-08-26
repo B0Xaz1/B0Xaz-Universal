@@ -1,7 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Unified Bootstrap Orchestrator (Path Resilient)
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -15,10 +12,9 @@ local function trace(message: string)
 	print("[B0Xaz][Trace] " .. message)
 end
 
+-- Roblox has no public console-clear API, so each executor-local helper name
+-- is tried in turn; unload must not depend on any particular executor.
 local function clearClientOutput()
-	-- Roblox does not expose a public in-game output-clear API. Supported
-	-- executors commonly expose one of these client-local helpers, so try each
-	-- without making unload depend on any particular executor.
 	for _, functionName in ipairs({ "rconsoleclear", "consoleclear", "clearconsole", "clearoutput" }) do
 		local clearFunction = globalEnv[functionName]
 		if typeof(clearFunction) == "function" then
@@ -44,12 +40,29 @@ end
 globalEnv.B0XazUnload = unloadSuite
 globalEnv.B0XazRunning = true
 
+-- Re-executes this entry point. The reloaded script disposes the previous
+-- master disposer at startup, so this gives the UI a clean reload path.
+globalEnv.B0XazRelaunch = function()
+	task.defer(function()
+		local ok, err = pcall(function()
+			local source = game:HttpGet(tostring(globalEnv.B0XazInitURL))
+			local chunk = loadstring(source, "@B0XazInitReload")
+			if not chunk then
+				error("Reloaded entry point failed to compile")
+			end
+			chunk()
+		end)
+		if not ok then
+			warn("[B0Xaz] Relaunch failed: " .. tostring(err))
+		end
+	end)
+end
+
 local SOURCE_ROOT: string = "B0XazUniversal"
 local sourceRef: string = tostring(globalEnv.B0XazRef or "main")
 
--- All source files, including this entry point, live under B0XazUniversal/.
--- B0XazBaseURL may point either at the repository ref or directly at that
--- folder; normalize both forms so every fetch uses the same root.
+-- B0XazBaseURL may point at the repository ref or directly at the source
+-- folder; normalize both forms so every fetch resolves against one root.
 local configuredBaseURL = globalEnv.B0XazBaseURL
 local BASE_URL: string
 if typeof(configuredBaseURL) == "string" and configuredBaseURL:gsub("%s+", "") ~= "" then
@@ -57,14 +70,13 @@ if typeof(configuredBaseURL) == "string" and configuredBaseURL:gsub("%s+", "") ~
 else
 	BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. sourceRef .. "/" .. SOURCE_ROOT
 end
--- Remove a trailing slash (and any accidental query string) before checking
--- the folder name, then restore the slash required for URL concatenation.
+-- Drop a trailing slash (and any query string) before the folder check,
+-- then restore the slash needed for URL concatenation.
 BASE_URL = (BASE_URL:match("^[^?#]*") or BASE_URL):gsub("[/\\]+$", "")
 if not BASE_URL:lower():match("/" .. SOURCE_ROOT:lower() .. "$") then
 	BASE_URL = BASE_URL .. "/" .. SOURCE_ROOT
 end
 BASE_URL = BASE_URL .. "/"
--- Keep the resolved location available to the server-hop/teleport pipeline.
 globalEnv.B0XazBaseURL = BASE_URL
 globalEnv.B0XazInitURL = BASE_URL .. "init.luau"
 
@@ -72,7 +84,8 @@ trace("Entry point loaded")
 trace("Source ref: " .. sourceRef)
 trace("Source base: " .. BASE_URL)
 
--- Session ID & Cleanup
+-- Each reload bumps the session id and disposes the previous master disposer
+-- so stale threads, connections, and instances from the last run are cleaned.
 local currentSessionId: number = (tonumber(globalEnv.B0XazSessionId) or 0) + 1
 globalEnv.B0XazSessionId = currentSessionId
 
@@ -82,7 +95,6 @@ if globalEnv.B0XazMasterDisposer and typeof(globalEnv.B0XazMasterDisposer.Dispos
 end
 trace("Session " .. tostring(currentSessionId) .. " initialized")
 
--- Wait for Game Load
 if not game:IsLoaded() then
 	local start = os.clock()
 	while not game:IsLoaded() and (os.clock() - start) < LOAD_TIMEOUT do task.wait(0.1) end
@@ -99,7 +111,6 @@ local initializedCache: { [string]: any } = {}
 local initializedFlags: { [string]: boolean } = {}
 
 local function fetchSource(path: string): string
-	-- Strip prefixes for clean path resolution across repos
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^B0XazUniversal/", "")
 	if sourceCache[cleanPath] then
 		trace("Fetch cache hit: " .. cleanPath)
@@ -108,6 +119,7 @@ local function fetchSource(path: string): string
 
 	local lastErr = "Unknown"
 	for attempt = 1, RETRY_ATTEMPTS do
+		-- Cache buster on retries so a flaky edge node cannot serve stale bytes
 		local url = BASE_URL .. cleanPath .. (attempt > 1 and ("?t=" .. os.clock()) or "")
 		trace(string.format("Fetch attempt %d/%d: %s", attempt, RETRY_ATTEMPTS, url))
 		local ok, response = pcall(game.HttpGet, game, url)
@@ -159,6 +171,8 @@ local function requireModule(path: string, ...: any): any
 			return moduleValue
 		end
 
+		-- Factory modules are initialized exactly once with the supplied
+		-- arguments; every later require returns that same instance.
 		trace("Factory initialize: " .. cleanPath)
 		local initOk, initialized = pcall(moduleValue, ...)
 		if not initOk then
@@ -181,7 +195,6 @@ local function requireStep(label: string, path: string, ...: any): any
 	return result
 end
 
--- Execution Pipeline
 local function bootstrap()
 	print("[B0Xaz] Starting Suite Engine...")
 	trace("Bootstrap start")
@@ -233,8 +246,8 @@ local function bootstrap()
 	registerStep("PlayerTracker", PlayerTracker)
 	registerStep("OptimizerService", OptimizerService)
 
-	-- Register each dependency before loading consumers that resolve it during
-	-- their factory call. This keeps the bootstrap order deterministic.
+	-- Dependencies are registered before any consumer is loaded so that
+	-- factories resolving them stay in a deterministic order.
 	local DrawingPool = requireStep("DrawingPool", "src/Visuals/DrawingPool.luau", ServiceContainer)
 	registerStep("DrawingPool", DrawingPool)
 

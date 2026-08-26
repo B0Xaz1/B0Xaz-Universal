@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Central Service Container & Dependency Registry
--- Provides decoupled service registration, lazy resolution, and standardized
--- lifecycle management across all domain subsystems.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type Service = {
 	Initialize: ((self: any) -> ())?,
@@ -38,6 +33,8 @@ function ServiceContainer:Has(name: string): boolean
 	return self._services[name] ~= nil
 end
 
+-- InitializeAll walks the load order forward; DestroyAll walks it backward so
+-- dependents tear down before the services they consume.
 function ServiceContainer:InitializeAll()
 	for _, name in ipairs(self._loadOrder) do
 		local service = self._services[name]

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Constraint Flight Subsystem
--- Implements modern physics constraint flight (LinearVelocity + AlignOrientation)
--- with zero solver fighting, smooth camera tracking, and mobile support.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
@@ -18,6 +13,8 @@ return function(services: any)
 
 	local FlightService = {
 		_active = false,
+		-- A child disposer is used for the movers so they can be re-created on
+		-- every flight start without touching the shared master disposer.
 		_flightDisposer = Disposer:CreateChild("FlightDisposer"),
 		_linearVelocity = nil :: LinearVelocity?,
 		_bodyGyro = nil :: BodyGyro?,
@@ -29,8 +26,8 @@ return function(services: any)
 	end
 
 	function FlightService:CleanupMovers()
-		-- A Disposer cannot accept new items after Dispose(). Recreate the
-		-- child container so every subsequent flight start can register movers.
+		-- A Disposer cannot accept items after Dispose(), so the child
+		-- container is discarded and rebuilt on every stop/start cycle.
 		self._flightDisposer:Dispose()
 		self._flightDisposer = Disposer:CreateChild("FlightDisposer")
 		self._linearVelocity = nil
@@ -59,13 +56,15 @@ return function(services: any)
 		local root = myAssets.RootPart
 		local hum = myAssets.Humanoid
 
-		-- Create Constraint Movers
 		local attachment = Instance.new("Attachment")
 		attachment.Name = "B0XazFlightAttachment"
 		attachment.Parent = root
 		self._attachment = attachment
 		self._flightDisposer:Add(attachment)
 
+		-- LinearVelocity + BodyGyro constraint pair: velocity drives movement
+		-- while the gyro holds the assembly level, so the physics solver does
+		-- not fight the humanoid controller.
 		local linearVel = Instance.new("LinearVelocity")
 		linearVel.Name = "B0XazFlightVelocity"
 		linearVel.Attachment0 = attachment
@@ -109,16 +108,20 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Flight Tick Processing
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onFlightUpdate(dt: number)
 		if not FlightService._active then
-			-- The toggle can be clicked before PlayerTracker has finished
-			-- indexing the character. Retry once assets become available.
+			-- The toggle can be flipped before PlayerTracker finishes indexing
+			-- the character, so retry here once the assets become available.
 			if StateStore:Get("Movement.FlyEnabled") == true then
 				FlightService:Start()
 			end
+			return
+		end
+
+		-- Permission or state can be revoked outside the UI (logout, tier
+		-- downgrade), in which case flight must stop on the next tick.
+		if StateStore:Get("Movement.FlyEnabled") ~= true or not StateStore:HasPermission("Movement.FlyEnabled") then
+			FlightService:Stop()
 			return
 		end
 
@@ -129,6 +132,10 @@ return function(services: any)
 			return
 		end
 
+		-- The velocity constraint ramps the assembly almost instantly, which
+		-- the fling guard would read as an impulse; stay suppressed while
+		-- flying.
+		StateStore:SetTransient("AntiFlingSuppressUntil", os.clock() + 0.1)
 		FlightService._bodyGyro.CFrame = cam.CFrame
 		local flySpeed = math.clamp(tonumber(StateStore:Get("Movement.FlySpeed")) or 50, 1, 500)
 		local moveDir = Vector3.zero
@@ -157,7 +164,6 @@ return function(services: any)
 	function FlightService:Initialize()
 		TaskScheduler:RegisterHeartbeat("FlightUpdate", 5, onFlightUpdate)
 
-		-- Keybind Listener
 		local bindConn = UserInputService.InputBegan:Connect(function(input, gp)
 			if gp or isMobile() or StateStore:GetTransient("IsBindingKey") then return end
 			local flyBind = StateStore:Get("Movement.FlyKeybind")
@@ -172,7 +178,6 @@ return function(services: any)
 			self:CleanupMovers()
 		end)
 
-		-- Character Lifecycle Reconnection
 		PlayerTracker:OnLocalCharacterRespawn(function()
 			if StateStore:Get("Movement.FlyEnabled") then
 				FlightService:Stop()

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Locomotion & Movement Physics Service
--- Consolidates WalkSpeed, JumpPower, Infinite Jump, CFrame displacement,
--- fling attack execution, click-to-teleport, and position bookmarks.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -23,15 +18,14 @@ return function(services: any)
 		_flingOffset = 0.1,
 	}
 
+	-- Originals are captured on the first frame we touch a humanoid so the
+	-- unload hook can return the character to exactly what it had
 	local originalHumanoid: Humanoid? = nil
 	local originalWalkSpeed: number? = nil
 	local originalUseJumpPower: boolean? = nil
 	local originalJumpPower: number? = nil
 	local originalJumpHeight: number? = nil
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Physics Updates (Heartbeat & Pre-Simulation)
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function updateMovement(dt: number)
 		local myAssets = PlayerTracker:GetLocalAssets()
 		if not myAssets or not myAssets.Humanoid or not myAssets.RootPart or myAssets.Humanoid.Health <= 0 then
@@ -50,7 +44,6 @@ return function(services: any)
 		local movSettings = StateStore:Get("Movement")
 		if not movSettings then return end
 
-		-- 1. Sprint & Base Speed Enforcement
 		if movSettings.SprintEnabled then
 			local isSprinting = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
 			local targetSpeed = isSprinting and (movSettings.SprintSpeed or 30) or (movSettings.Speed or 16)
@@ -63,17 +56,17 @@ return function(services: any)
 			end
 		end
 
-		-- 2. Jump Power
 		if movSettings.JumpPower and hum.JumpPower ~= movSettings.JumpPower then
 			hum.UseJumpPower = true
 			hum.JumpPower = movSettings.JumpPower
 		end
 
-		-- 3. CFrame Velocity Displacement
+		-- CFrame displacement teleports the root instead of changing velocity,
+		-- which is why it must pause while constraint flight owns the assembly
 		if movSettings.CFrameSpeed and not movSettings.FlyEnabled then
 			local moveDir = hum.MoveDirection
-			-- Fall back to keyboard direction when an executor/game makes
-			-- Humanoid.MoveDirection unavailable or stale.
+			-- Some executors/games keep MoveDirection stale, so fall back to
+			-- the camera-relative keyboard direction in that case.
 			if moveDir.Magnitude <= 0.05 then
 				local cam = Workspace.CurrentCamera
 				if cam then
@@ -93,22 +86,21 @@ return function(services: any)
 			end
 		end
 
-		-- 4. Target Fling Physics Injection
+		-- Fling: snap onto the target then slam the assembly at extreme speed
 		if LocomotionService._flingActive and LocomotionService._flingTarget then
 			local targetAssets = PlayerTracker:GetPlayerAssets(LocomotionService._flingTarget)
 			if targetAssets and targetAssets.RootPart then
 				root.CFrame = targetAssets.RootPart.CFrame
 				local currentVel = root.AssemblyLinearVelocity
 				root.AssemblyLinearVelocity = currentVel * 10000 + Vector3.new(0, 10000, 0)
+				-- Keep the fling guard off while we are the one flinging
+				StateStore:SetTransient("AntiFlingSuppressUntil", os.clock() + 0.1)
 			else
 				LocomotionService:StopFling()
 			end
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Teleportation & Raycasting
-	-- ─────────────────────────────────────────────────────────────────────────
 	function LocomotionService:SavePosition(): boolean
 		local myAssets = PlayerTracker:GetLocalAssets()
 		if myAssets and myAssets.RootPart then
@@ -122,9 +114,13 @@ return function(services: any)
 		local saved = StateStore:GetTransient("SavedPosition")
 		local myAssets = PlayerTracker:GetLocalAssets()
 		if saved and myAssets and myAssets.RootPart then
+			-- Zero velocity first so the teleport does not inherit momentum
 			myAssets.RootPart.AssemblyLinearVelocity = Vector3.zero
 			myAssets.RootPart.AssemblyAngularVelocity = Vector3.zero
 			myAssets.RootPart.CFrame = saved
+			-- Briefly suppress the fling guard so our own teleport is not
+			-- read as an impulse and snapped back.
+			StateStore:SetTransient("AntiFlingSuppressUntil", os.clock() + 0.5)
 			return true
 		end
 		return false
@@ -136,6 +132,7 @@ return function(services: any)
 			myAssets.RootPart.AssemblyLinearVelocity = Vector3.zero
 			myAssets.RootPart.AssemblyAngularVelocity = Vector3.zero
 			myAssets.RootPart.CFrame = CFrame.new(position + (offset or Vector3.new(0, 3, 0)))
+			StateStore:SetTransient("AntiFlingSuppressUntil", os.clock() + 0.5)
 		end
 	end
 
@@ -160,14 +157,9 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Initialization & Event Bindings
-	-- ─────────────────────────────────────────────────────────────────────────
 	function LocomotionService:Initialize()
-		-- Register Heartbeat Task
 		TaskScheduler:RegisterHeartbeat("LocomotionUpdate", 10, updateMovement)
 
-		-- Infinite Jump Listener
 		local jumpConn = UserInputService.JumpRequest:Connect(function()
 			if StateStore:Get("Movement.InfJump") then
 				local myAssets = PlayerTracker:GetLocalAssets()
@@ -178,7 +170,6 @@ return function(services: any)
 		end)
 		Disposer:Add(jumpConn)
 
-		-- Click / Tap to Teleport Listener
 		local inputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			if gameProcessed or not StateStore:Get("Settings.TpToMouse") then return end
 
@@ -204,6 +195,7 @@ return function(services: any)
 					myAssets.RootPart.AssemblyLinearVelocity = Vector3.zero
 					myAssets.RootPart.AssemblyAngularVelocity = Vector3.zero
 					myAssets.RootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+					StateStore:SetTransient("AntiFlingSuppressUntil", os.clock() + 0.5)
 				end
 			end
 		end)

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Platform & Capability Bridge
--- Isolates exploit globals, provides C-level crypto fallbacks, filesystem
--- operations rooted in B0XazUniversal/, and zero-allocation keycode resolvers.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -18,9 +13,8 @@ return function(disposer: any)
 		print("[B0Xaz][Environment] " .. message)
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Platform Capability Detection (Resolved once at boot)
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Capabilities are probed once at boot so per-frame code never has to
+	-- typeof-check executor globals again.
 	local hasHui: boolean = typeof(gethui) == "function"
 	local hasWriteFile: boolean = typeof(writefile) == "function"
 	local hasReadFile: boolean = typeof(readfile) == "function"
@@ -31,7 +25,7 @@ return function(disposer: any)
 	local hasMouseRel: boolean = typeof(mousemoverel) == "function"
 	local hasClipboard: boolean = typeof(setclipboard) == "function"
 	local hasGetClipboard: boolean = typeof(getclipboard) == "function"
-	local hasQueueTeleport: boolean = typeof(queue_on_teleport) == "function" 
+	local hasQueueTeleport: boolean = typeof(queue_on_teleport) == "function"
 		or (syn and typeof(syn.queue_on_teleport) == "function")
 		or (fluxus and typeof(fluxus.queue_on_teleport) == "function")
 
@@ -43,7 +37,6 @@ return function(disposer: any)
 		tostring(typeof(request) == "function" or typeof(http_request) == "function")
 	))
 
-	-- Ensure root directories exist
 	if hasMakeFolder then
 		debug("Creating filesystem folders")
 		pcall(makefolder, ROOT_FOLDER)
@@ -53,9 +46,6 @@ return function(disposer: any)
 		debug("makefolder unavailable; filesystem persistence may be disabled")
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- GUI Parent Host Adapter
-	-- ─────────────────────────────────────────────────────────────────────────
 	local cachedHostParent: Instance? = nil
 
 	function Environment.GetSafeGuiParent(): Instance
@@ -71,6 +61,8 @@ return function(disposer: any)
 			end
 		end
 
+		-- CoreGui is usable on some executors but not all; probe with a
+		-- throwaway instance instead of assuming.
 		local canAccessCore, _ = pcall(function()
 			local test = Instance.new("Folder")
 			test.Parent = CoreGui
@@ -95,9 +87,6 @@ return function(disposer: any)
 		return CoreGui
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Hardware / Device Identification
-	-- ─────────────────────────────────────────────────────────────────────────
 	function Environment.GetDeviceId(): string
 		local deviceFile = ROOT_FOLDER .. "/_device.json"
 		debug("GetDeviceId: checking " .. deviceFile)
@@ -147,15 +136,14 @@ return function(disposer: any)
 		return generatedId
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Cryptographic Utilities (Native C-Crypt with Luau Fast Fallbacks)
-	-- ─────────────────────────────────────────────────────────────────────────
 	local b64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 	local b64Lookup = {}
 	for i = 1, 64 do
 		b64Lookup[b64Chars:sub(i, i)] = i - 1
 	end
 
+	-- The Luau fallbacks mirror the standard base64 algorithm so configs and
+	-- keys keep working on executors without the native crypt library.
 	function Environment.Base64Encode(data: string): string
 		if crypt and typeof(crypt.base64encode) == "function" then
 			local ok, res = pcall(crypt.base64encode, data)
@@ -233,9 +221,8 @@ return function(disposer: any)
 		return table.concat(out)
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Filesystem Abstractions
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- All paths are pinned under ROOT_FOLDER; callers may or may not pass
+	-- the prefix, so it is stripped before joining.
 	function Environment.WriteFile(relativePath: string, content: string): (boolean, string?)
 		if not hasWriteFile then return false, "writefile unavailable" end
 		local fullPath = ROOT_FOLDER .. "/" .. relativePath:gsub("^" .. ROOT_FOLDER .. "/", "")
@@ -268,9 +255,6 @@ return function(disposer: any)
 		return ok
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Input & Mouse Relative Positioning
-	-- ─────────────────────────────────────────────────────────────────────────
 	function Environment.MouseMove(deltaX: number, deltaY: number): boolean
 		if not hasMouseRel then return false end
 		return pcall(mousemoverel, deltaX, deltaY)
@@ -289,8 +273,8 @@ return function(disposer: any)
 
 	function Environment.QueueTeleport(scriptSource: string): boolean
 		if not hasQueueTeleport then return false end
-		local queueFn = queue_on_teleport 
-			or (syn and syn.queue_on_teleport) 
+		local queueFn = queue_on_teleport
+			or (syn and syn.queue_on_teleport)
 			or (fluxus and fluxus.queue_on_teleport)
 		if queueFn then
 			return pcall(queueFn, scriptSource)
@@ -298,7 +282,7 @@ return function(disposer: any)
 		return false
 	end
 
-	-- Pre-computed Keycode Lookup Table ($O(1)$ fast resolution)
+	-- Keycode lookups are precomputed so keybind parsing stays O(1) at runtime
 	local KEYCODE_CACHE: { [string]: Enum.KeyCode } = {}
 	for _, enumItem in ipairs(Enum.KeyCode:GetEnumItems()) do
 		KEYCODE_CACHE[enumItem.Name:upper()] = enumItem

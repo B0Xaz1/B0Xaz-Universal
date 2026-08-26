@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Shared Target Filter & Visibility Engine
--- Provides unified, high-performance validation for teams, friends, whitelists,
--- forcefields, and zero-allocation raycast visibility tests.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -26,12 +21,16 @@ return function(services: any)
 	local TargetFilter = {}
 	local friendCache: { [number]: boolean } = {}
 
-	-- Reusable static RaycastParams to prevent per-check allocation
+	-- One shared RaycastParams instance keeps visibility checks allocation-free
 	local visRaycastParams = RaycastParams.new()
 	visRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	visRaycastParams.IgnoreWater = true
 
-	local cachedFilterList: { Instance } = { Workspace }
+	-- The exclude list holds only the local character (if one exists) so the
+	-- local player's own body cannot occlude a target. It is rebuilt in place
+	-- whenever the character model instance changes; an empty list simply
+	-- means "exclude nothing", which is the correct state while dead.
+	local cachedFilterList: { Instance } = {}
 	local lastLocalCharacter: Model? = nil
 
 	function TargetFilter:IsTeammate(player: Player): boolean
@@ -55,6 +54,7 @@ return function(services: any)
 		return nil
 	end
 
+	-- IsFriendsWith is a network round trip, so results are cached per UserId
 	function TargetFilter:IsFriend(player: Player): boolean
 		if not player or player == LocalPlayer or not player.UserId then return false end
 		local userId = player.UserId
@@ -73,6 +73,8 @@ return function(services: any)
 		return false
 	end
 
+	-- The whitelist matches either display name or UserId string, since
+	-- usernames can collide across servers
 	function TargetFilter:IsWhitelisted(player: Player): boolean
 		if not player or player == LocalPlayer then return false end
 		local whitelistMap = StateStore:Get("Settings.Whitelist")
@@ -101,9 +103,10 @@ return function(services: any)
 		local targetPos = targetPart.Position
 		local direction = targetPos - origin
 
+		-- Targets closer than this are always treated as visible; a short ray
+		-- is more likely to clip into the local character than to reveal a wall
 		if direction.Magnitude < 0.5 then return true end
 
-		-- Update filter array only when local character model instance changes
 		local myAssets = PlayerTracker:GetLocalAssets()
 		local myChar = myAssets and myAssets.Character
 		if myChar ~= lastLocalCharacter then
@@ -117,6 +120,7 @@ return function(services: any)
 			return true
 		end
 
+		-- A hit inside the target's own character counts as visible
 		local hitInstance = result.Instance
 		if hitInstance:IsDescendantOf(targetPart.Parent) or hitInstance == targetPart then
 			return true

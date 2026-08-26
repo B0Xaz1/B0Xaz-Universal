@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Combat & Targeting UI Tab
--- Declarative view-model binding for Aimbot, WindMouse physics, FOV circle,
--- target verification rules, lead prediction, and triggerbot parameters.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any, tab: any)
 	local ThemeEngine = services:Get("ThemeEngine")
@@ -17,7 +12,6 @@ return function(services: any, tab: any)
 	local Keybind = Require("B0XazUniversal/src/UI/Components/Keybind.luau", services)
 	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
-	-- Section Helper
 	local function createSection(parent: Instance, title: string): Frame
 		local secFrame = DOM.Create("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
@@ -68,10 +62,8 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: Core Aimbot & FOV Customization
-	-- ─────────────────────────────────────────────────────────────────────────
 	local aimbotSec = createSection(tab.LeftCol, "Aimbot Controls")
+	-- Tier 3 gates refuse the toggle itself, so the UI and the service agree
 	Toggle.new(aimbotSec, "Aimbot Enabled", "Aimbot.Enabled", nil, 3)
 	Toggle.new(aimbotSec, "Use Camera Lock (CFrame)", "Aimbot.UseCamera", nil, 3)
 	Keybind.new(aimbotSec, "Activation Bind", "Aimbot.Keybind")
@@ -90,9 +82,6 @@ return function(services: any, tab: any)
 	Slider.new(fovSec, "FOV Radius", 10, 600, "Aimbot.FOV.Size", 5, " px")
 	Slider.new(fovSec, "Line Thickness", 1, 10, "Aimbot.FOV.Thickness", 1)
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: Target Validation, Prediction & Triggerbot
-	-- ─────────────────────────────────────────────────────────────────────────
 	local filterSec = createSection(tab.RightCol, "Target Settings")
 	Toggle.new(filterSec, "Team Check", "Aimbot.TeamCheck")
 	Toggle.new(filterSec, "Ignore Friends", "Aimbot.FriendCheck")

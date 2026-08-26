@@ -1,7 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - High-Performance Pub/Sub EventBus
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type Connection = {
 	Connected: boolean,
@@ -29,6 +26,8 @@ function EventBus.new(disposer: any?)
 	return self
 end
 
+-- Handlers are stored in a doubly-linked list so disconnecting one handler
+-- never requires touching the rest of the list.
 function EventBus:Subscribe(eventName: string, handler: (...any) -> ()): Connection
 	local list = self._events[eventName]
 	if not list then
@@ -79,6 +78,8 @@ function EventBus:Subscribe(eventName: string, handler: (...any) -> ()): Connect
 	return connection
 end
 
+-- Handlers run through task.spawn so a single throwing handler can never
+-- take down the publisher or skip the remaining handlers.
 function EventBus:Publish(eventName: string, ...: any)
 	local list = self._events[eventName]
 	if not list or not list.head then return end
@@ -104,7 +105,6 @@ function EventBus:Dispose()
 	table.clear(self._events)
 end
 
--- Factory Wrapper
 return function(disposer: any?)
 	return EventBus.new(disposer)
 end

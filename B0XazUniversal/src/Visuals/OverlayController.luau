@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Visual Overlay Controller
--- Zero-allocation FOV pulse circle, pre-computed trigonometric speed lines,
--- and low-overhead dirty-checked FPS & Ping telemetry displays.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
@@ -18,9 +13,7 @@ type SpeedLine = {
 return function(services: any)
 	local StateStore = services:Get("StateStore")
 	local TaskScheduler = services:Get("TaskScheduler")
-	local Disposer = services:Get("Disposer")
 	local DrawingPool = services:Get("DrawingPool")
-	local Environment = services:Get("Environment")
 
 	local OverlayController = {
 		_fovCircle = nil :: any,
@@ -33,16 +26,14 @@ return function(services: any)
 		_pingTimer = 0,
 		_fpsCount = 0,
 		_fovPulseAngle = 0,
-		_fovHue = 0,
 	}
 
 	local function isMobile(): boolean
 		return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Speed Lines Generator (Pre-computed Trigonometry)
-	-- ─────────────────────────────────────────────────────────────────────────
+	-- Lines are pre-allocated with random directions; each frame they move
+	-- outward and respawn inward, so the effect has a constant memory cost.
 	local function initSpeedLines()
 		if not DrawingPool.Available then return end
 		local LINE_COUNT = 30
@@ -62,14 +53,10 @@ return function(services: any)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Frame Render Updates
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function onRenderUpdate(dt: number)
 		local cam = Workspace.CurrentCamera
 		if not cam then return end
 
-		-- 1. Dynamic FOV Circle
 		local aimbotSettings = StateStore:Get("Aimbot")
 		local fovSettings = aimbotSettings and aimbotSettings.FOV
 		local isAimbotActive = aimbotSettings and aimbotSettings.Enabled and StateStore:HasPermission("Aimbot.Enabled")
@@ -80,7 +67,6 @@ return function(services: any)
 					and Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
 					or UserInputService:GetMouseLocation()
 
-				-- Pulse & Rainbow calculations
 				local radius = tonumber(fovSettings.Size) or 150
 				if fovSettings.Pulse then
 					OverlayController._fovPulseAngle += dt * 3
@@ -103,7 +89,6 @@ return function(services: any)
 			end
 		end
 
-		-- 2. Speed Lines FX
 		local drawSpeedLines = StateStore:Get("Extras.SpeedLines") == true
 		local center = Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
 
@@ -128,7 +113,7 @@ return function(services: any)
 			end
 		end
 
-		-- 3. Telemetry HUD (FPS & Ping)
+		-- Telemetry is sampled once per second instead of every frame
 		OverlayController._fpsCount += 1
 		OverlayController._fpsTimer += dt
 		if OverlayController._fpsTimer >= 1.0 then
@@ -147,6 +132,7 @@ return function(services: any)
 		OverlayController._pingTimer += dt
 		if OverlayController._pingTimer >= 1.0 then
 			OverlayController._pingTimer = 0
+			-- The stats item is missing on some servers, so the read is pcalled
 			pcall(function()
 				OverlayController._lastPing = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
 			end)

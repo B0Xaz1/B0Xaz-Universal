@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Reactive State Store & Tier Capability Gate
--- Manages persistent settings vs. transient state, enforces strict tier
--- permissions, and dispatches reactive change signals.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local DEFAULT_SETTINGS = {
 	Aimbot = {
@@ -93,6 +88,7 @@ local DEFAULT_SETTINGS = {
 		Hitbox = { Enabled = false, Size = 10 },
 		SpinBot = { Enabled = false, Speed = 20 },
 		SpeedLines = false,
+		AntiFling = { Enabled = false, Threshold = 300, SnapBack = true },
 	},
 	Performance = {
 		NoTextures = false,
@@ -107,21 +103,18 @@ local DEFAULT_SETTINGS = {
 		UIScale = 1.0,
 		MenuKeybind = Enum.KeyCode.RightShift,
 		UnloadKeybind = Enum.KeyCode.End,
-		ShowHotkeys = false,
 		ShowFPS = false,
 		ShowPing = false,
 		AntiAfk = false,
 		TpToMouse = false,
-		IncludeSelf = false,
 		Whitelist = {} :: { [string]: boolean },
 	},
 	Theme = {
 		ActivePreset = "Default Cyan",
-		CustomColors = {} :: { [string]: Color3 },
-	}
+	},
 }
 
--- Feature Capability Gates based on Key Tier
+-- Features that only unlock from a given key tier upward
 local TIER_REQUIREMENTS: { [string]: number } = {
 	["Aimbot.Enabled"] = 3,
 	["Aimbot.Triggerbot.Enabled"] = 3,
@@ -133,6 +126,7 @@ local TIER_REQUIREMENTS: { [string]: number } = {
 	["Movement.CFrameSpeed"] = 1,
 	["Extras.Hitbox.Enabled"] = 1,
 	["Extras.SpinBot.Enabled"] = 1,
+	["Extras.AntiFling.Enabled"] = 1,
 	["Visuals.Fullbright"] = 1,
 }
 
@@ -178,9 +172,6 @@ return function(eventBus: any, disposer: any)
 		_defaults = deepClone(DEFAULT_SETTINGS),
 	}
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Capability Resolution
-	-- ─────────────────────────────────────────────────────────────────────────
 	function StateStore:SetTier(tier: number)
 		self._currentTier = math.clamp(tonumber(tier) or 0, 0, 3)
 		eventBus:Publish("TierChanged", self._currentTier)
@@ -197,6 +188,8 @@ return function(eventBus: any, disposer: any)
 		return self._currentTier >= req
 	end
 
+	-- Forces locked features back off whenever the tier is downgraded so a
+	-- stale "true" in settings can never outlive the key that granted it.
 	function StateStore:EnforcePermissions()
 		if self._currentTier < 3 then
 			self:Set("Aimbot.Enabled", false)
@@ -218,13 +211,11 @@ return function(eventBus: any, disposer: any)
 			self:Set("Movement.InfJump", false)
 			self:Set("Extras.Hitbox.Enabled", false)
 			self:Set("Extras.SpinBot.Enabled", false)
+			self:Set("Extras.AntiFling.Enabled", false)
 			self:Set("Visuals.Fullbright", false)
 		end
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Nested Property Accessors
-	-- ─────────────────────────────────────────────────────────────────────────
 	local function navigate(root: any, path: string, createMissing: boolean?): (any, string)
 		local segments = string.split(path, ".")
 		local current = root
@@ -258,10 +249,15 @@ return function(eventBus: any, disposer: any)
 		local parent, key = navigate(self._settings, path, true)
 		local oldValue = parent[key]
 
-		if oldValue ~= value then
-			parent[key] = value
-			eventBus:Publish("StateChanged:" .. path, value, oldValue)
-			eventBus:Publish("StateChanged", path, value, oldValue)
+		-- Tables are stored by copy: callers frequently mutate a table they
+		-- obtained from Get and Set it back, which would compare equal by
+		-- reference and never emit a change signal.
+		local storedValue = typeof(value) == "table" and deepClone(value) or value
+
+		if oldValue ~= storedValue then
+			parent[key] = storedValue
+			eventBus:Publish("StateChanged:" .. path, storedValue, oldValue)
+			eventBus:Publish("StateChanged", path, storedValue, oldValue)
 			return true
 		end
 		return false
@@ -285,6 +281,12 @@ return function(eventBus: any, disposer: any)
 
 	function StateStore:GetSettingsSnapshot(): { [string]: any }
 		return deepClone(self._settings)
+	end
+
+	-- Public accessor for the defaults so services do not reach into the
+	-- internal clone directly.
+	function StateStore:GetDefaultSettings(): { [string]: any }
+		return deepClone(self._defaults)
 	end
 
 	function StateStore:LoadSettingsSnapshot(snapshot: { [string]: any })

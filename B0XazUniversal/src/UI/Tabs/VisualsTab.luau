@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Visuals & ESP UI Tab
--- Controls 2D skeletal rendering, bounding boxes, health bars, highlights,
--- world lighting parameters, and speed line overlays.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Lighting = game:GetService("Lighting")
 
@@ -21,6 +16,8 @@ return function(services: any, tab: any)
 	local ColorPicker = Require("B0XazUniversal/src/UI/Components/ColorPicker.luau", services)
 	local Components = Require("B0XazUniversal/src/UI/Components/Textbox.luau", services)
 
+	-- Lighting values are backed up only once, before the first change, so
+	-- toggling fullbright repeatedly never stacks backups.
 	local fullbrightBackup: { [string]: any }? = nil
 	local function setFullbright(enabled: boolean)
 		if enabled then
@@ -40,6 +37,7 @@ return function(services: any, tab: any)
 			Lighting.Ambient = fullbrightBackup.Ambient
 			Lighting.OutdoorAmbient = fullbrightBackup.OutdoorAmbient
 			Lighting.Brightness = fullbrightBackup.Brightness
+			-- NoShadows owns the shadow state if it is still active
 			if StateStore:Get("Performance.NoShadows") == true then
 				Lighting.GlobalShadows = false
 			else
@@ -102,9 +100,6 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Left Column: 2D ESP & Formatting
-	-- ─────────────────────────────────────────────────────────────────────────
 	local espMainSec = createSection(tab.LeftCol, "Player ESP")
 	Toggle.new(espMainSec, "Enable Player ESP", "ESP.Enabled", nil, 2)
 	Toggle.new(espMainSec, "Draw 2D Bounding Boxes", "ESP.Box")
@@ -126,9 +121,6 @@ return function(services: any, tab: any)
 	Toggle.new(espConfigSec, "Text Outlines", "ESP.Outline")
 	Toggle.new(espConfigSec, "Auto-Scaling Distance", "ESP.AutoScaling")
 
-	-- ─────────────────────────────────────────────────────────────────────────
-	-- Right Column: 3D Chams, World Lighting & Speedlines
-	-- ─────────────────────────────────────────────────────────────────────────
 	local chamsSec = createSection(tab.RightCol, "Player Chams (Highlights)")
 	Toggle.new(chamsSec, "Enable Highlights", "Chams.Enabled", nil, 2)
 	Toggle.new(chamsSec, "Use Player Team Color", "Chams.UseTeamColor")
@@ -142,8 +134,14 @@ return function(services: any, tab: any)
 		setFullbright(StateStore:Get("Visuals.Fullbright") == true)
 	end)
 
-	Slider.new(lightingSec, "Time of Day", 0, 24, math.floor(Lighting.ClockTime), 1, "h", function(timeVal)
+	-- Clock time is a live server property; the original is remembered so
+	-- unload restores the world's lighting schedule.
+	local originalClockTime = Lighting.ClockTime
+	Slider.new(lightingSec, "Time of Day", 0, 24, math.floor(originalClockTime), 1, "h", function(timeVal)
 		Lighting.ClockTime = timeVal
+	end)
+	Disposer:Add(function()
+		Lighting.ClockTime = originalClockTime
 	end)
 
 	local fxSec = createSection(tab.RightCol, "Visual Effects")

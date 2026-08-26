@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - High-Speed Triggerbot Subsystem
--- Evaluates cursor crosshairs against player hitboxes using O(1) spatial
--- validation, with customizable delay scheduling and native mouse click dispatch.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -24,6 +19,8 @@ return function(services: any)
 	}
 
 	local function executeClick()
+		-- Prefer the executor's native click when present; otherwise emulate
+		-- a full press/release pair through the virtual input manager
 		if mouse1click and typeof(mouse1click) == "function" then
 			pcall(mouse1click)
 		else
@@ -44,8 +41,11 @@ return function(services: any)
 			return
 		end
 
+		-- The configured delay gates both the pre-check and the actual click,
+		-- so the slider value is honored end to end
+		local delayTime = math.clamp(tonumber(triggerCfg.Delay) or 0.05, 0, 0.5)
 		local now = os.clock()
-		if TriggerbotService._isFiring or (now - TriggerbotService._lastTriggerTime) < 0.05 then
+		if TriggerbotService._isFiring or (now - TriggerbotService._lastTriggerTime) < delayTime then
 			return
 		end
 
@@ -77,7 +77,6 @@ return function(services: any)
 									TriggerbotService._isFiring = true
 									TriggerbotService._lastTriggerTime = now
 
-									local delayTime = math.clamp(tonumber(triggerCfg.Delay) or 0.05, 0, 0.5)
 									Disposer:Delay(delayTime, function()
 										if StateStore:Get("Aimbot.Triggerbot.Enabled") then
 											executeClick()

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Two-Way Config Sharing Modal
--- Supports direct JSON payload viewing, clipboard copying, and live JSON parsing
--- to import external configurations directly into the suite.
--- ══════════════════════════════════════════════════════════════════════════════
 
 return function(services: any)
 	local Environment = services:Get("Environment")
@@ -73,13 +68,15 @@ return function(services: any)
 			BackgroundColor3 = ThemeEngine:GetToken("Panel"),
 			BorderSizePixel = 0,
 			ScrollBarThickness = 3,
-			AutomaticCanvasSize = Enum.AutomaticSize.XY,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			Parent = modalFrame,
 		}, {
 			DOM.CreateStroke(ThemeEngine:GetToken("Border"), 1),
 			DOM.CreatePadding(6),
 		}) :: ScrollingFrame
 
+		-- The textbox auto-sizes vertically with word wrapping so long JSON
+		-- payloads stay scrollable instead of overflowing a fixed box.
 		local textBox = DOM.Create("TextBox", {
 			Text = initialJson or "",
 			PlaceholderText = "Paste configuration JSON string here to import...",
@@ -88,11 +85,12 @@ return function(services: any)
 			Font = Enum.Font.Code,
 			TextSize = 11,
 			ClearTextOnFocus = false,
-			TextWrapped = false,
+			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			Parent = scrollContainer,
 		}) :: TextBox
 
@@ -107,9 +105,8 @@ return function(services: any)
 				Padding = UDim.new(0, 8),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-		})
+		}) :: Frame
 
-		-- Copy Button
 		local copyBtn = DOM.Create("TextButton", {
 			Text = "Copy JSON to Clipboard",
 			Font = Enum.Font.Code,
@@ -126,6 +123,7 @@ return function(services: any)
 				Environment.SetClipboard(textBox.Text)
 				copyBtn.Text = "Copied!"
 				task.delay(1.5, function()
+					-- The button may already be gone by the time the timer fires
 					if copyBtn and copyBtn.Parent then
 						copyBtn.Text = "Copy JSON to Clipboard"
 					end
@@ -133,7 +131,6 @@ return function(services: any)
 			end
 		end)
 
-		-- Apply / Import Button
 		local importBtn = DOM.Create("TextButton", {
 			Text = "Import & Apply JSON",
 			Font = Enum.Font.Code,

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Reactive Theme Engine
--- Manages color token observers with O(1) auto-unbind on instance destruction,
--- WCAG contrast-compensated tone derivation, and structured preset definitions.
--- ══════════════════════════════════════════════════════════════════════════════
 
 export type ThemeTokens = {
 	Bg: Color3,
@@ -33,6 +28,8 @@ local STATUS_COLORS = {
 	Warning = Color3.fromRGB(230, 175, 70),
 }
 
+-- Properties that refreshInstanceColors considers when rescanning a root for
+-- colors that match a previous token value.
 local COLOR_PROPERTIES = {
 	"BackgroundColor3",
 	"TextColor3",
@@ -161,11 +158,12 @@ return function(services: any)
 		_roots = {} :: { Instance },
 	}
 
-	-- Initialize Current Tokens
 	for k, v in pairs(PRESETS["Default Cyan"]) do
 		ThemeEngine.Current[k] = v
 	end
 
+	-- AccentDark/AccentDim are derived by darkening the accent's HSV value so
+	-- a single user color update re-themes the whole accent family.
 	function ThemeEngine:DeriveAccentTones(baseAccent: Color3): (Color3, Color3)
 		local h, s, v = baseAccent:ToHSV()
 		local darkTone = Color3.fromHSV(h, math.clamp(s * 0.9, 0, 1), math.clamp(v * 0.7, 0, 1))
@@ -192,6 +190,9 @@ return function(services: any)
 		return copy
 	end
 
+	-- Rescans a subtree for properties whose value equals a previous token
+	-- color and rewrites them with the new token value. This covers the GUI
+	-- pieces that were colored imperatively instead of through BindToken.
 	local function refreshInstanceColors(instance: Instance, previousTokens: { [string]: Color3 })
 		local target = instance :: any
 		for _, property in ipairs(COLOR_PROPERTIES) do
@@ -218,6 +219,7 @@ return function(services: any)
 		for rootIndex = #self._roots, 1, -1 do
 			local root = self._roots[rootIndex]
 			if not root or not root.Parent then
+				-- Roots that were destroyed are pruned from the list in place
 				table.remove(self._roots, rootIndex)
 			else
 				refreshInstanceColors(root, previousTokens)
@@ -232,7 +234,8 @@ return function(services: any)
 		if not self._bindings[instance] then
 			self._bindings[instance] = {}
 
-			-- Auto unbind on instance destruction
+			-- The binding removes itself when the instance is destroyed so
+			-- the map never holds a reference to a dead GUI.
 			local destroyConn = instance.Destroying:Connect(function()
 				self._bindings[instance] = nil
 			end)
@@ -285,11 +288,15 @@ return function(services: any)
 					end
 				end
 			else
+				-- Setting to nil during pairs iteration is safe; the entry is
+				-- only dropped, never replaced.
 				self._bindings[instance] = nil
 			end
 		end
 	end
 
+	-- Loaded configs can specify a different preset than the session started
+	-- with, so the theme re-applies after every state hydration.
 	EventBus:Subscribe("StateHydrated", function()
 		local presetName = StateStore:Get("Theme.ActivePreset")
 		if typeof(presetName) == "string" and presetName ~= ThemeEngine.ActivePresetName then

@@ -1,9 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Prison Life Reactive Weapon Attributes Modifier
--- Modifies SpreadRadius, FireRate, AutoFire, and Range on all weapons
--- using event-driven container listeners with zero periodic polling.
--- ══════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 
@@ -20,6 +15,8 @@ return function(services: any, manifest: any)
 		_pluginDisposer = Disposer:CreateChild("WeaponModsDisposer"),
 	}
 
+	-- Originals are captured on first modification so RestoreAll can put each
+	-- weapon back to exactly the state the server had given it.
 	local function modifyInstance(obj: Instance)
 		local isNoSpread = StateStore:Get("Game.NoSpread") == true
 		local isFastFire = StateStore:Get("Game.FastFire") == true
@@ -54,8 +51,11 @@ return function(services: any, manifest: any)
 	function WeaponMods:ApplyToTool(tool: Tool)
 		if not manifest.PRISON_GUNS[tool.Name] then return end
 		modifyInstance(tool)
+		-- Spread and fire rate can live on child models inside the tool
 		for _, child in ipairs(tool:GetDescendants()) do
-			if child:GetAttribute("SpreadRadius") ~= nil or child:GetAttribute("FireRate") ~= nil or child:GetAttribute("AutoFire") ~= nil then
+			if child:GetAttribute("SpreadRadius") ~= nil
+				or child:GetAttribute("FireRate") ~= nil
+				or child:GetAttribute("AutoFire") ~= nil then
 				modifyInstance(child)
 			end
 		end
@@ -89,6 +89,14 @@ return function(services: any, manifest: any)
 	end
 
 	function WeaponMods:HookContainer(container: Instance?)
+		-- Drop entries whose container was destroyed so the map does not grow
+		-- across respawns (the connections themselves die with the instance).
+		for existingContainer in pairs(self._containerConns) do
+			if not existingContainer.Parent then
+				self._containerConns[existingContainer] = nil
+			end
+		end
+
 		if not container then return end
 		if self._containerConns[container] then
 			self._containerConns[container]:Disconnect()
@@ -96,6 +104,8 @@ return function(services: any, manifest: any)
 
 		self._containerConns[container] = container.ChildAdded:Connect(function(child)
 			if child:IsA("Tool") and manifest.PRISON_GUNS[child.Name] then
+				-- Deferring lets the game finish wiring the new tool's
+				-- attributes before we overwrite them.
 				task.defer(function() self:ApplyToTool(child) end)
 			end
 		end)
@@ -106,13 +116,15 @@ return function(services: any, manifest: any)
 			self:HookContainer(LocalPlayer:FindFirstChild("Backpack"))
 			self:HookContainer(LocalPlayer.Character)
 
-			LocalPlayer.CharacterAdded:Connect(function(char)
+			-- Tracked in the plugin disposer so the hook stops firing after
+			-- the plugin (or the suite) is destroyed.
+			self._pluginDisposer:Add(LocalPlayer.CharacterAdded:Connect(function(char)
 				self:HookContainer(char)
 				local bp = LocalPlayer:WaitForChild("Backpack", 5)
 				self:HookContainer(bp)
 				task.wait(0.5)
 				self:ScanAllWeapons()
-			end)
+			end))
 		end
 	end
 

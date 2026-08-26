@@ -1,7 +1,4 @@
 --!strict
--- ══════════════════════════════════════════════════════════════════════════════
--- B0XazUniversal - Multi-Phase Lifecycle Task Scheduler
--- ══════════════════════════════════════════════════════════════════════════════
 
 local RunService = game:GetService("RunService")
 
@@ -28,52 +25,43 @@ function TaskScheduler.new(disposer: any)
 	return self
 end
 
+-- Lower priority value runs first within a pipeline
 local function sortJobs(a: TaskJob, b: TaskJob): boolean
 	return a.Priority < b.Priority
 end
 
-function TaskScheduler:_bindEnginePipelines()
-	local steppedConn = RunService.Stepped:Connect(function(_, dt: number)
-		for _, job in ipairs(self._preSimJobs) do
+-- Each pipeline wraps every job call in pcall. A job that throws is
+-- permanently disabled instead of spamming an error every frame.
+local function makePipelineRunner(scheduler: any, jobs: { TaskJob }, label: string)
+	return function(dt: number)
+		for _, job in ipairs(jobs) do
 			if job.Enabled then
 				local ok, err = pcall(job.Callback, dt)
-				if not ok then job.Enabled = false warn("[Scheduler PreSim Error] " .. job.Name .. ": " .. tostring(err)) end
+				if not ok then
+					job.Enabled = false
+					warn("[Scheduler " .. label .. " Error] " .. job.Name .. ": " .. tostring(err))
+				end
 			end
 		end
-	end)
+	end
+end
+
+function TaskScheduler:_bindEnginePipelines()
+	local steppedConn = RunService.Stepped:Connect(makePipelineRunner(self, self._preSimJobs, "PreSim"))
 	self._disposer:Add(steppedConn)
 
-	local heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
-		for _, job in ipairs(self._heartbeatJobs) do
-			if job.Enabled then
-				local ok, err = pcall(job.Callback, dt)
-				if not ok then job.Enabled = false warn("[Scheduler Heartbeat Error] " .. job.Name .. ": " .. tostring(err)) end
-			end
-		end
-	end)
+	local heartbeatConn = RunService.Heartbeat:Connect(makePipelineRunner(self, self._heartbeatJobs, "Heartbeat"))
 	self._disposer:Add(heartbeatConn)
 
-	local renderConn = RunService.RenderStepped:Connect(function(dt: number)
-		for _, job in ipairs(self._renderJobs) do
-			if job.Enabled then
-				local ok, err = pcall(job.Callback, dt)
-				if not ok then job.Enabled = false warn("[Scheduler Render Error] " .. job.Name .. ": " .. tostring(err)) end
-			end
-		end
-	end)
+	local renderConn = RunService.RenderStepped:Connect(makePipelineRunner(self, self._renderJobs, "Render"))
 	self._disposer:Add(renderConn)
 
+	-- Camera jobs run through BindToRenderStep so they fire just after the
+	-- camera has been updated for the frame.
 	local CAMERA_BIND_KEY = "B0XazCameraOverride"
 	pcall(function() RunService:UnbindFromRenderStep(CAMERA_BIND_KEY) end)
 
-	RunService:BindToRenderStep(CAMERA_BIND_KEY, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
-		for _, job in ipairs(self._cameraJobs) do
-			if job.Enabled then
-				local ok, err = pcall(job.Callback, dt)
-				if not ok then job.Enabled = false warn("[Scheduler Camera Error] " .. job.Name .. ": " .. tostring(err)) end
-			end
-		end
-	end)
+	RunService:BindToRenderStep(CAMERA_BIND_KEY, Enum.RenderPriority.Camera.Value + 1, makePipelineRunner(self, self._cameraJobs, "Camera"))
 
 	self._disposer:Add(function()
 		pcall(function() RunService:UnbindFromRenderStep(CAMERA_BIND_KEY) end)
@@ -108,7 +96,6 @@ function TaskScheduler:RegisterCamera(name: string, priority: number, callback: 
 	return job
 end
 
--- Factory Wrapper
 return function(disposer: any)
 	return TaskScheduler.new(disposer)
 end
