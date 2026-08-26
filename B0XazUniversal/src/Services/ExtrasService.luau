@@ -29,9 +29,11 @@ return function(services: any)
 	local function restoreHitbox(player: Player, backup: HitboxBackup)
 		local part = backup.Part
 		if part and part.Parent then
-			part.Size = backup.Size
-			part.Transparency = backup.Transparency
-			part.CanCollide = backup.CanCollide
+			pcall(function()
+				part.Size = backup.Size
+				part.Transparency = backup.Transparency
+				part.CanCollide = backup.CanCollide
+			end)
 		end
 		ExtrasService._hitboxBackups[player] = nil
 	end
@@ -56,7 +58,10 @@ return function(services: any)
 			if player ~= LocalPlayer then
 				local assets = PlayerTracker:GetPlayerAssets(player)
 				local part = assets and assets.RootPart
-				if part and part.Parent then
+				if not part and player.Character then
+					part = player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				end
+				if part and part:IsA("BasePart") and part.Parent then
 					local backup = ExtrasService._hitboxBackups[player]
 					if backup and backup.Part ~= part then
 						restoreHitbox(player, backup)
@@ -71,9 +76,13 @@ return function(services: any)
 						}
 						ExtrasService._hitboxBackups[player] = backup
 					end
-					part.Size = expandedSize
-					part.Transparency = math.max(backup.Transparency, 0.5)
-					part.CanCollide = false
+					pcall(function()
+						part.Size = expandedSize
+						-- HumanoidRootPart is normally fully transparent. Keep the
+						-- expanded area visible so the feature is easy to verify.
+						part.Transparency = 0.5
+						part.CanCollide = false
+					end)
 				end
 			end
 		end
@@ -97,7 +106,9 @@ return function(services: any)
 		end
 
 		local speed = math.clamp(tonumber(StateStore:Get("Extras.SpinBot.Speed")) or 20, 1, 100)
-		root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(speed) * dt, 0)
+		-- The slider is expressed as degrees per frame at 60 FPS. Scale by
+		-- dt so the spin remains consistent across different frame rates.
+		root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(speed) * dt * 60, 0)
 	end
 
 	local function onHeartbeat(dt: number)
