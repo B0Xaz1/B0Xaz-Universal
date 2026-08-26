@@ -1,15 +1,15 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (Final Path Fix - Searching in 'Root/' folder)
+-- Init.lua (Updated to search inside the 'Root' folder)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
 local branch = env.B0XazRef or "main"
-local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/")
+local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/"
 
 local moduleCache = {}
 
 local function httpGet(url)
-	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(os.time())
+	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. os.time()
 	if game and game.HttpGet then return game:HttpGet(cacheBustUrl) end
 	local req = request or http_request or (syn and syn.request)
 	if req then
@@ -27,55 +27,43 @@ local function isValidLua(source)
 	return true
 end
 
-local function getCandidatePaths(relativePath)
-	local clean = relativePath:gsub("^%./", ""):gsub("^/", "")
-	-- We add "Root/" because your screenshot shows everything is inside that folder
-	return {
-		"Root/" .. clean, 
-		clean,
-		"src/" .. clean,
-		"Root/" .. clean:lower(),
-		clean:lower()
-	}
-end
-
 local function import(path)
-	if moduleCache[path] then return moduleCache[path] end
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
+	if moduleCache[cleanPath] then return moduleCache[cleanPath] end
 
-	local candidates = getCandidatePaths(path)
-	local source = nil
-	local matchedPath = nil
+	-- We specifically add "Root/" here because your screenshot shows that folder
+	local targetUrl = baseUrl .. "Root/" .. cleanPath
+	
+	print("[B0Xaz] Attempting: " .. targetUrl)
 
-	for _, candidate in ipairs(candidates) do
-		local targetUrl = baseUrl .. candidate
-		local ok, result = pcall(httpGet, targetUrl)
-		if ok and isValidLua(result) then
-			source = result
-			matchedPath = candidate
-			break
-		end
+	local ok, result = pcall(httpGet, targetUrl)
+	
+	-- Fallback: try without "Root/" just in case
+	if not ok or not isValidLua(result) then
+		targetUrl = baseUrl .. cleanPath
+		ok, result = pcall(httpGet, targetUrl)
 	end
 
-	if not source then
-		error("[B0Xaz] 404: Could not find '" .. path .. "' in Root/ or base folder. Check GitHub!")
+	if not ok or not isValidLua(result) then
+		error("[B0Xaz] 404: Could not find " .. cleanPath .. " on GitHub. URL Tried: " .. targetUrl)
 	end
 
-	print("[B0Xaz] Success: " .. matchedPath)
-	local chunk, err = loadstring(source, "@" .. matchedPath)
-	if not chunk then error(err) end
-	local ok, mod = pcall(chunk)
-	if not ok then error(mod) end
+	local chunk, compileErr = loadstring(result, "@" .. cleanPath)
+	if not chunk then error("[B0Xaz] Syntax Error: " .. tostring(compileErr)) end
 
-	moduleCache[path] = mod
-	return mod
+	local ok2, module = pcall(chunk)
+	if not ok2 then error("[B0Xaz] Runtime Error: " .. tostring(module)) end
+
+	moduleCache[cleanPath] = module
+	return module
 end
 
--- Start Logic
+-- Wait for Game
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then while not Players.LocalPlayer do task.wait(0.1) end end
 
-print("[B0Xaz] Loading Universal Suite...")
+print("[B0Xaz] Bootstrapping from Root folder...")
 
 -- 1. Core
 local Janitor = import("Core/Janitor.lua")
@@ -109,10 +97,12 @@ local ThemeEngine = import("UI/ThemeEngine.lua")
 local UIManager = import("UI/UIManager.lua")
 local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
+-- Teardown
 if env.B0XazActiveJanitor then pcall(function() env.B0XazActiveJanitor:Destroy() end) end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
 
+-- IoC
 local container = Container.new()
 container:Register("Janitor", masterJanitor)
 container:Register("Signal", Signal)
@@ -128,6 +118,7 @@ scheduler:Init()
 masterJanitor:Add(scheduler)
 container:Register("Scheduler", scheduler)
 
+-- Register all
 container:Register("AuthService", AuthService.new())
 local config = container:Register("ConfigService", ConfigService.new())
 container:Register("EntityService", EntityService.new())
@@ -151,7 +142,7 @@ local function startApp()
 end
 
 local auth = container:Get("AuthService")
-local authenticated = auth:LoadAndVerify()
+local authenticated, _, _ = auth:LoadAndVerify()
 
 if authenticated then
 	startApp()
