@@ -22,26 +22,25 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 	self._callback = callback
 	self._isBinding = false
 
-	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 24),
-		BackgroundTransparency = 1,
-		Parent = parent,
-	})
-
-	DOM.Create("TextLabel", {
+	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Keybind",
-		Font = Enum.Font.Code,
-		TextSize = 11,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -70, 1, 0),
-		Parent = self.Container,
+		Size = UDim2.new(1, -76, 1, 0),
 	})
 
+	self.Container = DOM.Create("Frame", {
+		Size = UDim2.new(1, 0, 0, 26),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	}, { labelView })
+
 	self.Button = DOM.Create("TextButton", {
-		Size = UDim2.fromOffset(65, 18),
-		Position = UDim2.new(1, -65, 0.5, -9),
+		Size = UDim2.fromOffset(65, 20),
+		Position = UDim2.new(1, -65, 0.5, -10),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = "[" .. formatBind(self._bind) .. "]",
@@ -52,8 +51,10 @@ function Keybind.new(parent, label, defaultBind, callback, themeEngine)
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.BorderDim, 1),
+		DOM.CreateCorner(6),
 	})
 
+	themeEngine:Bind(labelView, "TextColor3", "Text")
 	self._theme:Bind(self.Button, "BackgroundColor3", "Elem")
 
 	self.Button.MouseButton1Click:Connect(function()
