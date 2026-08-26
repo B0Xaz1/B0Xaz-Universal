@@ -24,22 +24,21 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 	self._callback = callback
 	self._expanded = false
 
-	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 24),
-		BackgroundTransparency = 1,
-		Parent = parent,
-	})
-
-	DOM.Create("TextLabel", {
+	local labelView = DOM.Create("TextLabel", {
 		Text = label or "Color",
-		Font = Enum.Font.Code,
-		TextSize = 11,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
 		TextColor3 = self._theme.Current.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, -30, 1, 0),
-		Parent = self.Container,
 	})
+
+	self.Container = DOM.Create("Frame", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	}, { labelView })
 
 	self.Preview = DOM.Create("TextButton", {
 		Size = UDim2.fromOffset(20, 16),
@@ -51,10 +50,11 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 		Parent = self.Container,
 	}, {
 		DOM.CreateStroke(self._theme.Current.Border, 1),
+		DOM.CreateCorner(4),
 	})
 
 	self.PaletteFrame = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 26),
 		Position = UDim2.new(0, 0, 1, 4),
 		BackgroundColor3 = self._theme.Current.Panel,
 		BorderSizePixel = 0,
@@ -62,6 +62,7 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 		ZIndex = 15,
 		Parent = self.Container,
 	}, {
+		DOM.CreateCorner(6),
 		DOM.CreateStroke(self._theme.Current.Border, 1),
 		DOM.Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -80,7 +81,10 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 			AutoButtonColor = false,
 			ZIndex = 16,
 			Parent = self.PaletteFrame,
-		}, { DOM.CreateStroke(Color3.fromRGB(40, 40, 40), 1) })
+		}, {
+			DOM.CreateStroke(Color3.fromRGB(40, 40, 40), 1),
+			DOM.CreateCorner(3),
+		})
 
 		btn.MouseButton1Click:Connect(function()
 			self:Set(col)
@@ -93,6 +97,8 @@ function ColorPicker.new(parent, label, defaultColor, callback, themeEngine)
 		self._expanded = not self._expanded
 		self.PaletteFrame.Visible = self._expanded
 	end)
+
+	themeEngine:Bind(labelView, "TextColor3", "Text")
 
 	return self
 end
