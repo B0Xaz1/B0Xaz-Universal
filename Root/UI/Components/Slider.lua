@@ -20,7 +20,7 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 	self._dragging = false
 
 	self.Container = DOM.Create("Frame", {
-		Size = UDim2.new(1, 0, 0, 36),
+		Size = UDim2.new(1, 0, 0, 44),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
@@ -56,7 +56,7 @@ function Slider.new(parent, label, defaultVal, min, max, callback, suffix, theme
 
 	self.Track = DOM.Create("TextButton", {
 		Size = UDim2.new(1, 0, 0, 12),
-		Position = UDim2.new(0, 0, 0, 20),
+		Position = UDim2.new(0, 0, 0, 24),
 		BackgroundColor3 = self._theme.Current.Elem,
 		BorderSizePixel = 0,
 		Text = "",
