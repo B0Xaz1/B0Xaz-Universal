@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- init.lua (Direct Path Executor Bootstrapper - No 'src/' Prefix)
+-- init.lua (Force-Updating & Debugging Bootstrapper)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
@@ -10,76 +10,91 @@ local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/t
 
 local moduleCache = {}
 
--- Safe HttpGet wrapper
+-- Polymorphic HttpGet with Forced Cache Invalidation
 local function httpGet(url)
+	-- Append aggressive cache-busting query parameter
+	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "nocache=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999))
+	
 	if game and game.HttpGet then
-		return game:HttpGet(url)
+		return game:HttpGet(cacheBustUrl)
 	end
+	
 	local req = request or http_request or (syn and syn.request)
 	if req then
-		local res = req({ Url = url, Method = "GET" })
+		local res = req({
+			Url = cacheBustUrl,
+			Method = "GET",
+			Headers = { ["Cache-Control"] = "no-cache, no-store, must-revalidate" }
+		})
 		return res and (res.Body or res.body)
 	end
-	error("No valid HttpGet capability found in executor.")
+	
+	error("No HttpGet capability available.")
 end
 
--- Validate Lua source code string
+-- Check if source code is valid Luau
 local function isValidLua(source)
 	if type(source) ~= "string" or #source < 10 then return false end
-	local lower = source:sub(1, 100):lower()
-	if lower:find("404: not found", 1, true) or lower:find("404 not found", 1, true) then return false end
-	if lower:find("<!doctype", 1, true) or lower:find("<html", 1, true) then return false end
+	local head = source:sub(1, 150):lower()
+	if head:find("404: not found", 1, true) or head:find("404 not found", 1, true) then return false end
+	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then return false end
 	return true
 end
 
--- Remote Virtual Module Loader
+-- Virtual Module Import Engine
 local function import(path)
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^src/", "")
+	
 	if moduleCache[cleanPath] then
 		return moduleCache[cleanPath]
 	end
 
-	local url = baseUrl .. cleanPath
+	local targetUrl = baseUrl .. cleanPath
+	print("[B0Xaz Debug] Fetching: " .. targetUrl)
+
 	local source = nil
+	local lastErr = "Unknown error"
 
 	for attempt = 1, 3 do
-		local requestUrl = url .. (attempt > 1 and ("?t=" .. os.time()) or "")
-		local ok, result = pcall(httpGet, requestUrl)
+		local ok, result = pcall(httpGet, targetUrl)
 		if ok and isValidLua(result) then
 			source = result
 			break
+		else
+			lastErr = tostring(result)
 		end
-		task.wait(0.05)
+		task.wait(0.1)
 	end
 
 	if not source then
-		error("[B0Xaz Loader] File 404 (Not Found on GitHub): " .. cleanPath .. " at " .. url)
+		warn("[B0Xaz Error] Failed link: " .. targetUrl)
+		error("[B0Xaz Loader] 404 Not Found on GitHub: '" .. cleanPath .. "'. Click the debug link above in console to verify file exists.")
 	end
 
 	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
 	if not chunk then
-		error("[B0Xaz Loader] Syntax error in " .. cleanPath .. ": " .. tostring(compileErr))
+		error("[B0Xaz Loader] Syntax Error in '" .. cleanPath .. "': " .. tostring(compileErr))
 	end
 
 	local ok, module = pcall(chunk)
 	if not ok then
-		error("[B0Xaz Loader] Runtime error in " .. cleanPath .. ": " .. tostring(module))
+		error("[B0Xaz Loader] Runtime Error in '" .. cleanPath .. "': " .. tostring(module))
 	end
 
 	moduleCache[cleanPath] = module
 	return module
 end
 
--- Wait for game environment readiness
+-- Ensure game environment readiness
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then
 	while not Players.LocalPlayer do task.wait(0.1) end
 end
 
-print("[B0Xaz] Loading Universal Suite Framework...")
+print("[B0Xaz] Framework Bootstrapping Starting...")
 
--- 1. Core Framework Modules
+-- 1. Core Framework
 local Janitor = import("Core/Janitor.lua")
 local Signal = import("Core/Signal.lua")
 local Container = import("Core/Container.lua")
@@ -111,7 +126,7 @@ local ThemeEngine = import("UI/ThemeEngine.lua")
 local UIManager = import("UI/UIManager.lua")
 local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
--- Teardown prior active sessions
+-- Clean up existing session
 if env.B0XazActiveJanitor then
 	pcall(function() env.B0XazActiveJanitor:Destroy() end)
 end
@@ -119,7 +134,7 @@ end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
 
--- Setup IoC Container
+-- Dependency Injection Setup
 local container = Container.new()
 container:Register("Janitor", masterJanitor)
 container:Register("Signal", Signal)
@@ -152,20 +167,19 @@ local games = container:Register("GameLoader", GameLoader.new())
 local theme = container:Register("ThemeEngine", ThemeEngine.new())
 local ui = container:Register("UIManager", UIManager.new())
 
--- Application Launcher Routine
+-- Application Launcher
 local function startApp()
 	print("[B0Xaz] Initializing services...")
 	container:InitAll()
 	container:StartAll()
 
-	-- Load Autoload Configuration
 	config:LoadProfile(Constants.AUTOLOAD_FILE or "_autoload")
 	config:StartAutosave(2.0)
 
-	print("[B0Xaz] ✓ Suite fully operational.")
+	print("[B0Xaz] ✓ Universal Hub loaded successfully.")
 end
 
--- Key Authentication Check
+-- Licensing Verification Check
 local authenticated, _, _ = auth:LoadAndVerify()
 
 if authenticated then
