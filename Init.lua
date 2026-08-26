@@ -1,6 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- init.lua (Smart Auto-Path Executor Bootstrapper)
--- Dynamically fetches and boots all modular framework components with 404 fallbacks
+-- init.lua (Direct Path Executor Bootstrapper - No 'src/' Prefix)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
@@ -33,55 +32,41 @@ local function isValidLua(source)
 	return true
 end
 
--- Fetch source code from URL with fallback retry logic
-local function fetchSource(relativePath)
-	local cleanPath = relativePath:gsub("^%./", ""):gsub("^/", "")
-	
-	-- Paths to attempt: primary provided path, then path with/without 'src/' prefix
-	local candidatePaths = { cleanPath }
-	if cleanPath:sub(1, 4) == "src/" then
-		table.insert(candidatePaths, cleanPath:sub(5))
-	else
-		table.insert(candidatePaths, "src/" .. cleanPath)
-	end
-
-	for _, path in ipairs(candidatePaths) do
-		local url = baseUrl .. path
-		for attempt = 1, 2 do
-			local requestUrl = url .. (attempt > 1 and ("?t=" .. os.time()) or "")
-			local ok, result = pcall(httpGet, requestUrl)
-			if ok and isValidLua(result) then
-				return result, path
-			end
-			task.wait(0.05)
-		end
-	end
-
-	return nil, cleanPath
-end
-
--- Remote / Virtual Module Loader
+-- Remote Virtual Module Loader
 local function import(path)
-	if moduleCache[path] then
-		return moduleCache[path]
+	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^src/", "")
+	if moduleCache[cleanPath] then
+		return moduleCache[cleanPath]
 	end
 
-	local source, resolvedPath = fetchSource(path)
+	local url = baseUrl .. cleanPath
+	local source = nil
+
+	for attempt = 1, 3 do
+		local requestUrl = url .. (attempt > 1 and ("?t=" .. os.time()) or "")
+		local ok, result = pcall(httpGet, requestUrl)
+		if ok and isValidLua(result) then
+			source = result
+			break
+		end
+		task.wait(0.05)
+	end
+
 	if not source then
-		error("[B0Xaz Loader] File not found on GitHub (404): " .. tostring(path))
+		error("[B0Xaz Loader] File 404 (Not Found on GitHub): " .. cleanPath .. " at " .. url)
 	end
 
-	local chunk, compileErr = loadstring(source, "@" .. resolvedPath)
+	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
 	if not chunk then
-		error("[B0Xaz Loader] Syntax error in " .. resolvedPath .. ": " .. tostring(compileErr))
+		error("[B0Xaz Loader] Syntax error in " .. cleanPath .. ": " .. tostring(compileErr))
 	end
 
 	local ok, module = pcall(chunk)
 	if not ok then
-		error("[B0Xaz Loader] Runtime error in " .. resolvedPath .. ": " .. tostring(module))
+		error("[B0Xaz Loader] Runtime error in " .. cleanPath .. ": " .. tostring(module))
 	end
 
-	moduleCache[path] = module
+	moduleCache[cleanPath] = module
 	return module
 end
 
@@ -143,6 +128,7 @@ container:Register("Crypto", Crypto)
 container:Register("MathUtil", MathUtil)
 container:Register("SpatialUtil", SpatialUtil)
 container:Register("HttpUtil", HttpUtil)
+container:Register("Import", import)
 
 local scheduler = Scheduler.new()
 scheduler:Init()
@@ -172,7 +158,7 @@ local function startApp()
 	container:InitAll()
 	container:StartAll()
 
-	-- Load Autoload Profile
+	-- Load Autoload Configuration
 	config:LoadProfile(Constants.AUTOLOAD_FILE or "_autoload")
 	config:StartAutosave(2.0)
 
