@@ -149,7 +149,11 @@ return function(services: any, tab: any)
 
 			for _, server in ipairs(serverData.data) do
 				if server.id ~= game.JobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then
-					Environment.QueueTeleport("loadstring(game:HttpGet('" .. tostring((getgenv and getgenv()).B0XazBaseURL or "") .. "init.luau'))()")
+					local globalEnv = (getgenv and getgenv()) or _G
+					local initUrl = tostring(globalEnv.B0XazInitURL or "")
+					if initUrl ~= "" then
+						Environment.QueueTeleport("loadstring(game:HttpGet('" .. initUrl .. "'))()")
+					end
 					pcall(function()
 						TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, Players.LocalPlayer)
 					end)

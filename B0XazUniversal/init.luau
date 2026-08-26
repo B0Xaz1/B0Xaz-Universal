@@ -9,12 +9,29 @@ local LOAD_TIMEOUT: number = 15
 local RETRY_ATTEMPTS: number = 3
 
 local globalEnv = (getgenv and getgenv()) or _G
-local sourceRef: string = tostring(globalEnv.B0XazRef or "Rewrite")
+local SOURCE_ROOT: string = "B0XazUniversal"
+local sourceRef: string = tostring(globalEnv.B0XazRef or "main")
 
-local BASE_URL: string = tostring(globalEnv.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/testmenu/" .. sourceRef .. "/"))
-if not BASE_URL:sub(-1):match("[/\\]") then
-	BASE_URL = BASE_URL .. "/"
+-- All source files, including this entry point, live under B0XazUniversal/.
+-- B0XazBaseURL may point either at the repository ref or directly at that
+-- folder; normalize both forms so every fetch uses the same root.
+local configuredBaseURL = globalEnv.B0XazBaseURL
+local BASE_URL: string
+if typeof(configuredBaseURL) == "string" and configuredBaseURL:gsub("%s+", "") ~= "" then
+	BASE_URL = configuredBaseURL
+else
+	BASE_URL = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. sourceRef .. "/" .. SOURCE_ROOT
 end
+-- Remove a trailing slash (and any accidental query string) before checking
+-- the folder name, then restore the slash required for URL concatenation.
+BASE_URL = (BASE_URL:match("^[^?#]*") or BASE_URL):gsub("[/\\]+$", "")
+if not BASE_URL:lower():match("/" .. SOURCE_ROOT:lower() .. "$") then
+	BASE_URL = BASE_URL .. "/" .. SOURCE_ROOT
+end
+BASE_URL = BASE_URL .. "/"
+-- Keep the resolved location available to the server-hop/teleport pipeline.
+globalEnv.B0XazBaseURL = BASE_URL
+globalEnv.B0XazInitURL = BASE_URL .. "init.luau"
 
 -- Session ID & Cleanup
 local currentSessionId: number = (tonumber(globalEnv.B0XazSessionId) or 0) + 1
