@@ -8,9 +8,9 @@ local DoorPhaser = require(script.Parent.DoorPhaser)
 local WeaponModder = require(script.Parent.WeaponModder)
 local MeleeController = require(script.Parent.MeleeController)
 
-local Toggle = require(script.Parent.Parent.Parent.UI.Components.Toggle)
-local Slider = require(script.Parent.Parent.Parent.UI.Components.Slider)
-local Button = require(script.Parent.Parent.Parent.UI.Components.Button)
+local Toggle = require(script.Parent.Parent.Parent.Parent.UI.Components.Toggle)
+local Slider = require(script.Parent.Parent.Parent.Parent.UI.Components.Slider)
+local Button = require(script.Parent.Parent.Parent.Parent.UI.Components.Button)
 
 local PrisonLifeAdapter = {}
 PrisonLifeAdapter.__index = PrisonLifeAdapter
@@ -20,6 +20,7 @@ function PrisonLifeAdapter.new()
 end
 
 function PrisonLifeAdapter:Init(container)
+	self._container = container
 	self._config = container:Get("ConfigService")
 	self._entity = container:Get("EntityService")
 	self._scheduler = container:Get("Scheduler")
@@ -46,7 +47,7 @@ end
 
 function PrisonLifeAdapter:BuildUI(tab)
 	local page = tab.Page
-	local theme = tab._theme
+	local theme = self._container:Get("ThemeEngine")
 
 	-- Gun Grabber Spawns
 	for name, pos in pairs(Manifest.GUN_SPAWNS) do

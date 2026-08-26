@@ -7,10 +7,38 @@ local branch = env.B0XazRef or "main"
 local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/Root/"
 
 local moduleCache = {}
+local nativeRequire = require
 
 local function httpGet(url)
 	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(math.random(1, 100000))
 	return game:HttpGet(cacheBustUrl)
+end
+
+-- Virtual Instance graph:
+-- Modules in the tree are written like real Roblox code, i.e. they pull
+-- siblings with require(script.Parent.Child.Module). Each loaded module gets
+-- a synthetic 'script' that mirrors the on-disk hierarchy, so those paths
+-- resolve to virtual paths and are routed back into import().
+local function makeVirtualNode(path, name)
+	local node = {}
+	node.__virtualPath = path
+	setmetatable(node, {
+		__index = function(_, key)
+			if key == "Name" then
+				return name
+			elseif key == "Parent" then
+				-- Only the Root folder itself (path "") parents into the game;
+				-- every top-level folder (Core, UI, Games, ...) parents into Root.
+				if path == "" then
+					return game
+				end
+				local parentPath = path:match("^(.+)/[^/]+$") or ""
+				return makeVirtualNode(parentPath, parentPath ~= "" and parentPath:match("[^/]+$") or "Root")
+			end
+			return makeVirtualNode(path .. "/" .. key, key)
+		end,
+	})
+	return node
 end
 
 -- Virtual Module Loader
@@ -39,10 +67,20 @@ local function import(path)
 
 	-- MAGIC INJECTION:
 	-- This replaces 'require' inside the module with our 'import' function
-	-- and provides a fake 'script' object so 'script.Parent' doesn't crash.
-	local proxyScript = { Parent = { Name = "Virtual" } }
+	-- and provides a synthetic 'script' that mirrors the on-disk hierarchy,
+	-- so require(script.Parent.Child.Module) resolves exactly like it would
+	-- in a real Roblox tree. Plain string paths and real Instances still work.
+	local proxyScript = makeVirtualNode(cleanPath, cleanPath:match("[^/]+$"))
 	setfenv(chunk, setmetatable({
-		require = import,
+		require = function(arg)
+			if type(arg) == "string" then
+				return import(arg)
+			end
+			if type(arg) == "table" and rawget(arg, "__virtualPath") then
+				return import(arg.__virtualPath)
+			end
+			return nativeRequire(arg)
+		end,
 		script = proxyScript,
 	}, { __index = getfenv(0) }))
 

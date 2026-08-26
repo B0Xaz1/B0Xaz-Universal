@@ -176,6 +176,11 @@ function Window:AddTab(name)
 		self:SelectTab(tab)
 	end)
 
+	-- Convenience forwarder so presenters can notify through the tab they own
+	tab.Notify = function(_, title, message, duration, color)
+		self:Notify(title, message, duration, color)
+	end
+
 	table.insert(self._tabs, tab)
 	if #self._tabs == 1 then
 		self:SelectTab(tab)
