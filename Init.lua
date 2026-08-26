@@ -1,74 +1,60 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- init.lua (Force-Updating & Debugging Bootstrapper)
+-- Init.lua (B0Xaz1/Rewrite Executor Bootstrapper)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
 
--- Base URL configuration
+-- Correct Base URL pointing to B0Xaz1/Rewrite
 local branch = env.B0XazRef or "main"
-local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/testmenu/" .. branch .. "/")
+local baseUrl = env.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/Rewrite/" .. branch .. "/")
 
 local moduleCache = {}
 
--- Polymorphic HttpGet with Forced Cache Invalidation
+-- Safe HttpGet with Cache-Busting
 local function httpGet(url)
-	-- Append aggressive cache-busting query parameter
-	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "nocache=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999))
-	
+	local cacheBustUrl = url .. (url:find("%?") and "&" or "?") .. "t=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999))
 	if game and game.HttpGet then
 		return game:HttpGet(cacheBustUrl)
 	end
-	
 	local req = request or http_request or (syn and syn.request)
 	if req then
-		local res = req({
-			Url = cacheBustUrl,
-			Method = "GET",
-			Headers = { ["Cache-Control"] = "no-cache, no-store, must-revalidate" }
-		})
+		local res = req({ Url = cacheBustUrl, Method = "GET" })
 		return res and (res.Body or res.body)
 	end
-	
-	error("No HttpGet capability available.")
+	error("No HttpGet capability found.")
 end
 
--- Check if source code is valid Luau
+-- Validate Lua source code string
 local function isValidLua(source)
 	if type(source) ~= "string" or #source < 10 then return false end
-	local head = source:sub(1, 150):lower()
-	if head:find("404: not found", 1, true) or head:find("404 not found", 1, true) then return false end
-	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then return false end
+	local lower = source:sub(1, 150):lower()
+	if lower:find("404: not found", 1, true) or lower:find("404 not found", 1, true) then return false end
+	if lower:find("<!doctype", 1, true) or lower:find("<html", 1, true) then return false end
 	return true
 end
 
--- Virtual Module Import Engine
+-- Virtual Module Loader
 local function import(path)
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", ""):gsub("^src/", "")
-	
 	if moduleCache[cleanPath] then
 		return moduleCache[cleanPath]
 	end
 
 	local targetUrl = baseUrl .. cleanPath
-	print("[B0Xaz Debug] Fetching: " .. targetUrl)
+	print("[B0Xaz] Fetching: " .. targetUrl)
 
 	local source = nil
-	local lastErr = "Unknown error"
-
 	for attempt = 1, 3 do
 		local ok, result = pcall(httpGet, targetUrl)
 		if ok and isValidLua(result) then
 			source = result
 			break
-		else
-			lastErr = tostring(result)
 		end
 		task.wait(0.1)
 	end
 
 	if not source then
-		warn("[B0Xaz Error] Failed link: " .. targetUrl)
-		error("[B0Xaz Loader] 404 Not Found on GitHub: '" .. cleanPath .. "'. Click the debug link above in console to verify file exists.")
+		error("[B0Xaz Loader] 404 File Not Found on GitHub: '" .. cleanPath .. "'\nURL: " .. targetUrl)
 	end
 
 	local chunk, compileErr = loadstring(source, "@" .. cleanPath)
@@ -85,14 +71,14 @@ local function import(path)
 	return module
 end
 
--- Ensure game environment readiness
+-- Wait for game environment readiness
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then
 	while not Players.LocalPlayer do task.wait(0.1) end
 end
 
-print("[B0Xaz] Framework Bootstrapping Starting...")
+print("[B0Xaz] Loading Framework from B0Xaz1/Rewrite...")
 
 -- 1. Core Framework
 local Janitor = import("Core/Janitor.lua")
@@ -134,7 +120,7 @@ end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
 
--- Dependency Injection Setup
+-- Setup Container
 local container = Container.new()
 container:Register("Janitor", masterJanitor)
 container:Register("Signal", Signal)
@@ -176,10 +162,10 @@ local function startApp()
 	config:LoadProfile(Constants.AUTOLOAD_FILE or "_autoload")
 	config:StartAutosave(2.0)
 
-	print("[B0Xaz] ✓ Universal Hub loaded successfully.")
+	print("[B0Xaz] ✓ Suite fully operational.")
 end
 
--- Licensing Verification Check
+-- Key Authentication Check
 local authenticated, _, _ = auth:LoadAndVerify()
 
 if authenticated then
