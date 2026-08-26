@@ -1,9 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Init.lua (V2 ACTIVE - DEBUG VERSION)
+-- Init.lua (Matches Screenshot: Init at Root, Modules in Root/ folder)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local env = (getgenv and getgenv()) or _G
--- I am hardcoding 'Root/' into the base URL so it cannot fail.
 local baseUrl = "https://raw.githubusercontent.com/B0Xaz1/Rewrite/main/Root/"
 
 local moduleCache = {}
@@ -12,16 +11,16 @@ local function import(path)
 	local cleanPath = path:gsub("^%./", ""):gsub("^/", "")
 	if moduleCache[cleanPath] then return moduleCache[cleanPath] end
 
-	-- This URL construction is now absolute
+	-- Based on screenshot: baseUrl points to /Root/ 
+	-- So import("Core/Janitor.lua") becomes .../main/Root/Core/Janitor.lua
 	local targetUrl = baseUrl .. cleanPath .. "?t=" .. tostring(math.random(1, 100000))
 	
-	-- Note: Using [V2] so you know for sure the new script is running
-	print("[B0Xaz V2] Attempting: " .. targetUrl)
+	print("[B0Xaz] Loading: " .. targetUrl)
 
 	local ok, result = pcall(function() return game:HttpGet(targetUrl) end)
 	
 	if not ok or result:find("404: Not Found") or #result < 10 then
-		error("[B0Xaz] 404: File not found at " .. targetUrl)
+		error("[B0Xaz] 404: File not found. Verify repository is PUBLIC and path is correct: " .. targetUrl)
 	end
 
 	local chunk, compileErr = loadstring(result, "@" .. cleanPath)
@@ -39,7 +38,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 if not Players.LocalPlayer then while not Players.LocalPlayer do task.wait(0.1) end end
 
-print("[B0Xaz V2] Starting Framework...")
+print("[B0Xaz] Starting Universal Suite...")
 
 -- 1. Core
 local Janitor = import("Core/Janitor.lua")
@@ -73,7 +72,7 @@ local ThemeEngine = import("UI/ThemeEngine.lua")
 local UIManager = import("UI/UIManager.lua")
 local AuthModal = import("UI/Components/Modals/AuthModal.lua")
 
--- Global Cleanup
+-- Setup Session
 if env.B0XazActiveJanitor then pcall(function() env.B0XazActiveJanitor:Destroy() end) end
 local masterJanitor = Janitor.new()
 env.B0XazActiveJanitor = masterJanitor
@@ -117,7 +116,7 @@ local authenticated, _, _ = auth:LoadAndVerify()
 local function launch()
 	config:LoadProfile("_autoload")
 	config:StartAutosave(2.0)
-	print("[B0Xaz V2] ✓ Success.")
+	print("[B0Xaz] ✓ Suite Loaded.")
 end
 
 if authenticated then
