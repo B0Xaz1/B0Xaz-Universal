@@ -8,6 +8,7 @@ local Dropdown = require(script.Parent.Parent.Components.Dropdown)
 local Keybind = require(script.Parent.Parent.Components.Keybind)
 local Button = require(script.Parent.Parent.Components.Button)
 local ExportModal = require(script.Parent.Parent.Components.Modals.ExportModal)
+local Section = require(script.Parent.Parent.Components.Section)
 
 local SettingsPresenter = {}
 
@@ -17,6 +18,7 @@ function SettingsPresenter.Build(tab, container, themeEngine)
 	local page = tab.Page
 
 	-- Profile Directory Dropdown
+	Section.new(page, "Profiles", themeEngine)
 	local dropdownProfiles
 	dropdownProfiles = Dropdown.new(page, "Select Profile File", config:GetSavedProfiles(), function(v)
 		-- Selected profile handler
@@ -47,6 +49,7 @@ function SettingsPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- Interface Modifications
+	Section.new(page, "Interface", themeEngine)
 	Keybind.new(page, "Menu Toggle Hotkey", config:Get("Settings.MenuKeybind"), function(k)
 		config:Set("Settings.MenuKeybind", k)
 	end, themeEngine)
@@ -60,6 +63,7 @@ function SettingsPresenter.Build(tab, container, themeEngine)
 	end, themeEngine)
 
 	-- Design Theme Presets
+	Section.new(page, "Theme", themeEngine)
 	local presets = {}
 	for name in pairs(themeEngine.Presets) do table.insert(presets, name) end
 	table.sort(presets)
@@ -69,6 +73,7 @@ function SettingsPresenter.Build(tab, container, themeEngine)
 	end, themeEngine.ActivePreset, themeEngine)
 
 	-- Licensing Verifications
+	Section.new(page, "License", themeEngine)
 	Button.new(page, "Active License Level: " .. auth:GetTierName(), function() end, themeEngine)
 end
 
