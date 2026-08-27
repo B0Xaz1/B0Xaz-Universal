@@ -411,7 +411,6 @@ return function(services: any)
 		_use2022Snapshot = nil :: boolean?,
 		_effects = {} :: { Instance },
 		_reflectanceCache = {} :: { [BasePart]: number },
-		_lightCache = {} :: { [Instance]: { Brightness: number, Shadows: boolean } },
 		_cycleJob = nil :: any,
 		_staticJob = nil :: any,
 		_descendantConn = nil :: RBXScriptConnection?,
@@ -643,20 +642,6 @@ return function(services: any)
 		end
 	end
 
-	local function upgradeLight(instance: Instance)
-		if not instance:IsA("Light") then return end
-		local light = instance :: Light
-
-		if LightingService._lightCache[light] == nil then
-			LightingService._lightCache[light] = { Brightness = light.Brightness, Shadows = light.Shadows }
-		end
-
-		light.Shadows = true
-		-- Mild boost only, capped both multiplicatively and additively so
-		-- already-bright map lights do not turn into white blobs.
-		light.Brightness = math.min(light.Brightness * 1.1, light.Brightness + 0.5)
-	end
-
 	local function restoreWorldRemaster()
 		for part, reflectance in pairs(LightingService._reflectanceCache) do
 			if part and part.Parent then
@@ -666,31 +651,13 @@ return function(services: any)
 			end
 		end
 		table.clear(LightingService._reflectanceCache)
-
-		for light, original in pairs(LightingService._lightCache) do
-			if light and light.Parent then
-				pcall(function()
-					local typedLight = light :: Light
-					typedLight.Brightness = original.Brightness
-					typedLight.Shadows = original.Shadows
-				end)
-			end
-		end
-		table.clear(LightingService._lightCache)
 	end
 
 	local function applyWorldRemaster()
-		local remasterMaterials = StateStore:Get("Lighting.RemasterMaterials") == true
-		local upgradeLights = StateStore:Get("Lighting.UpgradeMapLights") == true
-		if not remasterMaterials and not upgradeLights then return end
+		if StateStore:Get("Lighting.RemasterMaterials") ~= true then return end
 
 		for _, descendant in ipairs(Workspace:GetDescendants()) do
-			if remasterMaterials then
-				remasterPart(descendant)
-			end
-			if upgradeLights then
-				upgradeLight(descendant)
-			end
+			remasterPart(descendant)
 		end
 
 		-- Late-arriving objects go through the same cached path, so restore
@@ -698,9 +665,6 @@ return function(services: any)
 		local conn = Workspace.DescendantAdded:Connect(function(descendant: Instance)
 			if StateStore:Get("Lighting.RemasterMaterials") == true then
 				remasterPart(descendant)
-			end
-			if StateStore:Get("Lighting.UpgradeMapLights") == true then
-				upgradeLight(descendant)
 			end
 		end)
 		LightingService._descendantConn = conn
@@ -1015,7 +979,6 @@ return function(services: any)
 			applyWorldRemaster()
 		end
 		StateStore:Observe("Lighting.RemasterMaterials", reapplyRemaster)
-		StateStore:Observe("Lighting.UpgradeMapLights", reapplyRemaster)
 
 		-- Loading a config profile replays the saved mode
 		EventBus:Subscribe("StateHydrated", function()

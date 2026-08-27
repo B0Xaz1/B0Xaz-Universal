@@ -171,7 +171,6 @@ return function(services: any, tab: any)
 	local startHourSlider = Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
 	local freezeToggle = Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
 	Toggle.new(cineSec, "Remaster Part Materials", "Lighting.RemasterMaterials")
-	Toggle.new(cineSec, "Upgrade Map Lights", "Lighting.UpgradeMapLights")
 
 	local function refreshCycleRows()
 		local isDynamic = StateStore:Get("Lighting.Mode") == "Dynamic"

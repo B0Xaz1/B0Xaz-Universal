@@ -90,7 +90,6 @@ local DEFAULT_SETTINGS = {
 		PresetBrightness = 100,
 		Vignette = true,
 		RemasterMaterials = true,
-		UpgradeMapLights = true,
 	},
 	Extras = {
 		Hitbox = { Enabled = false, Size = 10 },
