@@ -1,13 +1,3 @@
--- Cinematic lighting engine.
---
--- Dynamic mode drives a 24-hour keyframed day/night cycle across Lighting,
--- Atmosphere, Clouds, and the post-process stack. Static mode pins a single
--- golden-hour profile and re-asserts it once a second so game scripts cannot
--- quietly undo it. Every property this service writes is snapshotted before
--- the first write and rolled back by Restore(), so switching the mode back to
--- Off (or unloading the suite) leaves the game's original lighting exactly as
--- it was found.
-
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local MaterialService = game:GetService("MaterialService")
@@ -370,10 +360,6 @@ return function(services: any)
 		return Workspace:FindFirstChildOfClass("Terrain")
 	end
 
-	----------------------------------------------------------------------
-	-- Snapshot / restore
-	----------------------------------------------------------------------
-
 	-- Taken once, on the first apply. A second apply (mode switch while
 	-- already active) must not overwrite it with already-modified values.
 	local function takeSnapshot()
@@ -452,10 +438,6 @@ return function(services: any)
 			LightingService._use2022Snapshot = nil
 		end
 	end
-
-	----------------------------------------------------------------------
-	-- Effect instances
-	----------------------------------------------------------------------
 
 	-- Effects are created under a B0Xaz-prefixed name and tracked so the
 	-- restore path destroys ours without touching the game's own effects.
@@ -552,10 +534,6 @@ return function(services: any)
 		end
 	end
 
-	----------------------------------------------------------------------
-	-- World remaster (materials + map lights)
-	----------------------------------------------------------------------
-
 	-- Bright, near-white parts get their reflectance pulled down instead of
 	-- up; boosting them is what makes white surfaces bloom into a haze.
 	local function remasterPart(instance: Instance)
@@ -642,10 +620,6 @@ return function(services: any)
 		LightingService._descendantConn = conn
 		Disposer:Bind("B0XazLightingDescendants", conn)
 	end
-
-	----------------------------------------------------------------------
-	-- Dynamic mode
-	----------------------------------------------------------------------
 
 	local colorCorrection: ColorCorrectionEffect? = nil
 	local bloom: BloomEffect? = nil
@@ -764,10 +738,6 @@ return function(services: any)
 		end
 	end
 
-	----------------------------------------------------------------------
-	-- Static mode
-	----------------------------------------------------------------------
-
 	-- Re-asserting the core Lighting values keeps a game's own day/night
 	-- script from silently walking the preset back. Post-process effects
 	-- are not re-applied here; nothing else writes to instances we own.
@@ -812,10 +782,6 @@ return function(services: any)
 			applyProperties(terrain, STATIC_PROFILE.Water)
 		end
 	end
-
-	----------------------------------------------------------------------
-	-- Public API
-	----------------------------------------------------------------------
 
 	function LightingService:SetTime(clockTime: number)
 		self.CurrentTime = math.clamp(clockTime, 0, 24) % 24

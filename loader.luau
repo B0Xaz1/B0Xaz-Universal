@@ -1,10 +1,3 @@
--- B0Xaz Universal — branch loader
--- Launches the build on branch: arena/01a044ee-b0xaz-universal
--- (Performance tab: Performance Boosters + On-Screen Telemetry moved out of Utility)
---
--- Paste this whole file into your executor, or use the one-line version:
---   loadstring(game:HttpGet("https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/arena/01a044ee-b0xaz-universal/loader.luau"))()
-
 local BRANCH = "arena/01a044ee-b0xaz-universal"
 local BASE = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/" .. BRANCH
 
