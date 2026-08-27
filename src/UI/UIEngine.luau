@@ -607,7 +607,7 @@ return function(services: any)
 
 		local tabFiles = {
 			{ Path = "src/UI/Tabs/CombatTab.luau", Tier = 3 },
-			{ Path = "src/UI/Tabs/VisualsTab.luau", Tier = 2 },
+			{ Path = "src/UI/Tabs/VisualsTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/MovementTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/PlayersTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/UtilityTab.luau", Tier = 1 },
