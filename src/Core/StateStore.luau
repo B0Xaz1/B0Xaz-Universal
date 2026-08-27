@@ -125,6 +125,8 @@ local DEFAULT_SETTINGS = {
 			LightingMode = false,
 			Menu = false,
 		},
+		RestoreOnLaunch = true,
+		StartupProfile = "None",
 		AntiAfk = false,
 		TpToMouse = false,
 		Whitelist = {} :: { [string]: boolean },

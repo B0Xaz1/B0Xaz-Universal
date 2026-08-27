@@ -310,8 +310,8 @@ local function bootstrap()
 		trace("Constructing interface")
 		UIEngine:ConstructInterface()
 		trace("Interface constructed")
-		trace("Loading autoload configuration")
-		ConfigService:LoadAutoload()
+		trace("Applying launch configuration")
+		ConfigService:ApplyLaunchState()
 		print("[B0Xaz] Interface & Systems Ready.")
 	end
 

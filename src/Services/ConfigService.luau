@@ -168,6 +168,52 @@ return function(services: any)
 		return true, nil
 	end
 
+	-- The launch preferences live inside the autosaved session file, so they
+	-- have to be readable without applying that file to the running state.
+	function ConfigService:ReadRawAutoload(): any
+		local content = Environment.ReadFile(getFilePath(AUTOLOAD_FILENAME))
+		if not content or content == "" then return nil end
+		local ok, data = pcall(HttpService.JSONDecode, HttpService, content)
+		if ok and typeof(data) == "table" then return data end
+		return nil
+	end
+
+	function ConfigService:ProfileExists(profileName: string): boolean
+		if profileName == "" or profileName == "None" then return false end
+		if profileName:lower() == "default" then return true end
+		local content = Environment.ReadFile(getFilePath(profileName))
+		return content ~= nil and content ~= ""
+	end
+
+	-- Decides what the injection starts from: a pinned profile wins over the
+	-- autosaved session, and either can be turned off entirely.
+	function ConfigService:ApplyLaunchState(): string
+		local raw = self:ReadRawAutoload()
+		local prefs = (typeof(raw) == "table" and typeof(raw.Settings) == "table") and raw.Settings or {}
+
+		if prefs.RestoreOnLaunch == false then
+			-- Nothing is applied, but the preference itself must survive the
+			-- next autosave or it would silently switch itself back on.
+			StateStore:Set("Settings.RestoreOnLaunch", false)
+			if typeof(prefs.StartupProfile) == "string" then
+				StateStore:Set("Settings.StartupProfile", prefs.StartupProfile)
+			end
+			return "Skipped"
+		end
+
+		local startup = prefs.StartupProfile
+		if typeof(startup) == "string" and self:ProfileExists(startup) then
+			local ok = self:Load(startup)
+			if ok then
+				StateStore:Set("Settings.StartupProfile", startup)
+				return startup
+			end
+		end
+
+		if self:LoadAutoload() then return "Session" end
+		return "Fresh"
+	end
+
 	function ConfigService:LoadAutoload(): boolean
 		local content = Environment.ReadFile(getFilePath(AUTOLOAD_FILENAME))
 		if not content or content == "" then return false end
