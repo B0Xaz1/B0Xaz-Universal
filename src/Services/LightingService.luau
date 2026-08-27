@@ -179,15 +179,15 @@ local STATIC_PROFILES: { [string]: any } = {
 local KEYFRAMES = {
 	{ -- Midnight
 		Time = 0,
-		Brightness = 3.2,
-		Ambient = Color3.fromRGB(94, 106, 140),
-		OutdoorAmbient = Color3.fromRGB(120, 136, 176),
-		ColorShiftTop = Color3.fromRGB(160, 190, 255),
-		ColorShiftBottom = Color3.fromRGB(44, 52, 86),
-		FogColor = Color3.fromRGB(56, 72, 120),
-		FogStart = 500,
-		FogEnd = 17000,
-		Exposure = 0.22,
+		Brightness = 4.2,
+		Ambient = Color3.fromRGB(132, 144, 176),
+		OutdoorAmbient = Color3.fromRGB(168, 182, 212),
+		ColorShiftTop = Color3.fromRGB(180, 205, 255),
+		ColorShiftBottom = Color3.fromRGB(66, 76, 110),
+		FogColor = Color3.fromRGB(82, 100, 148),
+		FogStart = 700,
+		FogEnd = 20000,
+		Exposure = 0.38,
 		Saturation = 0.06,
 		Contrast = 0.2,
 		TintColor = Color3.fromRGB(198, 214, 255),
@@ -319,15 +319,15 @@ local KEYFRAMES = {
 	},
 	{ -- Dusk / blue hour
 		Time = 19.0,
-		Brightness = 2.7,
-		Ambient = Color3.fromRGB(80, 82, 118),
-		OutdoorAmbient = Color3.fromRGB(102, 110, 160),
-		ColorShiftTop = Color3.fromRGB(142, 152, 226),
-		ColorShiftBottom = Color3.fromRGB(36, 42, 74),
-		FogColor = Color3.fromRGB(50, 60, 108),
-		FogStart = 400,
-		FogEnd = 15000,
-		Exposure = 0.14,
+		Brightness = 3.4,
+		Ambient = Color3.fromRGB(114, 120, 152),
+		OutdoorAmbient = Color3.fromRGB(146, 158, 194),
+		ColorShiftTop = Color3.fromRGB(165, 180, 240),
+		ColorShiftBottom = Color3.fromRGB(56, 64, 96),
+		FogColor = Color3.fromRGB(74, 88, 132),
+		FogStart = 600,
+		FogEnd = 18000,
+		Exposure = 0.3,
 		Saturation = 0.05,
 		Contrast = 0.16,
 		TintColor = Color3.fromRGB(200, 212, 255),
@@ -347,15 +347,15 @@ local KEYFRAMES = {
 	},
 	{ -- Midnight again, so hour 23.x interpolates back into hour 0
 		Time = 24.0,
-		Brightness = 3.2,
-		Ambient = Color3.fromRGB(94, 106, 140),
-		OutdoorAmbient = Color3.fromRGB(120, 136, 176),
-		ColorShiftTop = Color3.fromRGB(160, 190, 255),
-		ColorShiftBottom = Color3.fromRGB(44, 52, 86),
-		FogColor = Color3.fromRGB(56, 72, 120),
-		FogStart = 500,
-		FogEnd = 17000,
-		Exposure = 0.22,
+		Brightness = 4.2,
+		Ambient = Color3.fromRGB(132, 144, 176),
+		OutdoorAmbient = Color3.fromRGB(168, 182, 212),
+		ColorShiftTop = Color3.fromRGB(180, 205, 255),
+		ColorShiftBottom = Color3.fromRGB(66, 76, 110),
+		FogColor = Color3.fromRGB(82, 100, 148),
+		FogStart = 700,
+		FogEnd = 20000,
+		Exposure = 0.38,
 		Saturation = 0.06,
 		Contrast = 0.2,
 		TintColor = Color3.fromRGB(198, 214, 255),
@@ -430,6 +430,16 @@ return function(services: any)
 		pcall(function()
 			uiEngine:Notify(title, text, 2.5, color)
 		end)
+	end
+
+	-- Scales a profile colour without letting any channel clip past white,
+	-- which is what would reintroduce the white-surface glow.
+	local function scaleColor(color: Color3, scale: number): Color3
+		return Color3.new(
+			math.clamp(color.R * scale, 0, 1),
+			math.clamp(color.G * scale, 0, 1),
+			math.clamp(color.B * scale, 0, 1)
+		)
 	end
 
 	local function getTerrain(): Terrain?
@@ -760,15 +770,18 @@ return function(services: any)
 		-- Kept below 1 on purpose: full specular is a white-blowout source
 		Lighting.EnvironmentSpecularScale = 0.7
 
-		Lighting.Brightness = lerpNumber(first.Brightness, second.Brightness, alpha)
-		Lighting.Ambient = first.Ambient:Lerp(second.Ambient, alpha)
-		Lighting.OutdoorAmbient = first.OutdoorAmbient:Lerp(second.OutdoorAmbient, alpha)
+		-- Same user trim the static presets honour, so one slider controls
+		-- the exposure of every cinematic mode.
+		local trim = (tonumber(StateStore:Get("Lighting.PresetBrightness")) or 100) / 100
+		Lighting.Brightness = lerpNumber(first.Brightness, second.Brightness, alpha) * trim
+		Lighting.Ambient = scaleColor(first.Ambient:Lerp(second.Ambient, alpha), trim)
+		Lighting.OutdoorAmbient = scaleColor(first.OutdoorAmbient:Lerp(second.OutdoorAmbient, alpha), trim)
 		Lighting.ColorShift_Top = first.ColorShiftTop:Lerp(second.ColorShiftTop, alpha)
 		Lighting.ColorShift_Bottom = first.ColorShiftBottom:Lerp(second.ColorShiftBottom, alpha)
 		Lighting.FogColor = first.FogColor:Lerp(second.FogColor, alpha)
 		Lighting.FogStart = lerpNumber(first.FogStart, second.FogStart, alpha)
 		Lighting.FogEnd = lerpNumber(first.FogEnd, second.FogEnd, alpha)
-		Lighting.ExposureCompensation = lerpNumber(first.Exposure, second.Exposure, alpha)
+		Lighting.ExposureCompensation = lerpNumber(first.Exposure, second.Exposure, alpha) + (trim - 1) * 0.25
 
 		pcall(function()
 			Workspace.GlobalWind = first.WindForce:Lerp(second.WindForce, alpha)
@@ -821,16 +834,6 @@ return function(services: any)
 	-- Re-asserting the core Lighting values keeps a game's own day/night
 	-- script from silently walking the preset back. Post-process effects
 	-- are not re-applied here; nothing else writes to instances we own.
-	-- Scales a profile colour without letting any channel clip past white,
-	-- which is what would reintroduce the white-surface glow.
-	local function scaleColor(color: Color3, scale: number): Color3
-		return Color3.new(
-			math.clamp(color.R * scale, 0, 1),
-			math.clamp(color.G * scale, 0, 1),
-			math.clamp(color.B * scale, 0, 1)
-		)
-	end
-
 	local function assertStaticLighting()
 		if not activeStaticProfile then return end
 		applyProperties(Lighting, activeStaticProfile.Lighting)

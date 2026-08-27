@@ -161,7 +161,7 @@ return function(services: any, tab: any)
 	-- presets pin one look; Dynamic runs the full 24-hour cycle.
 	local cineSec = createSection(tab.RightCol, "Cinematic Lighting")
 	Dropdown.new(cineSec, "Lighting Mode", { "Off", "Static Day", "Static Night", "Dynamic" }, "Lighting.Mode")
-	Slider.new(cineSec, "Static Preset Brightness", 50, 200, "Lighting.PresetBrightness", 5, "%")
+	Slider.new(cineSec, "Preset Brightness", 50, 200, "Lighting.PresetBrightness", 5, "%")
 	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
 
 	-- Cycle timing only means anything while the 24-hour cycle is running,

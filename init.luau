@@ -100,6 +100,10 @@ if not Players.LocalPlayer then
 end
 trace(string.format("Readiness complete: gameLoaded=%s localPlayer=%s", tostring(game:IsLoaded()), tostring(Players.LocalPlayer ~= nil)))
 
+-- One token per run so a reload always re-fetches, while the in-memory
+-- caches below keep a single run down to one request per module.
+local SESSION_TOKEN: string = tostring(os.time()) .. "_" .. tostring(currentSessionId)
+
 local sourceCache: { [string]: string } = {}
 local compiledCache: { [string]: any } = {}
 local initializedCache: { [string]: any } = {}
@@ -114,8 +118,11 @@ local function fetchSource(path: string): string
 
 	local lastErr = "Unknown"
 	for attempt = 1, RETRY_ATTEMPTS do
-		-- Cache buster on retries so a flaky edge node cannot serve stale bytes
-		local url = BASE_URL .. cleanPath .. (attempt > 1 and ("?t=" .. os.clock()) or "")
+		-- Every fetch carries a cache buster: raw hosts keep a branch file
+		-- for minutes, which otherwise silently loads a stale module mixed
+		-- with fresh ones. Repeat fetches inside a session are served from
+		-- sourceCache, so this costs one request per module per run.
+		local url = BASE_URL .. cleanPath .. "?t=" .. tostring(SESSION_TOKEN) .. tostring(attempt)
 		trace(string.format("Fetch attempt %d/%d: %s", attempt, RETRY_ATTEMPTS, url))
 		local ok, response = pcall(game.HttpGet, game, url)
 		if ok and type(response) == "string" and #response > 10 and not response:find("404: Not Found", 1, true) then
