@@ -295,6 +295,28 @@ return function(disposer: any)
 		["MOUSEBUTTON3"] = Enum.UserInputType.MouseButton3,
 	}
 
+	-- Executors expose the frame limiter under several names; the first one
+	-- present wins. A cap of 0 means uncapped, which is also what unload
+	-- restores so the limiter never outlives the suite.
+	local fpsCapSetter: ((number) -> ())? = nil
+	for _, candidate in ipairs({ "setfpscap", "set_fps_cap", "setfps" }) do
+		local fn = (getgenv and getgenv() or _G)[candidate]
+		if typeof(fn) == "function" then
+			fpsCapSetter = fn
+			break
+		end
+	end
+
+	function Environment.HasFpsCap(): boolean
+		return fpsCapSetter ~= nil
+	end
+
+	function Environment.SetFpsCap(cap: number): boolean
+		if not fpsCapSetter then return false end
+		local ok = pcall(fpsCapSetter, math.max(0, math.floor(cap)))
+		return ok
+	end
+
 	function Environment.ParseKeybind(input: any): (Enum.KeyCode | Enum.UserInputType)?
 		if typeof(input) == "EnumItem" then
 			if input.EnumType == Enum.KeyCode or input.EnumType == Enum.UserInputType then

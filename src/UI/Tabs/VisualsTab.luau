@@ -13,6 +13,9 @@ return function(services: any, tab: any)
 	local Dropdown = Require("src/UI/Components/Dropdown.luau", services)
 	local ColorPicker = Require("src/UI/Components/ColorPicker.luau", services)
 	local Components = Require("src/UI/Components/Textbox.luau", services)
+	local UIEngine = services:Get("UIEngine")
+	local Environment = services:Get("Environment")
+	local OptimizerService = services:Get("OptimizerService")
 
 	-- Lighting values are backed up only once, before the first change, so
 	-- toggling fullbright repeatedly never stacks backups.
@@ -119,6 +122,37 @@ return function(services: any, tab: any)
 	Toggle.new(espConfigSec, "Text Outlines", "ESP.Outline")
 	Toggle.new(espConfigSec, "Auto-Scaling Distance", "ESP.AutoScaling")
 
+	-- Every flag here is consumed by OptimizerService, which caches the
+	-- original property values so a restore stays lossless.
+	local perfSec = createSection(tab.LeftCol, "Performance Boosters")
+	Toggle.new(perfSec, "Strip Textures & Decals", "Performance.NoTextures")
+	Toggle.new(perfSec, "Force Flat Smooth Plastic", "Performance.LowMaterials")
+	Toggle.new(perfSec, "Reduce 3D Terrain Fidelity", "Performance.OptimizeTerrain")
+	Toggle.new(perfSec, "Disable Post-Processing FX", "Performance.NoPostProcessing")
+	Toggle.new(perfSec, "Disable Global Shadows", "Performance.NoShadows")
+	Toggle.new(perfSec, "Disable Particle Emitters", "Performance.NoParticles")
+
+	-- 0 keeps the executor's own limiter untouched; anything above it is
+	-- pushed through whichever frame-cap global the executor exposes.
+	local fpsSec = createSection(tab.LeftCol, "Framerate & Memory")
+	Slider.new(fpsSec, "FPS Cap (0 = uncapped)", 0, 360, "Performance.FpsCap", 10, " fps")
+	if not Environment.HasFpsCap() then
+		Components.CreateButton(fpsSec, "FPS cap unsupported on this executor", function()
+			UIEngine:Notify("Framerate", "This executor exposes no frame limiter.", 2.5, ThemeEngine:GetToken("Warning"))
+		end)
+	end
+	Components.CreateButton(fpsSec, "Flush Unused Memory", function()
+		task.spawn(function()
+			local freedMb = OptimizerService:FlushMemory()
+			UIEngine:Notify("Memory", string.format("Reclaimed %.1f MB.", freedMb), 2.5, ThemeEngine:GetToken("Success"))
+		end)
+	end)
+
+	local statSec = createSection(tab.LeftCol, "On-Screen Telemetry")
+	Toggle.new(statSec, "Show Watermark", "Settings.Watermark")
+	Toggle.new(statSec, "Display FPS Counter", "Settings.ShowFPS")
+	Toggle.new(statSec, "Display Ping Monitor", "Settings.ShowPing")
+
 	local chamsSec = createSection(tab.RightCol, "Player Chams (Highlights)")
 	Toggle.new(chamsSec, "Enable Highlights", "Chams.Enabled", nil, 2)
 	Toggle.new(chamsSec, "Use Player Team Color", "Chams.UseTeamColor")
@@ -141,6 +175,35 @@ return function(services: any, tab: any)
 	Disposer:Add(function()
 		Lighting.ClockTime = originalClockTime
 	end)
+
+	-- Every cinematic mode owns ClockTime while active, so the manual Time of
+	-- Day slider above only has an effect while the mode is Off. The static
+	-- presets pin one look; Dynamic runs the full 24-hour cycle.
+	local cineSec = createSection(tab.RightCol, "Cinematic Lighting")
+	Dropdown.new(cineSec, "Lighting Mode", { "Off", "Static Day", "Static Night", "Dynamic" }, "Lighting.Mode")
+	Slider.new(cineSec, "Preset Brightness", 50, 200, "Lighting.PresetBrightness", 5, "%")
+	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
+
+	-- Cycle timing only means anything while the 24-hour cycle is running,
+	-- so these rows are hidden outside Dynamic mode. UIListLayout skips
+	-- invisible children, so the section closes the gap on its own.
+	local cycleSlider = Slider.new(cineSec, "Day Cycle Duration", 30, 1800, "Lighting.CycleDuration", 30, " s")
+	local startHourSlider = Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
+	local freezeToggle = Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
+	Toggle.new(cineSec, "Remaster Part Materials", "Lighting.RemasterMaterials")
+
+	local function refreshCycleRows()
+		local isDynamic = StateStore:Get("Lighting.Mode") == "Dynamic"
+		cycleSlider.Instance.Visible = isDynamic
+		startHourSlider.Instance.Visible = isDynamic
+		freezeToggle.Instance.Visible = isDynamic
+	end
+	refreshCycleRows()
+	StateStore:Observe("Lighting.Mode", refreshCycleRows)
+	EventBus:Subscribe("StateHydrated", refreshCycleRows)
+	-- Clearing the title-bar search re-shows every row, so these have to be
+	-- re-hidden afterwards.
+	EventBus:Subscribe("UIFilterCleared", refreshCycleRows)
 
 	local fxSec = createSection(tab.RightCol, "Visual Effects")
 	Toggle.new(fxSec, "Draw Radial Speed Lines", "Extras.SpeedLines", nil, 1)

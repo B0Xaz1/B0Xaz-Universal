@@ -83,6 +83,8 @@ return function(services: any, tab: any)
 	local selectedProfileName = "Default"
 	local inputProfileName = "MyProfile"
 
+	local refreshProfileLists: (selection: string?) -> ()
+
 	local profileSec = createSection(tab.LeftCol, "Configuration Profiles")
 	local profileDropdown = Dropdown.new(profileSec, "Select Profile", ConfigService:ListProfiles(), selectedProfileName, function(name)
 		selectedProfileName = name
@@ -99,7 +101,8 @@ return function(services: any, tab: any)
 		end
 		local ok, err = ConfigService:Save(inputProfileName)
 		if ok then
-			profileDropdown:Refresh(ConfigService:ListProfiles(), true)
+			selectedProfileName = inputProfileName
+			refreshProfileLists(inputProfileName)
 			UIEngine:Notify("Config", "Saved profile: " .. inputProfileName, 2, ThemeEngine:GetToken("Success"))
 		else
 			UIEngine:Notify("Save Failed", err or "Error", 2, ThemeEngine:GetToken("Danger"))
@@ -120,11 +123,47 @@ return function(services: any, tab: any)
 			UIEngine:Notify("Config", "Cannot delete default profile.", 2, ThemeEngine:GetToken("Warning"))
 			return
 		end
-		if ConfigService:Delete(selectedProfileName) then
-			profileDropdown:Refresh(ConfigService:ListProfiles(), false)
+		local removed = selectedProfileName
+		if ConfigService:Delete(removed) then
+			if StateStore:Get("Settings.StartupProfile") == removed then
+				StateStore:Set("Settings.StartupProfile", "None")
+			end
+			selectedProfileName = "Default"
+			refreshProfileLists("Default")
 			UIEngine:Notify("Config", "Deleted profile.", 2, ThemeEngine:GetToken("Success"))
 		end
 	end)
+
+	local launchSec = createSection(tab.LeftCol, "Launch Behaviour")
+
+	-- "None" keeps the autosaved session as the startup state; picking a
+	-- profile pins it instead, so every injection starts identically.
+	local function startupOptions(): { string }
+		local options = { "None" }
+		for _, name in ipairs(ConfigService:ListProfiles()) do
+			table.insert(options, name)
+		end
+		return options
+	end
+
+	local startupDropdown = Dropdown.new(launchSec, "Startup Profile", startupOptions(), "Settings.StartupProfile", function(name)
+		StateStore:Set("Settings.StartupProfile", name)
+	end)
+
+	Toggle.new(launchSec, "Restore Settings On Launch", "Settings.RestoreOnLaunch")
+
+	Components.CreateButton(launchSec, "Refresh Profile List", function()
+		refreshProfileLists(nil)
+		UIEngine:Notify("Config", "Profile list refreshed.", 2, ThemeEngine:GetToken("Success"))
+	end)
+
+	function refreshProfileLists(selection: string?)
+		profileDropdown:Refresh(ConfigService:ListProfiles(), selection == nil)
+		startupDropdown:Refresh(startupOptions(), true)
+		if selection then
+			profileDropdown:Set(selection, true)
+		end
+	end
 
 	local shareSec = createSection(tab.LeftCol, "Profile Sharing")
 	Components.CreateButton(shareSec, "Export Profile to Clipboard", function()
@@ -151,6 +190,14 @@ return function(services: any, tab: any)
 	end)
 	Keybind.new(uiSec, "Menu Toggle Hotkey", "Settings.MenuKeybind")
 	Keybind.new(uiSec, "Quick Unload Hotkey", "Settings.UnloadKeybind")
+
+	-- Rows are generated from the service's own target list so a new bind
+	-- only has to be declared in one place.
+	local HotkeyService = services:Get("HotkeyService")
+	local bindSec = createSection(tab.RightCol, "Feature Hotkeys")
+	for _, target in ipairs(HotkeyService.Targets) do
+		Keybind.new(bindSec, target.Label, "Settings.Binds." .. target.Key)
+	end
 
 	local themeSec = createSection(tab.RightCol, "Themes & Styling")
 	local presetList = {}

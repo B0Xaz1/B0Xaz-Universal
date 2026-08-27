@@ -39,7 +39,8 @@ return function(services: any)
 		NotifyContainer = nil :: Frame?,
 		Tabs = {} :: { TabInstance },
 		ActiveTab = nil :: TabInstance?,
-		_dropdownCloseHandlers = {} :: { () -> () },
+		_dropdownCloseHandlers = {} :: { () -> () },		_searchQuery = "",
+		_movedRows = {} :: { { Row: GuiObject, Parent: Instance, Order: number } },
 	}
 
 	-- Drag state lives in this closure; the two UserInputService listeners
@@ -160,7 +161,177 @@ return function(services: any)
 		tab.Underline.Visible = true
 		self.ActiveTab = tab
 
+		-- A live search follows the user: results are rebuilt onto whichever
+		-- tab is now in front.
+		if self._searchQuery ~= "" then
+			self:ApplyFilter(self._searchQuery)
+		end
+
 		self:CloseAllDropdownsExcept(nil)
+	end
+
+	local tabResultColumns: { [Instance]: ScrollingFrame } = {}
+
+	-- Rows are the direct children of a section's content frame; the label a
+	-- row is matched on is its first descendant TextLabel.
+	local function rowMatches(row: Instance, query: string): boolean
+		for _, descendant in ipairs(row:GetDescendants()) do
+			if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+				local text = (descendant :: any).Text
+				if typeof(text) == "string" and string.find(string.lower(text), query, 1, true) then
+					return true
+				end
+			end
+		end
+		if row:IsA("TextButton") and string.find(string.lower(row.Text), query, 1, true) then
+			return true
+		end
+		return false
+	end
+
+	-- Rows are physically reparented into the active tab's results column,
+	-- so every match is reachable without switching tabs. The original
+	-- parent and layout order are kept for an exact put-back.
+	function UIEngine:RestoreSearchRows()
+		for index = #self._movedRows, 1, -1 do
+			local entry = self._movedRows[index]
+			if entry.Row and entry.Row.Parent then
+				entry.Row.LayoutOrder = entry.Order
+				entry.Row.Parent = entry.Parent
+			end
+			self._movedRows[index] = nil
+		end
+
+		for _, tabRecord in ipairs(self.Tabs) do
+			local resultsCol = tabResultColumns[tabRecord.Page]
+			if resultsCol then
+				for _, child in ipairs(resultsCol:GetChildren()) do
+					-- Only the generated group labels: an info row moved here
+					-- by the search is a TextLabel too and must survive.
+					if child.Name == "SearchGroupHeader" then
+						child:Destroy()
+					end
+				end
+				resultsCol.Visible = false
+			end
+			tabRecord.LeftCol.Visible = true
+			tabRecord.RightCol.Visible = true
+
+			for _, column in ipairs({ tabRecord.LeftCol, tabRecord.RightCol }) do
+				for _, section in ipairs(column:GetChildren()) do
+					if section:IsA("Frame") then
+						section.Visible = true
+					end
+				end
+			end
+		end
+	end
+
+	function UIEngine:ApplyFilter(rawQuery: string)
+		local query = string.lower((rawQuery or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+		self._searchQuery = query
+
+		self:RestoreSearchRows()
+
+		if query == "" then
+			-- Tabs own conditional rows of their own (mode-dependent
+			-- controls), so they re-hide them once the filter is cleared.
+			EventBus:Publish("UIFilterCleared")
+			return
+		end
+
+		local target = self.ActiveTab
+		if not target then return end
+		local resultsCol = tabResultColumns[target.Page]
+		if not resultsCol then return end
+
+		target.LeftCol.Visible = false
+		target.RightCol.Visible = false
+		resultsCol.Visible = true
+
+		local order = 0
+		local matchCount = 0
+
+		for _, tabRecord in ipairs(self.Tabs) do
+			for _, column in ipairs({ tabRecord.LeftCol, tabRecord.RightCol }) do
+				for _, section in ipairs(column:GetChildren()) do
+					if section:IsA("Frame") then
+						-- Section children are [stroke, layout, header, content]
+						local frames = {}
+						for _, child in ipairs(section:GetChildren()) do
+							if child:IsA("Frame") then table.insert(frames, child) end
+						end
+
+						local header = frames[1]
+						local content = frames[2]
+						local sectionTitle = "Section"
+						if header then
+							local headerLabel = header:FindFirstChildWhichIsA("TextLabel")
+							if headerLabel then
+								sectionTitle = (headerLabel.Text:gsub("^%s+", ""))
+							end
+						end
+
+						-- A hit on the tab or section name pulls in the whole
+						-- group, so "combat" or "aimbot" behaves like a jump.
+						local groupMatched = string.find(string.lower(sectionTitle), query, 1, true) ~= nil
+							or string.find(string.lower(tabRecord.Name), query, 1, true) ~= nil
+
+						if content then
+							local matchedRows = {}
+							for _, row in ipairs(content:GetChildren()) do
+								if row:IsA("GuiObject") and (groupMatched or rowMatches(row, query)) then
+									table.insert(matchedRows, row)
+								end
+							end
+
+							if #matchedRows > 0 then
+								order += 1
+								DOM.Create("TextLabel", {
+									Name = "SearchGroupHeader",
+									Text = string.format("%s  >  %s", tabRecord.Name, sectionTitle),
+									Font = Enum.Font.Code,
+									TextSize = 11,
+									TextColor3 = ThemeEngine:GetToken("Accent"),
+									TextXAlignment = Enum.TextXAlignment.Left,
+									BackgroundTransparency = 1,
+									Size = UDim2.new(1, 0, 0, 16),
+									LayoutOrder = order,
+									Parent = resultsCol,
+								})
+
+								for _, row in ipairs(matchedRows) do
+									table.insert(self._movedRows, {
+										Row = row,
+										Parent = content,
+										Order = row.LayoutOrder,
+									})
+									order += 1
+									row.LayoutOrder = order
+									row.Visible = true
+									row.Parent = resultsCol
+									matchCount += 1
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if matchCount == 0 then
+			DOM.Create("TextLabel", {
+				Name = "SearchGroupHeader",
+				Text = "  no matches for \"" .. rawQuery .. "\"",
+				Font = Enum.Font.Code,
+				TextSize = 11,
+				TextColor3 = ThemeEngine:GetToken("TextDim"),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 18),
+				Parent = resultsCol,
+			})
+		end
 	end
 
 	function UIEngine:ConstructInterface()
@@ -211,7 +382,7 @@ return function(services: any)
 				TextColor3 = ThemeEngine:GetToken("Text"),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -40, 1, 0),
+				Size = UDim2.new(1, -200, 1, 0),
 			}),
 		}) :: Frame
 		ThemeEngine:BindToken(titleBar, "BackgroundColor3", "Side")
@@ -231,6 +402,38 @@ return function(services: any)
 		closeBtn.MouseButton1Click:Connect(function()
 			self.MainWindow.Visible = false
 			StateStore:SetTransient("MenuVisible", false)
+		end)
+		-- Live filter over every control in every tab. Sections whose rows
+		-- all fail the match are hidden too, so the columns close up.
+		local searchBox = DOM.Create("TextBox", {
+			Text = "",
+			PlaceholderText = "search...",
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = ThemeEngine:GetToken("Text"),
+			PlaceholderColor3 = ThemeEngine:GetToken("TextDim"),
+			BackgroundColor3 = ThemeEngine:GetToken("Elem"),
+			BorderSizePixel = 0,
+			ClearTextOnFocus = false,
+			Size = UDim2.fromOffset(150, 16),
+			Position = UDim2.new(1, -186, 0, 6),
+			ZIndex = TAB_ZINDEX + 2,
+			Parent = titleBar,
+		}, {
+			DOM.CreateStroke(ThemeEngine:GetToken("Border"), 1),
+		}) :: TextBox
+		ThemeEngine:BindToken(searchBox, "BackgroundColor3", "Elem")
+
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			-- A filter that errors halfway would leave the columns hidden
+			-- with no results in front of them, so failure rolls back.
+			local ok, err = pcall(function()
+				self:ApplyFilter(searchBox.Text)
+			end)
+			if not ok then
+				warn("[B0Xaz][UIEngine] Search failed: " .. tostring(err))
+				self:RestoreSearchRows()
+			end
 		end)
 
 		self.TabContainer = DOM.Create("Frame", {
@@ -362,6 +565,26 @@ return function(services: any)
 				DOM.CreatePadding(0, 8, 0, 4),
 			}) :: ScrollingFrame
 
+			-- Search results are rendered into this overlay so matches from
+			-- every tab can be shown without leaving the current one.
+			local resultsCol = DOM.Create("ScrollingFrame", {
+				Name = "SearchResults",
+				Size = UDim2.new(1, -16, 1, -16),
+				Position = UDim2.new(0, 8, 0, 8),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ScrollBarThickness = 3,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				Visible = false,
+				ZIndex = PAGE_ZINDEX + 1,
+				Parent = pageFrame,
+			}, {
+				DOM.Create("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+				DOM.CreatePadding(0, 8, 0, 4),
+			}) :: ScrollingFrame
+			tabResultColumns[pageFrame] = resultsCol
+
 			local tabRecord: TabInstance = {
 				Name = tabName,
 				RequiredTier = tier,
@@ -384,7 +607,7 @@ return function(services: any)
 
 		local tabFiles = {
 			{ Path = "src/UI/Tabs/CombatTab.luau", Tier = 3 },
-			{ Path = "src/UI/Tabs/VisualsTab.luau", Tier = 2 },
+			{ Path = "src/UI/Tabs/VisualsTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/MovementTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/PlayersTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/UtilityTab.luau", Tier = 1 },

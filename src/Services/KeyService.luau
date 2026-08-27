@@ -32,7 +32,7 @@ return function(services: any)
 
 	-- Uses whichever HTTP implementation the executor provides; RequestAsync
 	-- is the last-resort fallback since it is slowest on some executors.
-	local function requestValidation(key: string, hwid: string): (boolean, number, string)
+	local function attemptValidation(key: string, hwid: string): (boolean, number, string, boolean)
 		debug("Validation request: preparing payload")
 		local payload = HttpService:JSONEncode({ key = key, hwid = hwid })
 		local headers = {
@@ -54,7 +54,7 @@ return function(services: any)
 
 		if not ok or typeof(response) ~= "table" then
 			debug("Validation request failed: no response table")
-			return false, 0, "Authentication server unreachable."
+			return false, 0, "Authentication server unreachable.", true
 		end
 
 		local statusCode = tonumber(response.StatusCode or response.Status) or 500
@@ -69,19 +69,40 @@ return function(services: any)
 					errMsg = tostring(decoded.error)
 				end
 			end
-			return false, 0, errMsg
+			-- 5xx and rate limiting are the backend faulting, which says
+			-- nothing about whether the key itself is good.
+			local transient = statusCode >= 500 or statusCode == 408 or statusCode == 429
+			if transient then
+				errMsg = "Server error: " .. errMsg
+			end
+			return false, 0, errMsg, transient
 		end
 
 		local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, body)
 		if not decodeOk or typeof(data) ~= "table" or data.valid ~= true then
-			return false, 0, (typeof(data) == "table" and tostring(data.error or "Invalid license")) or "Invalid server response."
+			return false, 0, (typeof(data) == "table" and tostring(data.error or "Invalid license")) or "Invalid server response.", false
 		end
 
 		local tierMap = { Entry = 1, Normal = 2, Full = 3 }
 		local tierNumber = tierMap[data.tier] or 0
-		if tierNumber == 0 then return false, 0, "License tier invalid." end
+		if tierNumber == 0 then return false, 0, "License tier invalid.", false end
 
-		return true, tierNumber, data.tier .. " Access Granted"
+		return true, tierNumber, data.tier .. " Access Granted", false
+	end
+
+	-- A backend blip must not read as a bad key, so transient failures are
+	-- retried before the modal is shown.
+	local function requestValidation(key: string, hwid: string): (boolean, number, string)
+		local valid, tier, msg, transient
+		for attempt = 1, 3 do
+			valid, tier, msg, transient = attemptValidation(key, hwid)
+			if valid or not transient then
+				return valid, tier, msg
+			end
+			debug("Validation attempt " .. attempt .. " failed transiently: " .. tostring(msg))
+			task.wait(attempt * 1.5)
+		end
+		return false, 0, tostring(msg) .. " (retried 3 times)"
 	end
 
 	-- The key is wrapped in XOR + base64 before touching disk; this is

@@ -13,10 +13,13 @@ return function(services: any)
 	local TaskScheduler = services:Get("TaskScheduler")
 	local DrawingPool = services:Get("DrawingPool")
 
+	local SCRIPT_NAME = "B0Xaz Universal"
+
 	local OverlayController = {
 		_fovCircle = nil :: any,
 		_fpsLabel = nil :: any,
 		_pingLabel = nil :: any,
+		_watermarkLabel = nil :: any,
 		_speedLines = {} :: { SpeedLine },
 		_lastFps = 0,
 		_lastPing = 0,
@@ -119,6 +122,30 @@ return function(services: any)
 			OverlayController._fpsCount = 0
 			OverlayController._fpsTimer = 0
 
+			local showWatermark = StateStore:Get("Settings.Watermark") ~= false
+			if OverlayController._watermarkLabel then
+				if showWatermark then
+					OverlayController._watermarkLabel.Text = string.format(
+						"%s  |  %d fps  |  %d ms  |  %s",
+						SCRIPT_NAME,
+						OverlayController._lastFps,
+						OverlayController._lastPing,
+						os.date("%H:%M:%S")
+					)
+					OverlayController._watermarkLabel.Color = StateStore:Get("ESP.Color") or Color3.new(1, 1, 1)
+				end
+				OverlayController._watermarkLabel.Visible = showWatermark
+			end
+
+			-- The standalone counters sit under the watermark when it is on
+			local rowOffset = showWatermark and 28 or 10
+			if OverlayController._fpsLabel then
+				OverlayController._fpsLabel.Position = Vector2.new(10, rowOffset)
+			end
+			if OverlayController._pingLabel then
+				OverlayController._pingLabel.Position = Vector2.new(10, rowOffset + 16)
+			end
+
 			if OverlayController._fpsLabel and StateStore:Get("Settings.ShowFPS") then
 				OverlayController._fpsLabel.Text = string.format("FPS: %d", OverlayController._lastFps)
 				OverlayController._fpsLabel.Visible = true
@@ -149,15 +176,23 @@ return function(services: any)
 			self._fovCircle = DrawingPool:Acquire("Circle")
 			self._fpsLabel = DrawingPool:Acquire("Text")
 			if self._fpsLabel then
-				self._fpsLabel.Position = Vector2.new(10, 10)
+				self._fpsLabel.Position = Vector2.new(10, 28)
 				self._fpsLabel.Size = 14
 				self._fpsLabel.Outline = true
 				self._fpsLabel.Color = Color3.new(1, 1, 1)
 			end
 
+			self._watermarkLabel = DrawingPool:Acquire("Text")
+			if self._watermarkLabel then
+				self._watermarkLabel.Position = Vector2.new(10, 10)
+				self._watermarkLabel.Size = 15
+				self._watermarkLabel.Outline = true
+				self._watermarkLabel.Color = Color3.new(1, 1, 1)
+			end
+
 			self._pingLabel = DrawingPool:Acquire("Text")
 			if self._pingLabel then
-				self._pingLabel.Position = Vector2.new(10, 26)
+				self._pingLabel.Position = Vector2.new(10, 44)
 				self._pingLabel.Size = 14
 				self._pingLabel.Outline = true
 				self._pingLabel.Color = Color3.new(1, 1, 1)

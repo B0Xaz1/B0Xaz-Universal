@@ -81,6 +81,16 @@ trace("Source base: " .. BASE_URL)
 
 -- Each reload bumps the session id and disposes the previous master disposer
 -- so stale threads, connections, and instances from the last run are cleaned.
+-- A second execution that lands while the first is still booting would
+-- dispose a suite that has not registered its instances yet, leaving an
+-- orphaned menu on screen under the new run's auth modal.
+local launchStartedAt = tonumber(globalEnv.B0XazLaunching)
+if launchStartedAt and (os.clock() - launchStartedAt) < 90 then
+	warn("[B0Xaz] A launch is already in progress; ignoring this execution.")
+	return
+end
+globalEnv.B0XazLaunching = os.clock()
+
 local currentSessionId: number = (tonumber(globalEnv.B0XazSessionId) or 0) + 1
 globalEnv.B0XazSessionId = currentSessionId
 
@@ -100,6 +110,10 @@ if not Players.LocalPlayer then
 end
 trace(string.format("Readiness complete: gameLoaded=%s localPlayer=%s", tostring(game:IsLoaded()), tostring(Players.LocalPlayer ~= nil)))
 
+-- One token per run so a reload always re-fetches, while the in-memory
+-- caches below keep a single run down to one request per module.
+local SESSION_TOKEN: string = tostring(os.time()) .. "_" .. tostring(currentSessionId)
+
 local sourceCache: { [string]: string } = {}
 local compiledCache: { [string]: any } = {}
 local initializedCache: { [string]: any } = {}
@@ -114,8 +128,11 @@ local function fetchSource(path: string): string
 
 	local lastErr = "Unknown"
 	for attempt = 1, RETRY_ATTEMPTS do
-		-- Cache buster on retries so a flaky edge node cannot serve stale bytes
-		local url = BASE_URL .. cleanPath .. (attempt > 1 and ("?t=" .. os.clock()) or "")
+		-- Every fetch carries a cache buster: raw hosts keep a branch file
+		-- for minutes, which otherwise silently loads a stale module mixed
+		-- with fresh ones. Repeat fetches inside a session are served from
+		-- sourceCache, so this costs one request per module per run.
+		local url = BASE_URL .. cleanPath .. "?t=" .. tostring(SESSION_TOKEN) .. tostring(attempt)
 		trace(string.format("Fetch attempt %d/%d: %s", attempt, RETRY_ATTEMPTS, url))
 		local ok, response = pcall(game.HttpGet, game, url)
 		if ok and type(response) == "string" and #response > 10 and not response:find("404: Not Found", 1, true) then
@@ -236,10 +253,14 @@ local function bootstrap()
 	local ConfigService = requireStep("ConfigService", "src/Services/ConfigService.luau", ServiceContainer)
 	local PlayerTracker = requireStep("PlayerTracker", "src/Services/PlayerTracker.luau", ServiceContainer)
 	local OptimizerService = requireStep("OptimizerService", "src/Services/OptimizerService.luau", ServiceContainer)
+	local LightingService = requireStep("LightingService", "src/Services/LightingService.luau", ServiceContainer)
+	local HotkeyService = requireStep("HotkeyService", "src/Services/HotkeyService.luau", ServiceContainer)
 	registerStep("KeyService", KeyService)
 	registerStep("ConfigService", ConfigService)
 	registerStep("PlayerTracker", PlayerTracker)
 	registerStep("OptimizerService", OptimizerService)
+	registerStep("LightingService", LightingService)
+	registerStep("HotkeyService", HotkeyService)
 
 	-- Dependencies are registered before any consumer is loaded so that
 	-- factories resolving them stay in a deterministic order.
@@ -284,6 +305,8 @@ local function bootstrap()
 	local function launch()
 		initializeStep("PlayerTracker", PlayerTracker)
 		initializeStep("OptimizerService", OptimizerService)
+		initializeStep("LightingService", LightingService)
+		initializeStep("HotkeyService", HotkeyService)
 		initializeStep("ESPController", ESPController)
 		initializeStep("OverlayController", OverlayController)
 		initializeStep("LocomotionService", LocomotionService)
@@ -297,8 +320,8 @@ local function bootstrap()
 		trace("Constructing interface")
 		UIEngine:ConstructInterface()
 		trace("Interface constructed")
-		trace("Loading autoload configuration")
-		ConfigService:LoadAutoload()
+		trace("Applying launch configuration")
+		ConfigService:ApplyLaunchState()
 		print("[B0Xaz] Interface & Systems Ready.")
 	end
 
@@ -308,9 +331,11 @@ local function bootstrap()
 		trace("Saved credentials accepted")
 		StateStore:SetTier(tier)
 		launch()
+		globalEnv.B0XazLaunching = nil
 	else
 		trace("Saved credentials unavailable; showing authentication modal")
 		local KeyAuthModal = requireStep("KeyAuthModal", "src/UI/Modals/KeyAuthModal.luau", ServiceContainer)
+		globalEnv.B0XazLaunching = nil
 		KeyAuthModal:Show(function(verifiedTier)
 			trace("Credentials accepted from modal")
 			StateStore:SetTier(verifiedTier)
@@ -321,4 +346,8 @@ local function bootstrap()
 end
 
 trace("Invoking bootstrap")
-bootstrap()
+local bootOk, bootErr = pcall(bootstrap)
+globalEnv.B0XazLaunching = nil
+if not bootOk then
+	warn("[B0Xaz] Bootstrap failed: " .. tostring(bootErr))
+end
