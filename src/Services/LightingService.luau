@@ -1,10 +1,12 @@
 -- Cinematic lighting engine.
 --
 -- Dynamic mode drives a 24-hour keyframed day/night cycle across Lighting,
--- Atmosphere, Clouds, and the post-process stack. Every property this
--- service writes is snapshotted before the first write and rolled back by
--- Restore(), so switching the mode back to Off (or unloading the suite)
--- leaves the game's original lighting exactly as it was found.
+-- Atmosphere, Clouds, and the post-process stack. Static mode pins a single
+-- golden-hour profile and re-asserts it once a second so game scripts cannot
+-- quietly undo it. Every property this service writes is snapshotted before
+-- the first write and rolled back by Restore(), so switching the mode back to
+-- Off (or unloading the suite) leaves the game's original lighting exactly as
+-- it was found.
 
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
@@ -42,6 +44,67 @@ local TERRAIN_PROPERTIES: { string } = {
 	"WaterTransparency",
 	"WaterWaveSize",
 	"WaterWaveSpeed",
+}
+
+-- Static mode profile: a fixed late-afternoon golden hour. Specular and
+-- exposure are held down and the bloom threshold high for the same reason
+-- the dynamic keyframes do it - white clothing and pale walls must not glow.
+local STATIC_PROFILE = {
+	Lighting = {
+		ClockTime = 17.25,
+		GeographicLatitude = 41.8,
+		Brightness = 2.2,
+		Ambient = Color3.fromRGB(65, 70, 85),
+		OutdoorAmbient = Color3.fromRGB(120, 100, 90),
+		ColorShift_Top = Color3.fromRGB(240, 170, 100),
+		ColorShift_Bottom = Color3.fromRGB(40, 45, 65),
+		GlobalShadows = true,
+		ShadowSoftness = 0.1,
+		EnvironmentDiffuseScale = 0.8,
+		EnvironmentSpecularScale = 0.5,
+		ExposureCompensation = -0.05,
+		FogStart = 400,
+		FogEnd = 15000,
+		FogColor = Color3.fromRGB(220, 140, 95),
+	},
+	ColorCorrection = {
+		Contrast = 0.1,
+		Saturation = 0.12,
+		TintColor = Color3.fromRGB(255, 235, 215),
+	},
+	Bloom = {
+		Intensity = 0.08,
+		Size = 8,
+		Threshold = 1.4,
+	},
+	SunRays = {
+		Intensity = 0.25,
+		Spread = 0.5,
+	},
+	Atmosphere = {
+		Density = 0.4,
+		Offset = 0.25,
+		Color = Color3.fromRGB(230, 120, 80),
+		Decay = Color3.fromRGB(255, 115, 65),
+		Glare = 0.2,
+		Haze = 1.8,
+	},
+	DepthOfField = {
+		FarIntensity = 0.2,
+		FocusDistance = 80,
+		InFocusRadius = 40,
+		NearIntensity = 0,
+	},
+	Clouds = {
+		Cover = 0.5,
+		Density = 0.4,
+		Color = Color3.fromRGB(240, 140, 100),
+	},
+	Water = {
+		WaterColor = Color3.fromRGB(35, 75, 105),
+		WaterReflectance = 0.8,
+		WaterTransparency = 0.7,
+	},
 }
 
 -- 24-hour keyframes. Bloom values are deliberately low and the bloom
@@ -284,6 +347,7 @@ return function(services: any)
 		_reflectanceCache = {} :: { [BasePart]: number },
 		_lightCache = {} :: { [Instance]: { Brightness: number, Shadows: boolean } },
 		_cycleJob = nil :: any,
+		_staticJob = nil :: any,
 		_descendantConn = nil :: RBXScriptConnection?,
 		_vignetteGui = nil :: ScreenGui?,
 	}
@@ -411,6 +475,17 @@ return function(services: any)
 		effect.Parent = parent
 		table.insert(LightingService._effects, effect)
 		return effect
+	end
+
+	-- Properties are written one at a time under pcall so a single property
+	-- missing on an older client build cannot abort the whole preset.
+	local function applyProperties(target: Instance, properties: { [string]: any })
+		local targetAny = target :: any
+		for property, value in pairs(properties) do
+			pcall(function()
+				targetAny[property] = value
+			end)
+		end
 	end
 
 	local function destroyEffects()
@@ -690,6 +765,55 @@ return function(services: any)
 	end
 
 	----------------------------------------------------------------------
+	-- Static mode
+	----------------------------------------------------------------------
+
+	-- Re-asserting the core Lighting values keeps a game's own day/night
+	-- script from silently walking the preset back. Post-process effects
+	-- are not re-applied here; nothing else writes to instances we own.
+	local function assertStaticLighting()
+		applyProperties(Lighting, STATIC_PROFILE.Lighting)
+		-- NoShadows still owns the shadow state when it is active
+		if StateStore:Get("Performance.NoShadows") == true then
+			Lighting.GlobalShadows = false
+		end
+	end
+
+	-- Heartbeat with an accumulator instead of a spawned while-loop: the
+	-- job dies with the scheduler and costs nothing between ticks.
+	local staticElapsed = 0
+	local function stepStatic(deltaTime: number)
+		staticElapsed += deltaTime
+		if staticElapsed < 1 then return end
+		staticElapsed = 0
+		assertStaticLighting()
+	end
+
+	local function buildStaticEffects()
+		local cc = acquireEffect(Lighting, "ColorCorrectionEffect", "StaticColorCorrection")
+		applyProperties(cc, STATIC_PROFILE.ColorCorrection)
+
+		local bloomFx = acquireEffect(Lighting, "BloomEffect", "StaticBloom")
+		applyProperties(bloomFx, STATIC_PROFILE.Bloom)
+
+		local rays = acquireEffect(Lighting, "SunRaysEffect", "StaticSunRays")
+		applyProperties(rays, STATIC_PROFILE.SunRays)
+
+		local atmo = acquireEffect(Lighting, "Atmosphere", "StaticAtmosphere")
+		applyProperties(atmo, STATIC_PROFILE.Atmosphere)
+
+		local dof = acquireEffect(Lighting, "DepthOfFieldEffect", "StaticDepthOfField")
+		applyProperties(dof, STATIC_PROFILE.DepthOfField)
+
+		local terrain = getTerrain()
+		if terrain then
+			local cloudLayer = acquireEffect(terrain, "Clouds", "StaticClouds")
+			applyProperties(cloudLayer, STATIC_PROFILE.Clouds)
+			applyProperties(terrain, STATIC_PROFILE.Water)
+		end
+	end
+
+	----------------------------------------------------------------------
 	-- Public API
 	----------------------------------------------------------------------
 
@@ -701,6 +825,9 @@ return function(services: any)
 		if self._cycleJob then
 			self._cycleJob.Enabled = false
 		end
+		if self._staticJob then
+			self._staticJob.Enabled = false
+		end
 		Disposer:Unbind("B0XazLightingDescendants")
 		self._descendantConn = nil
 
@@ -710,6 +837,22 @@ return function(services: any)
 		restoreWorldRemaster()
 		restoreSnapshot()
 		self.Mode = "Off"
+	end
+
+	function LightingService:ApplyStatic()
+		takeSnapshot()
+
+		buildStaticEffects()
+		assertStaticLighting()
+
+		if StateStore:Get("Lighting.Vignette") == true then
+			createVignette()
+		end
+
+		if self._staticJob then
+			self._staticJob.Enabled = true
+		end
+		self.Mode = "Static"
 	end
 
 	function LightingService:ApplyDynamic()
@@ -731,7 +874,10 @@ return function(services: any)
 	end
 
 	function LightingService:SetMode(mode: string)
-		local target = (mode == "Dynamic") and "Dynamic" or "Off"
+		local target = "Off"
+		if mode == "Dynamic" or mode == "Static" then
+			target = mode
+		end
 		if target == self.Mode then return end
 
 		-- Always fully restore before applying a different mode so two
@@ -740,15 +886,21 @@ return function(services: any)
 
 		if target == "Dynamic" then
 			self:ApplyDynamic()
-			if StateStore:Get("Visuals.Fullbright") == true then
-				notify("Lighting", "Fullbright is overriding the cinematic cycle.", "Warning")
-			end
+		elseif target == "Static" then
+			self:ApplyStatic()
+		end
+
+		if target ~= "Off" and StateStore:Get("Visuals.Fullbright") == true then
+			notify("Lighting", "Fullbright is overriding the cinematic preset.", "Warning")
 		end
 	end
 
 	function LightingService:Initialize()
 		self._cycleJob = TaskScheduler:RegisterRender("CinematicLighting", 30, stepCycle)
 		self._cycleJob.Enabled = false
+
+		self._staticJob = TaskScheduler:RegisterHeartbeat("StaticLighting", 30, stepStatic)
+		self._staticJob.Enabled = false
 
 		Disposer:Add(function()
 			self:Restore()
