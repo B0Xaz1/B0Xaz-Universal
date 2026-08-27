@@ -142,6 +142,17 @@ return function(services: any, tab: any)
 		Lighting.ClockTime = originalClockTime
 	end)
 
+	-- Cinematic mode drives ClockTime every frame, so the manual Time of Day
+	-- slider above only has an effect while the mode is Off.
+	local cineSec = createSection(tab.RightCol, "Cinematic Lighting")
+	Dropdown.new(cineSec, "Lighting Mode", { "Off", "Dynamic" }, "Lighting.Mode")
+	Slider.new(cineSec, "Day Cycle Duration", 30, 1800, "Lighting.CycleDuration", 30, " s")
+	Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
+	Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
+	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
+	Toggle.new(cineSec, "Remaster Part Materials", "Lighting.RemasterMaterials")
+	Toggle.new(cineSec, "Upgrade Map Lights", "Lighting.UpgradeMapLights")
+
 	local fxSec = createSection(tab.RightCol, "Visual Effects")
 	Toggle.new(fxSec, "Draw Radial Speed Lines", "Extras.SpeedLines", nil, 1)
 end

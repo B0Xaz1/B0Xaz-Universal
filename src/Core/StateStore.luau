@@ -82,6 +82,15 @@ local DEFAULT_SETTINGS = {
 	},
 	Camera = { FOV = 90 },
 	Visuals = { Fullbright = false },
+	Lighting = {
+		Mode = "Off",
+		TimeOfDay = 6,
+		CycleDuration = 600,
+		Paused = false,
+		Vignette = true,
+		RemasterMaterials = true,
+		UpgradeMapLights = true,
+	},
 	Extras = {
 		Hitbox = { Enabled = false, Size = 10 },
 		SpinBot = { Enabled = false, Speed = 20 },
