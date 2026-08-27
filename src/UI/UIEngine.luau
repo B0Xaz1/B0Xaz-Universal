@@ -402,7 +402,7 @@ return function(services: any)
 		closeBtn.MouseButton1Click:Connect(function()
 			self.MainWindow.Visible = false
 			StateStore:SetTransient("MenuVisible", false)
-		end)
+		end)
 		-- Live filter over every control in every tab. Sections whose rows
 		-- all fail the match are hidden too, so the columns close up.
 		local searchBox = DOM.Create("TextBox", {
