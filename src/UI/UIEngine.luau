@@ -272,10 +272,15 @@ return function(services: any)
 							end
 						end
 
+						-- A hit on the tab or section name pulls in the whole
+						-- group, so "combat" or "aimbot" behaves like a jump.
+						local groupMatched = string.find(string.lower(sectionTitle), query, 1, true) ~= nil
+							or string.find(string.lower(tabRecord.Name), query, 1, true) ~= nil
+
 						if content then
 							local matchedRows = {}
 							for _, row in ipairs(content:GetChildren()) do
-								if row:IsA("GuiObject") and rowMatches(row, query) then
+								if row:IsA("GuiObject") and (groupMatched or rowMatches(row, query)) then
 									table.insert(matchedRows, row)
 								end
 							end
@@ -420,7 +425,15 @@ return function(services: any)
 		ThemeEngine:BindToken(searchBox, "BackgroundColor3", "Elem")
 
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-			self:ApplyFilter(searchBox.Text)
+			-- A filter that errors halfway would leave the columns hidden
+			-- with no results in front of them, so failure rolls back.
+			local ok, err = pcall(function()
+				self:ApplyFilter(searchBox.Text)
+			end)
+			if not ok then
+				warn("[B0Xaz][UIEngine] Search failed: " .. tostring(err))
+				self:RestoreSearchRows()
+			end
 		end)
 
 		self.TabContainer = DOM.Create("Frame", {
