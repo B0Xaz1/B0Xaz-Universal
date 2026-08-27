@@ -81,6 +81,16 @@ trace("Source base: " .. BASE_URL)
 
 -- Each reload bumps the session id and disposes the previous master disposer
 -- so stale threads, connections, and instances from the last run are cleaned.
+-- A second execution that lands while the first is still booting would
+-- dispose a suite that has not registered its instances yet, leaving an
+-- orphaned menu on screen under the new run's auth modal.
+local launchStartedAt = tonumber(globalEnv.B0XazLaunching)
+if launchStartedAt and (os.clock() - launchStartedAt) < 90 then
+	warn("[B0Xaz] A launch is already in progress; ignoring this execution.")
+	return
+end
+globalEnv.B0XazLaunching = os.clock()
+
 local currentSessionId: number = (tonumber(globalEnv.B0XazSessionId) or 0) + 1
 globalEnv.B0XazSessionId = currentSessionId
 
@@ -321,9 +331,11 @@ local function bootstrap()
 		trace("Saved credentials accepted")
 		StateStore:SetTier(tier)
 		launch()
+		globalEnv.B0XazLaunching = nil
 	else
 		trace("Saved credentials unavailable; showing authentication modal")
 		local KeyAuthModal = requireStep("KeyAuthModal", "src/UI/Modals/KeyAuthModal.luau", ServiceContainer)
+		globalEnv.B0XazLaunching = nil
 		KeyAuthModal:Show(function(verifiedTier)
 			trace("Credentials accepted from modal")
 			StateStore:SetTier(verifiedTier)
@@ -334,4 +346,8 @@ local function bootstrap()
 end
 
 trace("Invoking bootstrap")
-bootstrap()
+local bootOk, bootErr = pcall(bootstrap)
+globalEnv.B0XazLaunching = nil
+if not bootOk then
+	warn("[B0Xaz] Bootstrap failed: " .. tostring(bootErr))
+end

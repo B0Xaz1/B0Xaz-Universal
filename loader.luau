@@ -49,20 +49,22 @@ task.spawn(function()
 	-- Cache buster: raw.githubusercontent edge nodes hold a branch file for a
 	-- few minutes, so a fresh push can otherwise load as the previous build.
 	local source = fetch(BASE .. "/init.luau?t=" .. tostring(os.time()))
-	globalEnv.B0XazLoaderBusy = nil
 
 	if not source then
+		globalEnv.B0XazLoaderBusy = nil
 		warn("[B0Xaz] Loader could not download init.luau")
 		return
 	end
 
 	local chunk, err = loadstring(source, "@B0XazInit")
 	if not chunk then
+		globalEnv.B0XazLoaderBusy = nil
 		warn("[B0Xaz] Loader compile failed: " .. tostring(err))
 		return
 	end
 
 	local ok, runErr = pcall(chunk)
+	globalEnv.B0XazLoaderBusy = nil
 	if not ok then
 		warn("[B0Xaz] Loader run failed: " .. tostring(runErr))
 	end
