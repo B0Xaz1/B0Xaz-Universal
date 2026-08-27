@@ -119,6 +119,20 @@ return function(services: any, tab: any)
 	Toggle.new(espConfigSec, "Text Outlines", "ESP.Outline")
 	Toggle.new(espConfigSec, "Auto-Scaling Distance", "ESP.AutoScaling")
 
+	-- Every flag here is consumed by OptimizerService, which caches the
+	-- original property values so a restore stays lossless.
+	local perfSec = createSection(tab.LeftCol, "Performance Boosters")
+	Toggle.new(perfSec, "Strip Textures & Decals", "Performance.NoTextures")
+	Toggle.new(perfSec, "Force Flat Smooth Plastic", "Performance.LowMaterials")
+	Toggle.new(perfSec, "Reduce 3D Terrain Fidelity", "Performance.OptimizeTerrain")
+	Toggle.new(perfSec, "Disable Post-Processing FX", "Performance.NoPostProcessing")
+	Toggle.new(perfSec, "Disable Global Shadows", "Performance.NoShadows")
+	Toggle.new(perfSec, "Disable Particle Emitters", "Performance.NoParticles")
+
+	local statSec = createSection(tab.LeftCol, "On-Screen Telemetry")
+	Toggle.new(statSec, "Display FPS Counter", "Settings.ShowFPS")
+	Toggle.new(statSec, "Display Ping Monitor", "Settings.ShowPing")
+
 	local chamsSec = createSection(tab.RightCol, "Player Chams (Highlights)")
 	Toggle.new(chamsSec, "Enable Highlights", "Chams.Enabled", nil, 2)
 	Toggle.new(chamsSec, "Use Player Team Color", "Chams.UseTeamColor")

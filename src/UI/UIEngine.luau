@@ -388,7 +388,6 @@ return function(services: any)
 			{ Path = "src/UI/Tabs/MovementTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/PlayersTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/UtilityTab.luau", Tier = 1 },
-			{ Path = "src/UI/Tabs/PerformanceTab.luau", Tier = 1 },
 			{ Path = "src/UI/Tabs/GameTab.luau", Tier = 3 },
 			{ Path = "src/UI/Tabs/SettingsTab.luau", Tier = 0 },
 		}
