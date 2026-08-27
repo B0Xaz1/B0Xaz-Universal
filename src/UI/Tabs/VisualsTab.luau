@@ -156,11 +156,11 @@ return function(services: any, tab: any)
 		Lighting.ClockTime = originalClockTime
 	end)
 
-	-- Both cinematic modes own ClockTime while active, so the manual Time of
-	-- Day slider above only has an effect while the mode is Off. Static pins
-	-- one golden-hour look; Dynamic runs the full 24-hour cycle.
+	-- Every cinematic mode owns ClockTime while active, so the manual Time of
+	-- Day slider above only has an effect while the mode is Off. The static
+	-- presets pin one look; Dynamic runs the full 24-hour cycle.
 	local cineSec = createSection(tab.RightCol, "Cinematic Lighting")
-	Dropdown.new(cineSec, "Lighting Mode", { "Off", "Static", "Dynamic" }, "Lighting.Mode")
+	Dropdown.new(cineSec, "Lighting Mode", { "Off", "Static Day", "Static Night", "Dynamic" }, "Lighting.Mode")
 	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
 
 	-- Dynamic-only controls

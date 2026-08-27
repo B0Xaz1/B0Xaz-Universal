@@ -36,10 +36,10 @@ local TERRAIN_PROPERTIES: { string } = {
 	"WaterWaveSpeed",
 }
 
--- Static mode profile: a fixed late-afternoon golden hour. Specular and
+-- Static day profile: a fixed late-afternoon golden hour. Specular and
 -- exposure are held down and the bloom threshold high for the same reason
 -- the dynamic keyframes do it - white clothing and pale walls must not glow.
-local STATIC_PROFILE = {
+local STATIC_DAY_PROFILE = {
 	Lighting = {
 		ClockTime = 17.25,
 		GeographicLatitude = 41.8,
@@ -95,6 +95,76 @@ local STATIC_PROFILE = {
 		WaterReflectance = 0.8,
 		WaterTransparency = 0.7,
 	},
+}
+
+-- Static night profile: moonlit blue hour. Sun rays and glare are nearly
+-- off because a night sky has no shafts to catch, and the bloom threshold
+-- goes higher still so streetlamps and neon signs stay points of light
+-- instead of smearing across the screen.
+local STATIC_NIGHT_PROFILE = {
+	Lighting = {
+		ClockTime = 0.5,
+		GeographicLatitude = 41.8,
+		Brightness = 1.0,
+		Ambient = Color3.fromRGB(28, 32, 48),
+		OutdoorAmbient = Color3.fromRGB(22, 28, 45),
+		ColorShift_Top = Color3.fromRGB(70, 95, 150),
+		ColorShift_Bottom = Color3.fromRGB(10, 12, 25),
+		GlobalShadows = true,
+		ShadowSoftness = 0.15,
+		EnvironmentDiffuseScale = 0.6,
+		EnvironmentSpecularScale = 0.35,
+		ExposureCompensation = -0.15,
+		FogStart = 120,
+		FogEnd = 6500,
+		FogColor = Color3.fromRGB(14, 18, 38),
+	},
+	ColorCorrection = {
+		Contrast = 0.16,
+		Saturation = -0.08,
+		TintColor = Color3.fromRGB(190, 205, 255),
+	},
+	Bloom = {
+		Intensity = 0.06,
+		Size = 6,
+		Threshold = 1.45,
+	},
+	SunRays = {
+		Intensity = 0.03,
+		Spread = 0.4,
+	},
+	Atmosphere = {
+		Density = 0.35,
+		Offset = 0.2,
+		Color = Color3.fromRGB(22, 28, 55),
+		Decay = Color3.fromRGB(40, 55, 105),
+		Glare = 0.05,
+		Haze = 1.2,
+	},
+	DepthOfField = {
+		FarIntensity = 0.22,
+		FocusDistance = 70,
+		InFocusRadius = 35,
+		NearIntensity = 0,
+	},
+	Clouds = {
+		Cover = 0.45,
+		Density = 0.35,
+		Color = Color3.fromRGB(30, 38, 65),
+	},
+	Water = {
+		WaterColor = Color3.fromRGB(18, 38, 60),
+		WaterReflectance = 0.9,
+		WaterTransparency = 0.75,
+	},
+}
+
+-- "Static" is the pre-split name for the day preset; it is kept so a saved
+-- profile written before the night preset existed still resolves.
+local STATIC_PROFILES: { [string]: any } = {
+	["Static Day"] = STATIC_DAY_PROFILE,
+	["Static Night"] = STATIC_NIGHT_PROFILE,
+	["Static"] = STATIC_DAY_PROFILE,
 }
 
 -- 24-hour keyframes. Bloom values are deliberately low and the bloom
@@ -738,11 +808,16 @@ return function(services: any)
 		end
 	end
 
+	-- Whichever static preset is live; the reassert job reads it so day and
+	-- night share one code path.
+	local activeStaticProfile: any = nil
+
 	-- Re-asserting the core Lighting values keeps a game's own day/night
 	-- script from silently walking the preset back. Post-process effects
 	-- are not re-applied here; nothing else writes to instances we own.
 	local function assertStaticLighting()
-		applyProperties(Lighting, STATIC_PROFILE.Lighting)
+		if not activeStaticProfile then return end
+		applyProperties(Lighting, activeStaticProfile.Lighting)
 		-- NoShadows still owns the shadow state when it is active
 		if StateStore:Get("Performance.NoShadows") == true then
 			Lighting.GlobalShadows = false
@@ -759,27 +834,29 @@ return function(services: any)
 		assertStaticLighting()
 	end
 
-	local function buildStaticEffects()
+	-- Both presets write to the same effect instances, so switching between
+	-- them reuses them instead of leaving a stale set behind.
+	local function buildStaticEffects(profile: any)
 		local cc = acquireEffect(Lighting, "ColorCorrectionEffect", "StaticColorCorrection")
-		applyProperties(cc, STATIC_PROFILE.ColorCorrection)
+		applyProperties(cc, profile.ColorCorrection)
 
 		local bloomFx = acquireEffect(Lighting, "BloomEffect", "StaticBloom")
-		applyProperties(bloomFx, STATIC_PROFILE.Bloom)
+		applyProperties(bloomFx, profile.Bloom)
 
 		local rays = acquireEffect(Lighting, "SunRaysEffect", "StaticSunRays")
-		applyProperties(rays, STATIC_PROFILE.SunRays)
+		applyProperties(rays, profile.SunRays)
 
 		local atmo = acquireEffect(Lighting, "Atmosphere", "StaticAtmosphere")
-		applyProperties(atmo, STATIC_PROFILE.Atmosphere)
+		applyProperties(atmo, profile.Atmosphere)
 
 		local dof = acquireEffect(Lighting, "DepthOfFieldEffect", "StaticDepthOfField")
-		applyProperties(dof, STATIC_PROFILE.DepthOfField)
+		applyProperties(dof, profile.DepthOfField)
 
 		local terrain = getTerrain()
 		if terrain then
 			local cloudLayer = acquireEffect(terrain, "Clouds", "StaticClouds")
-			applyProperties(cloudLayer, STATIC_PROFILE.Clouds)
-			applyProperties(terrain, STATIC_PROFILE.Water)
+			applyProperties(cloudLayer, profile.Clouds)
+			applyProperties(terrain, profile.Water)
 		end
 	end
 
@@ -794,6 +871,7 @@ return function(services: any)
 		if self._staticJob then
 			self._staticJob.Enabled = false
 		end
+		activeStaticProfile = nil
 		Disposer:Unbind("B0XazLightingDescendants")
 		self._descendantConn = nil
 
@@ -805,10 +883,14 @@ return function(services: any)
 		self.Mode = "Off"
 	end
 
-	function LightingService:ApplyStatic()
-		takeSnapshot()
+	function LightingService:ApplyStatic(modeName: string)
+		local profile = STATIC_PROFILES[modeName]
+		if not profile then return end
 
-		buildStaticEffects()
+		takeSnapshot()
+		activeStaticProfile = profile
+
+		buildStaticEffects(profile)
 		assertStaticLighting()
 
 		if StateStore:Get("Lighting.Vignette") == true then
@@ -818,7 +900,7 @@ return function(services: any)
 		if self._staticJob then
 			self._staticJob.Enabled = true
 		end
-		self.Mode = "Static"
+		self.Mode = modeName
 	end
 
 	function LightingService:ApplyDynamic()
@@ -841,7 +923,7 @@ return function(services: any)
 
 	function LightingService:SetMode(mode: string)
 		local target = "Off"
-		if mode == "Dynamic" or mode == "Static" then
+		if mode == "Dynamic" or STATIC_PROFILES[mode] then
 			target = mode
 		end
 		if target == self.Mode then return end
@@ -852,8 +934,8 @@ return function(services: any)
 
 		if target == "Dynamic" then
 			self:ApplyDynamic()
-		elseif target == "Static" then
-			self:ApplyStatic()
+		elseif STATIC_PROFILES[target] then
+			self:ApplyStatic(target)
 		end
 
 		if target ~= "Off" and StateStore:Get("Visuals.Fullbright") == true then
