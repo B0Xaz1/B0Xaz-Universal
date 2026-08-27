@@ -66,14 +66,6 @@ return function(services: any, tab: any)
 		return content
 	end
 
-	local perfSec = createSection(tab.LeftCol, "Performance Boosters")
-	Toggle.new(perfSec, "Strip Textures & Decals", "Performance.NoTextures")
-	Toggle.new(perfSec, "Force Flat Smooth Plastic", "Performance.LowMaterials")
-	Toggle.new(perfSec, "Reduce 3D Terrain Fidelity", "Performance.OptimizeTerrain")
-	Toggle.new(perfSec, "Disable Post-Processing FX", "Performance.NoPostProcessing")
-	Toggle.new(perfSec, "Disable Global Shadows", "Performance.NoShadows")
-	Toggle.new(perfSec, "Disable Particle Emitters", "Performance.NoParticles")
-
 	local hitboxSec = createSection(tab.LeftCol, "Hitbox Expansion")
 	Toggle.new(hitboxSec, "Expand Character Hitboxes", "Extras.Hitbox.Enabled", nil, 1)
 	Slider.new(hitboxSec, "Hitbox Radius", 4, 60, "Extras.Hitbox.Size", 2, " studs")
@@ -89,10 +81,6 @@ return function(services: any, tab: any)
 	Toggle.new(antiFlingSec, "Anti Fling (Block Impulses)", "Extras.AntiFling.Enabled", nil, 1)
 	Slider.new(antiFlingSec, "Impulse Threshold", 200, 5000, "Extras.AntiFling.Threshold", 50, " u/s²")
 	Toggle.new(antiFlingSec, "Snap Back Position", "Extras.AntiFling.SnapBack")
-
-	local statSec = createSection(tab.RightCol, "On-Screen Telemetry")
-	Toggle.new(statSec, "Display FPS Counter", "Settings.ShowFPS")
-	Toggle.new(statSec, "Display Ping Monitor", "Settings.ShowPing")
 
 	local serverSec = createSection(tab.RightCol, "Anti-AFK & Server Management")
 
