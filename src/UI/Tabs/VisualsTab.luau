@@ -165,11 +165,11 @@ return function(services: any, tab: any)
 	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
 
 	-- Cycle timing only means anything while the 24-hour cycle is running,
-	-- so these two rows are hidden outside Dynamic mode. UIListLayout skips
+	-- so these rows are hidden outside Dynamic mode. UIListLayout skips
 	-- invisible children, so the section closes the gap on its own.
 	local cycleSlider = Slider.new(cineSec, "Day Cycle Duration", 30, 1800, "Lighting.CycleDuration", 30, " s")
 	local startHourSlider = Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
-	Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
+	local freezeToggle = Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
 	Toggle.new(cineSec, "Remaster Part Materials", "Lighting.RemasterMaterials")
 	Toggle.new(cineSec, "Upgrade Map Lights", "Lighting.UpgradeMapLights")
 
@@ -177,6 +177,7 @@ return function(services: any, tab: any)
 		local isDynamic = StateStore:Get("Lighting.Mode") == "Dynamic"
 		cycleSlider.Instance.Visible = isDynamic
 		startHourSlider.Instance.Visible = isDynamic
+		freezeToggle.Instance.Visible = isDynamic
 	end
 	refreshCycleRows()
 	StateStore:Observe("Lighting.Mode", refreshCycleRows)
