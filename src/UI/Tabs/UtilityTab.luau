@@ -102,6 +102,11 @@ return function(services: any, tab: any)
 
 	Toggle.new(serverSec, "Enable Anti-AFK", "Settings.AntiAfk", updateAntiAfk)
 
+	-- HotkeyService owns the disconnect watcher; this only arms it. The
+	-- launcher source is queued before the teleport so the suite comes back
+	-- with the new session.
+	Toggle.new(serverSec, "Auto Rejoin On Disconnect", "Settings.AutoRejoin")
+
 	local lastHopTime = 0
 	Components.CreateButton(serverSec, "Server Hop (Public Matchmaking)", function()
 		-- A short cooldown prevents double-clicks from stacking hops

@@ -92,9 +92,16 @@ return function(services: any, tab: any)
 			Workspace.Gravity = originalGravity
 		end
 	end)
+	-- Same reasoning as gravity: the camera keeps whatever FOV was set unless
+	-- unload puts the original back.
+	local originalFov = Workspace.CurrentCamera and Workspace.CurrentCamera.FieldOfView or 70
 	Slider.new(worldSec, "Camera Field of View", 70, 120, "Camera.FOV", 1, "°", function(fov)
 		local cam = Workspace.CurrentCamera
 		if cam then cam.FieldOfView = fov end
+	end)
+	Disposer:Add(function()
+		local cam = Workspace.CurrentCamera
+		if cam then cam.FieldOfView = originalFov end
 	end)
 
 	local tpSec = createSection(tab.RightCol, "Position Bookmarks")

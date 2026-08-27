@@ -13,6 +13,9 @@ return function(services: any, tab: any)
 	local Dropdown = Require("src/UI/Components/Dropdown.luau", services)
 	local ColorPicker = Require("src/UI/Components/ColorPicker.luau", services)
 	local Components = Require("src/UI/Components/Textbox.luau", services)
+	local UIEngine = services:Get("UIEngine")
+	local Environment = services:Get("Environment")
+	local OptimizerService = services:Get("OptimizerService")
 
 	-- Lighting values are backed up only once, before the first change, so
 	-- toggling fullbright repeatedly never stacks backups.
@@ -129,7 +132,24 @@ return function(services: any, tab: any)
 	Toggle.new(perfSec, "Disable Global Shadows", "Performance.NoShadows")
 	Toggle.new(perfSec, "Disable Particle Emitters", "Performance.NoParticles")
 
+	-- 0 keeps the executor's own limiter untouched; anything above it is
+	-- pushed through whichever frame-cap global the executor exposes.
+	local fpsSec = createSection(tab.LeftCol, "Framerate & Memory")
+	Slider.new(fpsSec, "FPS Cap (0 = uncapped)", 0, 360, "Performance.FpsCap", 10, " fps")
+	if not Environment.HasFpsCap() then
+		Components.CreateButton(fpsSec, "FPS cap unsupported on this executor", function()
+			UIEngine:Notify("Framerate", "This executor exposes no frame limiter.", 2.5, ThemeEngine:GetToken("Warning"))
+		end)
+	end
+	Components.CreateButton(fpsSec, "Flush Unused Memory", function()
+		task.spawn(function()
+			local freedMb = OptimizerService:FlushMemory()
+			UIEngine:Notify("Memory", string.format("Reclaimed %.1f MB.", freedMb), 2.5, ThemeEngine:GetToken("Success"))
+		end)
+	end)
+
 	local statSec = createSection(tab.LeftCol, "On-Screen Telemetry")
+	Toggle.new(statSec, "Show Watermark", "Settings.Watermark")
 	Toggle.new(statSec, "Display FPS Counter", "Settings.ShowFPS")
 	Toggle.new(statSec, "Display Ping Monitor", "Settings.ShowPing")
 
@@ -181,6 +201,9 @@ return function(services: any, tab: any)
 	refreshCycleRows()
 	StateStore:Observe("Lighting.Mode", refreshCycleRows)
 	EventBus:Subscribe("StateHydrated", refreshCycleRows)
+	-- Clearing the title-bar search re-shows every row, so these have to be
+	-- re-hidden afterwards.
+	EventBus:Subscribe("UIFilterCleared", refreshCycleRows)
 
 	local fxSec = createSection(tab.RightCol, "Visual Effects")
 	Toggle.new(fxSec, "Draw Radial Speed Lines", "Extras.SpeedLines", nil, 1)

@@ -152,6 +152,14 @@ return function(services: any, tab: any)
 	Keybind.new(uiSec, "Menu Toggle Hotkey", "Settings.MenuKeybind")
 	Keybind.new(uiSec, "Quick Unload Hotkey", "Settings.UnloadKeybind")
 
+	-- Rows are generated from the service's own target list so a new bind
+	-- only has to be declared in one place.
+	local HotkeyService = services:Get("HotkeyService")
+	local bindSec = createSection(tab.RightCol, "Feature Hotkeys")
+	for _, target in ipairs(HotkeyService.Targets) do
+		Keybind.new(bindSec, target.Label, "Settings.Binds." .. target.Key)
+	end
+
 	local themeSec = createSection(tab.RightCol, "Themes & Styling")
 	local presetList = {}
 	for name in pairs(ThemeEngine.Presets) do table.insert(presetList, name) end

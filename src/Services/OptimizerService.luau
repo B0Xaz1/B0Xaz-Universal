@@ -22,6 +22,7 @@ return function(services: any)
 	local StateStore = services:Get("StateStore")
 	local Disposer = services:Get("Disposer")
 	local EventBus = services:Get("EventBus")
+	local Environment = services:Get("Environment")
 
 	local OptimizerService = {
 		_textureCache = {} :: { [Instance]: string },
@@ -175,6 +176,26 @@ return function(services: any)
 		self:SetNoPostProcessing(false)
 	end
 
+	-- 0 means uncapped. Unload always pushes 0 back so a limiter set here
+	-- cannot outlive the suite.
+	function OptimizerService:ApplyFpsCap(cap: number): boolean
+		return Environment.SetFpsCap(cap)
+	end
+
+	-- Roblox exposes no direct cache flush, so this drops what the suite can
+	-- reach and reports the delta Lua actually reclaimed.
+	function OptimizerService:FlushMemory(): number
+		local before = collectgarbage("count")
+		for _ = 1, 3 do
+			pcall(function()
+				collectgarbage("step")
+			end)
+			task.wait()
+		end
+		local after = collectgarbage("count")
+		return math.max(0, (before - after) / 1024)
+	end
+
 	function OptimizerService:Initialize()
 		Disposer:Add(function()
 			self:RestoreAll()
@@ -190,6 +211,13 @@ return function(services: any)
 				self:ApplyAllOptimizations()
 			end
 		end
+		EventBus:Subscribe("StateChanged:Performance.FpsCap", function(cap)
+			self:ApplyFpsCap(tonumber(cap) or 0)
+		end)
+		Disposer:Add(function()
+			Environment.SetFpsCap(0)
+		end)
+
 		EventBus:Subscribe("StateChanged:Performance.NoTextures", onPerfFlagChanged)
 		EventBus:Subscribe("StateChanged:Performance.LowMaterials", onPerfFlagChanged)
 		EventBus:Subscribe("StateChanged:Performance.NoShadows", onPerfFlagChanged)

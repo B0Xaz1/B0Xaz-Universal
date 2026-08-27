@@ -163,6 +163,66 @@ return function(services: any)
 		self:CloseAllDropdownsExcept(nil)
 	end
 
+	-- Rows are the direct children of a section's content frame; the label a
+	-- row is matched on is its first descendant TextLabel.
+	local function rowMatches(row: Instance, query: string): boolean
+		for _, descendant in ipairs(row:GetDescendants()) do
+			if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+				local text = (descendant :: any).Text
+				if typeof(text) == "string" and string.find(string.lower(text), query, 1, true) then
+					return true
+				end
+			end
+		end
+		if row:IsA("TextButton") and string.find(string.lower(row.Text), query, 1, true) then
+			return true
+		end
+		return false
+	end
+
+	function UIEngine:ApplyFilter(rawQuery: string)
+		local query = string.lower((rawQuery or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+		local clearing = query == ""
+
+		for _, tabRecord in ipairs(self.Tabs) do
+			for _, column in ipairs({ tabRecord.LeftCol, tabRecord.RightCol }) do
+				for _, section in ipairs(column:GetChildren()) do
+					if section:IsA("Frame") then
+						-- Children are [stroke, layout, header, content]
+						local frames = {}
+						for _, child in ipairs(section:GetChildren()) do
+							if child:IsA("Frame") then table.insert(frames, child) end
+						end
+						local content = frames[2]
+						local matchCount = 0
+
+						if content then
+							for _, row in ipairs(content:GetChildren()) do
+								if row:IsA("GuiObject") then
+									if clearing then
+										row.Visible = true
+									else
+										local matched = rowMatches(row, query)
+										row.Visible = matched
+										if matched then matchCount += 1 end
+									end
+								end
+							end
+						end
+
+						section.Visible = clearing or matchCount > 0
+					end
+				end
+			end
+		end
+
+		-- Tabs own conditional rows of their own (mode-dependent controls),
+		-- so they get a chance to re-hide them once the filter is cleared.
+		if clearing then
+			EventBus:Publish("UIFilterCleared")
+		end
+	end
+
 	function UIEngine:ConstructInterface()
 		local parent = Environment.GetSafeGuiParent()
 
@@ -211,7 +271,7 @@ return function(services: any)
 				TextColor3 = ThemeEngine:GetToken("Text"),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -40, 1, 0),
+				Size = UDim2.new(1, -200, 1, 0),
 			}),
 		}) :: Frame
 		ThemeEngine:BindToken(titleBar, "BackgroundColor3", "Side")
@@ -231,6 +291,30 @@ return function(services: any)
 		closeBtn.MouseButton1Click:Connect(function()
 			self.MainWindow.Visible = false
 			StateStore:SetTransient("MenuVisible", false)
+		end)
+		-- Live filter over every control in every tab. Sections whose rows
+		-- all fail the match are hidden too, so the columns close up.
+		local searchBox = DOM.Create("TextBox", {
+			Text = "",
+			PlaceholderText = "search...",
+			Font = Enum.Font.Code,
+			TextSize = 11,
+			TextColor3 = ThemeEngine:GetToken("Text"),
+			PlaceholderColor3 = ThemeEngine:GetToken("TextDim"),
+			BackgroundColor3 = ThemeEngine:GetToken("Elem"),
+			BorderSizePixel = 0,
+			ClearTextOnFocus = false,
+			Size = UDim2.fromOffset(150, 16),
+			Position = UDim2.new(1, -186, 0, 6),
+			ZIndex = TAB_ZINDEX + 2,
+			Parent = titleBar,
+		}, {
+			DOM.CreateStroke(ThemeEngine:GetToken("Border"), 1),
+		}) :: TextBox
+		ThemeEngine:BindToken(searchBox, "BackgroundColor3", "Elem")
+
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			self:ApplyFilter(searchBox.Text)
 		end)
 
 		self.TabContainer = DOM.Create("Frame", {
