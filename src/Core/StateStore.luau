@@ -87,6 +87,7 @@ local DEFAULT_SETTINGS = {
 		TimeOfDay = 6,
 		CycleDuration = 600,
 		Paused = false,
+		PresetBrightness = 100,
 		Vignette = true,
 		RemasterMaterials = true,
 		UpgradeMapLights = true,

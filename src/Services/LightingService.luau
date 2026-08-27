@@ -97,65 +97,69 @@ local STATIC_DAY_PROFILE = {
 	},
 }
 
--- Static night profile: moonlit blue hour. Sun rays and glare are nearly
--- off because a night sky has no shafts to catch, and the bloom threshold
--- goes higher still so streetlamps and neon signs stay points of light
--- instead of smearing across the screen.
+-- Static night profile: a stylized moonlit blue hour rather than a literal
+-- midnight. Moonlight is deliberately overdriven and the ambients kept well
+-- above black so the scene reads as graded night instead of an unlit map.
 local STATIC_NIGHT_PROFILE = {
 	Lighting = {
-		ClockTime = 0.5,
+		ClockTime = 0.4,
 		GeographicLatitude = 41.8,
-		Brightness = 1.0,
-		Ambient = Color3.fromRGB(28, 32, 48),
-		OutdoorAmbient = Color3.fromRGB(22, 28, 45),
-		ColorShift_Top = Color3.fromRGB(70, 95, 150),
-		ColorShift_Bottom = Color3.fromRGB(10, 12, 25),
+		Brightness = 2.4,
+		Ambient = Color3.fromRGB(58, 68, 100),
+		OutdoorAmbient = Color3.fromRGB(74, 90, 132),
+		ColorShift_Top = Color3.fromRGB(130, 160, 230),
+		ColorShift_Bottom = Color3.fromRGB(28, 34, 62),
 		GlobalShadows = true,
-		ShadowSoftness = 0.15,
-		EnvironmentDiffuseScale = 0.6,
-		EnvironmentSpecularScale = 0.35,
-		ExposureCompensation = -0.15,
-		FogStart = 120,
-		FogEnd = 6500,
-		FogColor = Color3.fromRGB(14, 18, 38),
+		ShadowSoftness = 0.2,
+		EnvironmentDiffuseScale = 0.85,
+		EnvironmentSpecularScale = 0.45,
+		ExposureCompensation = 0.05,
+		FogStart = 250,
+		FogEnd = 12000,
+		FogColor = Color3.fromRGB(38, 50, 92),
 	},
+	-- Strong contrast plus a cold tint is what sells the grade; saturation
+	-- stays positive so neon and emissive props keep their color.
 	ColorCorrection = {
-		Contrast = 0.16,
-		Saturation = -0.08,
-		TintColor = Color3.fromRGB(190, 205, 255),
+		Contrast = 0.22,
+		Saturation = 0.1,
+		TintColor = Color3.fromRGB(198, 214, 255),
 	},
+	-- Threshold is lower than the day preset on purpose: at night the only
+	-- things bright enough to cross it are lamps, neon, and moon highlights,
+	-- so the glow lands on light sources instead of on white surfaces.
 	Bloom = {
-		Intensity = 0.06,
-		Size = 6,
-		Threshold = 1.45,
+		Intensity = 0.16,
+		Size = 14,
+		Threshold = 1.1,
 	},
 	SunRays = {
-		Intensity = 0.03,
-		Spread = 0.4,
+		Intensity = 0.1,
+		Spread = 0.6,
 	},
 	Atmosphere = {
-		Density = 0.35,
-		Offset = 0.2,
-		Color = Color3.fromRGB(22, 28, 55),
-		Decay = Color3.fromRGB(40, 55, 105),
-		Glare = 0.05,
-		Haze = 1.2,
+		Density = 0.3,
+		Offset = 0.15,
+		Color = Color3.fromRGB(48, 64, 118),
+		Decay = Color3.fromRGB(75, 100, 180),
+		Glare = 0.18,
+		Haze = 1.5,
 	},
 	DepthOfField = {
-		FarIntensity = 0.22,
-		FocusDistance = 70,
-		InFocusRadius = 35,
+		FarIntensity = 0.18,
+		FocusDistance = 85,
+		InFocusRadius = 45,
 		NearIntensity = 0,
 	},
 	Clouds = {
-		Cover = 0.45,
-		Density = 0.35,
-		Color = Color3.fromRGB(30, 38, 65),
+		Cover = 0.55,
+		Density = 0.45,
+		Color = Color3.fromRGB(60, 78, 130),
 	},
 	Water = {
-		WaterColor = Color3.fromRGB(18, 38, 60),
-		WaterReflectance = 0.9,
-		WaterTransparency = 0.75,
+		WaterColor = Color3.fromRGB(26, 58, 95),
+		WaterReflectance = 0.95,
+		WaterTransparency = 0.7,
 	},
 }
 
@@ -815,9 +819,31 @@ return function(services: any)
 	-- Re-asserting the core Lighting values keeps a game's own day/night
 	-- script from silently walking the preset back. Post-process effects
 	-- are not re-applied here; nothing else writes to instances we own.
+	-- Scales a profile colour without letting any channel clip past white,
+	-- which is what would reintroduce the white-surface glow.
+	local function scaleColor(color: Color3, scale: number): Color3
+		return Color3.new(
+			math.clamp(color.R * scale, 0, 1),
+			math.clamp(color.G * scale, 0, 1),
+			math.clamp(color.B * scale, 0, 1)
+		)
+	end
+
 	local function assertStaticLighting()
 		if not activeStaticProfile then return end
 		applyProperties(Lighting, activeStaticProfile.Lighting)
+
+		-- User brightness trim, applied on top of the preset so the grade
+		-- (colours, fog, contrast) is preserved at any exposure level.
+		local scale = (tonumber(StateStore:Get("Lighting.PresetBrightness")) or 100) / 100
+		if scale ~= 1 then
+			local base = activeStaticProfile.Lighting
+			Lighting.Brightness = base.Brightness * scale
+			Lighting.Ambient = scaleColor(base.Ambient, scale)
+			Lighting.OutdoorAmbient = scaleColor(base.OutdoorAmbient, scale)
+			Lighting.ExposureCompensation = base.ExposureCompensation + (scale - 1) * 0.25
+		end
+
 		-- NoShadows still owns the shadow state when it is active
 		if StateStore:Get("Performance.NoShadows") == true then
 			Lighting.GlobalShadows = false
@@ -960,6 +986,11 @@ return function(services: any)
 
 		StateStore:Observe("Lighting.TimeOfDay", function(newTime)
 			self:SetTime(tonumber(newTime) or 6)
+		end)
+		-- The reassert job would pick this up within a second anyway; this
+		-- makes dragging the slider feel immediate.
+		StateStore:Observe("Lighting.PresetBrightness", function()
+			assertStaticLighting()
 		end)
 
 		-- Vignette and world remaster can be flipped while a mode is live
