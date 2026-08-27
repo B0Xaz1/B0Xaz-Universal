@@ -164,12 +164,23 @@ return function(services: any, tab: any)
 	Slider.new(cineSec, "Static Preset Brightness", 50, 200, "Lighting.PresetBrightness", 5, "%")
 	Toggle.new(cineSec, "Vignette Overlay", "Lighting.Vignette")
 
-	-- Dynamic-only controls
-	Slider.new(cineSec, "Day Cycle Duration", 30, 1800, "Lighting.CycleDuration", 30, " s")
-	Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
+	-- Cycle timing only means anything while the 24-hour cycle is running,
+	-- so these two rows are hidden outside Dynamic mode. UIListLayout skips
+	-- invisible children, so the section closes the gap on its own.
+	local cycleSlider = Slider.new(cineSec, "Day Cycle Duration", 30, 1800, "Lighting.CycleDuration", 30, " s")
+	local startHourSlider = Slider.new(cineSec, "Cycle Start Hour", 0, 24, "Lighting.TimeOfDay", 1, "h")
 	Toggle.new(cineSec, "Freeze Time Cycle", "Lighting.Paused")
 	Toggle.new(cineSec, "Remaster Part Materials", "Lighting.RemasterMaterials")
 	Toggle.new(cineSec, "Upgrade Map Lights", "Lighting.UpgradeMapLights")
+
+	local function refreshCycleRows()
+		local isDynamic = StateStore:Get("Lighting.Mode") == "Dynamic"
+		cycleSlider.Instance.Visible = isDynamic
+		startHourSlider.Instance.Visible = isDynamic
+	end
+	refreshCycleRows()
+	StateStore:Observe("Lighting.Mode", refreshCycleRows)
+	EventBus:Subscribe("StateHydrated", refreshCycleRows)
 
 	local fxSec = createSection(tab.RightCol, "Visual Effects")
 	Toggle.new(fxSec, "Draw Radial Speed Lines", "Extras.SpeedLines", nil, 1)
