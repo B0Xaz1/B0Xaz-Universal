@@ -1,6 +1,6 @@
 local Players = game:GetService("Players")
 
-local BRANCH = "arena/01a044ee-b0xaz-universal"
+local BRANCH = "main"
 local BASE = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/" .. BRANCH
 
 local globalEnv = (getgenv and getgenv()) or _G
