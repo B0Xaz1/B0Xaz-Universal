@@ -117,6 +117,7 @@ return function(services: any, tab: any)
 
 	local espConfigSec = createSection(tab.LeftCol, "ESP Configuration")
 	Slider.new(espConfigSec, "Max Rendering Distance", 100, 2000, "ESP.MaxDist", 50, " studs")
+	Toggle.new(espConfigSec, "Use Player Team Color", "ESP.UseTeamColor")
 	ColorPicker.new(espConfigSec, "Global ESP Color", "ESP.Color")
 	Dropdown.new(espConfigSec, "ESP Font Style", { "Monospace", "UI", "System", "Plex" }, "ESP.Font")
 	Toggle.new(espConfigSec, "Text Outlines", "ESP.Outline")

@@ -67,6 +67,7 @@ local DEFAULT_SETTINGS = {
 		HeadDot = false,
 		LookDir = false,
 		TeamCheck = false,
+		UseTeamColor = false,
 		MaxDist = 500,
 		Color = Color3.fromRGB(0, 200, 255),
 		Font = "Monospace",

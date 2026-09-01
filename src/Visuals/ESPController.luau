@@ -153,7 +153,8 @@ return function(services: any)
 		local myAssets = PlayerTracker:GetLocalAssets()
 		local myPos = myAssets and myAssets.RootPart and myAssets.RootPart.Position
 
-		local espColor: Color3 = espSettings.Color or Color3.fromRGB(0, 200, 255)
+		local baseEspColor: Color3 = espSettings.Color or Color3.fromRGB(0, 200, 255)
+		local useTeamColor = espSettings.UseTeamColor == true
 		local fontIndex = FONT_INDICES[espSettings.Font] or 3
 		local hasOutline = espSettings.Outline ~= false
 		local maxDistSq = (espSettings.MaxDist or 500) ^ 2
@@ -172,6 +173,13 @@ return function(services: any)
 				if distSq > maxDistSq then
 					hideRecord(record)
 				else
+					local espColor = baseEspColor
+					if useTeamColor then
+						local teamColor = TargetFilter:GetTeamColor(player)
+						if teamColor then
+							espColor = teamColor
+						end
+					end
 					-- Chams live on the character model and must be rebuilt
 					-- if the record's highlight was lost (e.g. respawn).
 					if isChamsEnabled then
@@ -259,6 +267,7 @@ return function(services: any)
 								if tool then
 									record.Tool.Text = string.format("[%s]", tool.Name)
 									record.Tool.Position = Vector2.new(rootV.X, feetScreen.Y + bottomOffset)
+									record.Tool.Color = espColor
 									record.Tool.Font = fontIndex
 									record.Tool.Outline = hasOutline
 									record.Tool.Visible = true
