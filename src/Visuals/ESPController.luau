@@ -232,7 +232,9 @@ return function(services: any)
 							elseif record.Name then record.Name.Visible = false end
 
 							if espSettings.Health and record.Health and record.HealthBG then
-								local healthRatio = math.clamp(assets.Humanoid.Health / math.max(assets.Humanoid.MaxHealth, 1), 0, 1)
+								local maxHealth = assets.Humanoid.MaxHealth
+								if maxHealth <= 0 then maxHealth = 100 end
+								local healthRatio = math.clamp(assets.Humanoid.Health / maxHealth, 0, 1)
 								local barX = rootV.X - halfW - 6
 								local barY = rootV.Y - halfH
 								record.HealthBG.Size = Vector2.new(3, height)
@@ -241,8 +243,9 @@ return function(services: any)
 								record.HealthBG.Filled = true
 								record.HealthBG.Visible = true
 
-								record.Health.Size = Vector2.new(3, height * healthRatio)
-								record.Health.Position = Vector2.new(barX, barY + height * (1 - healthRatio))
+								local fillHeight = height * healthRatio
+								record.Health.Size = Vector2.new(3, fillHeight)
+								record.Health.Position = Vector2.new(barX, barY + (height - fillHeight))
 								record.Health.Color = Color3.fromHSV(healthRatio * 0.33, 1, 1)
 								record.Health.Filled = true
 								record.Health.Visible = true
