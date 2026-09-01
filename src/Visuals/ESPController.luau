@@ -166,6 +166,8 @@ return function(services: any)
 				hideRecord(record)
 			elseif espSettings.TeamCheck and TargetFilter:IsTeammate(player) then
 				hideRecord(record)
+			elseif espSettings.DepthMode == "Occluded" and not TargetFilter:IsVisible(assets.Head) then
+				hideRecord(record)
 			else
 				local rootPos = assets.RootPart.Position
 				local distSq = myPos and (myPos - rootPos).Magnitude ^ 2 or 0
