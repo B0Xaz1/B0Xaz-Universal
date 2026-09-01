@@ -1,9 +1,9 @@
 local Players = game:GetService("Players")
 
-local BRANCH = "main"
-local BASE = "https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/" .. BRANCH
-
 local globalEnv = (getgenv and getgenv()) or _G
+
+local BRANCH = globalEnv.B0XazRef or "arena/01a05a68-b0xaz-universal"
+local BASE = globalEnv.B0XazBaseURL or ("https://raw.githubusercontent.com/B0Xaz1/B0Xaz-Universal/" .. BRANCH)
 
 -- init.luau reads these: B0XazBaseURL wins over B0XazRef, and both are
 -- re-normalized there, so the branch sticks across relaunch / server hop.
