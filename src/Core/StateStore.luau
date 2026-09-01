@@ -68,6 +68,7 @@ local DEFAULT_SETTINGS = {
 		LookDir = false,
 		TeamCheck = false,
 		UseTeamColor = false,
+		DepthMode = "AlwaysOnTop",
 		MaxDist = 500,
 		Color = Color3.fromRGB(0, 200, 255),
 		Font = "Monospace",

@@ -166,6 +166,8 @@ return function(services: any)
 				hideRecord(record)
 			elseif espSettings.TeamCheck and TargetFilter:IsTeammate(player) then
 				hideRecord(record)
+			elseif espSettings.DepthMode == "Occluded" and not TargetFilter:IsVisible(assets.Head) then
+				hideRecord(record)
 			else
 				local rootPos = assets.RootPart.Position
 				local distSq = myPos and (myPos - rootPos).Magnitude ^ 2 or 0
@@ -192,7 +194,7 @@ return function(services: any)
 						end
 						record.Highlight.FillColor = useTeamColor and TargetFilter:GetTeamColor(player) or chamsSettings.FillColor
 						record.Highlight.OutlineColor = chamsSettings.OutlineColor
-						record.Highlight.DepthMode = (chamsSettings.DepthMode == "Occluded") and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
+						record.Highlight.DepthMode = (espSettings.DepthMode == "Occluded") and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
 						record.Highlight.Enabled = true
 					elseif record.Highlight then
 						record.Highlight.Enabled = false
