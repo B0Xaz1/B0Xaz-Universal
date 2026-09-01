@@ -180,6 +180,8 @@ return function(services: any)
 				hideRecord(record)
 			elseif espSettings.TeamCheck and TargetFilter:IsTeammate(player) then
 				hideRecord(record)
+			elseif espSettings.DepthMode == "Occluded" and not isCharacterVisible(assets) then
+				hideRecord(record)
 			else
 				local rootPos = assets.RootPart.Position
 				local distSq = myPos and (myPos - rootPos).Magnitude ^ 2 or 0
@@ -213,20 +215,6 @@ return function(services: any)
 					end
 
 					if isESPEnabled then
-						-- When DepthMode is Occluded, check if any part of the character
-						-- is in view using the same engine/Highlight visibility logic
-						-- (or if parts are visible to camera). If DepthMode is Occluded
-						-- and the highlight is hidden/occluded by the depth buffer, hide ESP.
-						if espSettings.DepthMode == "Occluded" and record.Highlight then
-							-- When Highlight.DepthMode is Occluded, Roblox engine hides it behind walls.
-							-- We can check if the character parts are occluded from the camera.
-							local cam = Workspace.CurrentCamera
-							local hitPart = cam and cam:GetPartsObscuringTarget({assets.Head.Position}, {assets.Character, cam})
-							if hitPart and #hitPart > 0 then
-								hideRecord(record)
-								continue
-							end
-						end
 						local headPos = assets.Head.Position + Vector3.new(0, 0.5, 0)
 						local feetPos = rootPos - Vector3.new(0, 3, 0)
 
