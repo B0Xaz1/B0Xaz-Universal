@@ -100,6 +100,20 @@ return function(services: any)
 		}
 	end
 
+	local function isCharacterVisible(assets: any): boolean
+		if not assets or not assets.Character or not assets.Head or not assets.RootPart then
+			return false
+		end
+		if TargetFilter:IsVisible(assets.Head) or TargetFilter:IsVisible(assets.RootPart) then
+			return true
+		end
+		local torso = assets.Character:FindFirstChild("UpperTorso") or assets.Character:FindFirstChild("Torso")
+		if torso and torso:IsA("BasePart") and TargetFilter:IsVisible(torso) then
+			return true
+		end
+		return false
+	end
+
 	local function hideRecord(record: ESPRecord)
 		if record.Box then record.Box.Visible = false end
 		if record.Name then record.Name.Visible = false end
@@ -166,7 +180,7 @@ return function(services: any)
 				hideRecord(record)
 			elseif espSettings.TeamCheck and TargetFilter:IsTeammate(player) then
 				hideRecord(record)
-			elseif espSettings.DepthMode == "Occluded" and not TargetFilter:IsVisible(assets.Head) then
+			elseif espSettings.DepthMode == "Occluded" and not isCharacterVisible(assets) then
 				hideRecord(record)
 			else
 				local rootPos = assets.RootPart.Position
@@ -195,7 +209,7 @@ return function(services: any)
 						record.Highlight.FillColor = useTeamColor and TargetFilter:GetTeamColor(player) or chamsSettings.FillColor
 						record.Highlight.OutlineColor = chamsSettings.OutlineColor
 						record.Highlight.DepthMode = (espSettings.DepthMode == "Occluded") and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
-						record.Highlight.Enabled = (espSettings.DepthMode ~= "Occluded") or TargetFilter:IsVisible(assets.Head)
+						record.Highlight.Enabled = (espSettings.DepthMode ~= "Occluded") or isCharacterVisible(assets)
 					elseif record.Highlight then
 						record.Highlight.Enabled = false
 					end
