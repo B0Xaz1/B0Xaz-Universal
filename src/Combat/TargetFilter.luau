@@ -140,7 +140,7 @@ return function(services: any)
 			-- Invisible barriers, non-collidable trigger zones, or transparent obstacles
 			-- should not block line of sight; add the part (or its parent model if it's
 			-- a door/fence/foliage model) to the exclude filter and continue past them
-			if not hitInstance.CanCollide or hitInstance.Transparency >= 0.5 then
+			if not hitInstance.CanCollide or hitInstance.Transparency >= 0.3 then
 				local ancestorModel = hitInstance.Parent
 				if ancestorModel and ancestorModel:IsA("Model") and ancestorModel ~= Workspace then
 					table.insert(activeFilterList, ancestorModel)
