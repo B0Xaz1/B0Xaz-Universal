@@ -156,7 +156,6 @@ return function(services: any, tab: any)
 
 	local chamsSec = createSection(tab.RightCol, "Player Chams (Highlights)")
 	Toggle.new(chamsSec, "Enable Highlights", "Chams.Enabled", nil, 2)
-	Toggle.new(chamsSec, "Use Player Team Color", "Chams.UseTeamColor")
 	Dropdown.new(chamsSec, "Depth Rendering Mode", { "AlwaysOnTop", "Occluded" }, "Chams.DepthMode")
 	ColorPicker.new(chamsSec, "Highlight Fill Color", "Chams.FillColor")
 	ColorPicker.new(chamsSec, "Highlight Outline Color", "Chams.OutlineColor")

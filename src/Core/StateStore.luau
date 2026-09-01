@@ -76,7 +76,6 @@ local DEFAULT_SETTINGS = {
 	},
 	Chams = {
 		Enabled = false,
-		UseTeamColor = false,
 		DepthMode = "AlwaysOnTop",
 		FillColor = Color3.fromRGB(0, 170, 255),
 		OutlineColor = Color3.fromRGB(255, 255, 255),

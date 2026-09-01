@@ -190,7 +190,7 @@ return function(services: any)
 							hl.Parent = assets.Character
 							record.Highlight = hl
 						end
-						record.Highlight.FillColor = chamsSettings.UseTeamColor and TargetFilter:GetTeamColor(player) or chamsSettings.FillColor
+						record.Highlight.FillColor = useTeamColor and TargetFilter:GetTeamColor(player) or chamsSettings.FillColor
 						record.Highlight.OutlineColor = chamsSettings.OutlineColor
 						record.Highlight.DepthMode = (chamsSettings.DepthMode == "Occluded") and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
 						record.Highlight.Enabled = true
